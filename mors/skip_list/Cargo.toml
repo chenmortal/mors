@@ -1,0 +1,16 @@
+[package]
+name = "mors-skip_list"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+version.workspace = true
+
+
+[dependencies]
+mors-common = { workspace = true, version = "0.1.0" }
+mors-traits = { workspace = true, version = "0.1.0" }
+thiserror = { workspace = true,version= "1.0.24" }
+rand = { workspace = true, version = "0.8.4" }
+[lints]
+workspace = true

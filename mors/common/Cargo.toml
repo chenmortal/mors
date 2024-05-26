@@ -1,0 +1,11 @@
+[package]
+name = "mors-common"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+version.workspace = true
+
+[dependencies]
+lazy_static={workspace=true}
+libc={workspace=true}
