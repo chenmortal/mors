@@ -7,11 +7,10 @@ pub trait SkipList {
     where
         Self: Sized;
     fn size(&self) -> usize;
-    fn push(&self, key: &[u8], value: &[u8])->Result<(), Self::ErrorType>;
-    fn get(&self, key: &[u8], allow_near: bool) -> Option<&[u8]>;
-    fn get_key_value(&self, key: &[u8], allow_near: bool) -> Option<(&[u8], &[u8])>;
+    fn push(&self, key: &[u8], value: &[u8]) -> Result<(), Self::ErrorType>;
+    fn get(&self, key: &[u8]) -> Result<Option<&[u8]>,Self::ErrorType>;
+    fn get_or_next(&self, key: &[u8]) -> Result<Option<&[u8]>,Self::ErrorType>;
     fn is_empty(&self) -> bool;
     fn height(&self) -> usize;
 }
 
-pub struct SkipListError {}

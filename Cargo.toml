@@ -1,5 +1,6 @@
 [workspace]
 members = ["mors/common", "mors/core", "mors/memtable", "mors/skip_list", "mors/sstable", "mors/traits"]
+resolver="2"
 
 [workspace.package]
 authors = ["chenshiming <2584139809@qq.com>"]
@@ -7,7 +8,7 @@ edition = "2021"
 license = "Apache-2.0"
 readme = "README.md"
 version = "0.1.0"
-resolver="1"
+
 
 [workspace.lints.clippy]
 # Detects large stack-allocated futures that may cause stack overflow crashes (see threshold in clippy.toml)
@@ -25,7 +26,6 @@ mors-traits={path = "mors/traits",version ="0.1"}
 mors-skip_list={path = "mors/skip_list",version ="0.1"}
 log = "0.4"
 tracing = "0.1.37"
-# tracing-subscriber = "0.2.0"
 tokio = { version = "1", features = ["full"] }
 tokio-util = "0.7"
 anyhow = "1"
