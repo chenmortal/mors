@@ -4,175 +4,158 @@ use std::{
     sync::atomic::{AtomicU64, AtomicUsize, Ordering},
 };
 const SKL_MAX_HEIGHT: usize = 20; //<20 !=20
-///a probability of `numerator/denominator`.
-///for example,the probability of node.height==1 is 1/3
-///the probability of node.height==2 is (1/3)^2, node.height==3 is (1/3)^3;
-const RANDOM_HEIGHT_NUMERATOR: u32 = 1;
-const RANDOM_HEIGHT_DENOMINATOR: u32 = 3;
 
 extern crate thiserror;
 use arena::Arena;
 use error::MorsSkipListError;
 use rand::Rng;
 
-mod arena;
+pub mod arena;
 mod error;
 mod impls;
+#[cfg(test)]
+mod test;
 type Result<T> = std::result::Result<T, MorsSkipListError>;
 
-/// <head> --> [1] --> [2] --> [3] --> [4] --> [5] --> [6] --> [7] --> [8] --> [9] --> [10] ->
-/// <head> ----------> [2] ----------> [4] ------------------> [7] ----------> [9] --> [10] ->
-/// <head> ----------> [2] ------------------------------------[7] ----------> [9] ---------->
-/// <head> ----------> [2] --------------------------------------------------> [9] ---------->
+///0 <head> --> [1] --> [2] --> [3] --> [4] --> [5] --> [6] --> [7] --> [8] --> [9] --> [10] ->  
+///1 <head> ----------> [2] ----------> [4] ------------------> [7] ----------> [9] --> [10] ->  
+///2 <head> ----------> [2] ------------------------------------[7] ----------> [9] ---------->  
+///3 <head> ----------> [2] --------------------------------------------------> [9] ---------->  
 
-struct Inner {
+pub struct SkipList {
+    ///the height of the highest node in the list
     height: AtomicUsize,
+    ///the head of the list
     head: NonNull<Node>,
+    ///the memory pool of the list
     arena: Arena,
+    ///the compare function of the list
     cmp: fn(&[u8], &[u8]) -> std::cmp::Ordering,
 }
-#[derive(Debug, Default)]
-#[repr(C, align(8))]
-pub(crate) struct Node {
-    value_slice: AtomicU64,
-    key_offset: u32,
-    key_len: u16,
-    height: u16,
-    prev: NodeOffset,
-    tower: Tower,
-}
-#[derive(Debug, Default)]
-pub(crate) struct NodeOffset(AtomicUsize);
-#[derive(Debug, Default)]
-struct Tower([NodeOffset; SKL_MAX_HEIGHT]);
-
-impl Inner {
-    fn new(max_size: usize, cmp: fn(&[u8], &[u8]) -> std::cmp::Ordering) -> Result<Self>
+impl SkipList {
+    pub fn new(max_size: usize, cmp: fn(&[u8], &[u8]) -> std::cmp::Ordering) -> Result<Self>
     where
         Self: Sized,
     {
         let arena = Arena::new(max_size)?;
+        arena.alloc(0u8)?;
         let head: &mut Node = arena.alloc_with(Node::default)?;
         head.set_height(SKL_MAX_HEIGHT as u16);
         let head = NonNull::new(head as *mut _).unwrap();
 
-        Ok(Inner {
+        Ok(SkipList {
             height: AtomicUsize::new(1),
             head,
             arena,
             cmp,
         })
     }
-    fn push(&self, key: &[u8], value: &[u8]) -> Result<()> {
-        let mut height = self.height();
+
+    pub fn push(&self, key: &[u8], value: &[u8]) -> Result<()> {
+        let mut height = self.height.load(Ordering::Relaxed);
         let mut prev = [std::ptr::null::<Node>(); SKL_MAX_HEIGHT + 1];
         let mut next = [std::ptr::null::<Node>(); SKL_MAX_HEIGHT + 1];
+
         prev[height] = self.head.as_ptr();
+
         for h in (0..height).rev() {
-            let (p, n) = self.find_splice_for_level(key.into(), prev[h + 1], h);
+            // [height-1,0]
+            let (p, n) = self.find_splice_for_level(key.into(), prev[h + 1], h); //[height,1]
+            if p == n {
+                return self.set_value(p, value);
+            }
             prev[h] = p;
             next[h] = n;
-            if prev[h] == next[h] {
-                self.try_set_value(prev[h], value);
-                return Ok(());
-            }
         }
-        let random_height = Self::random_height();
-        let node = Node::new(&self.arena, key, value, random_height)?;
-        while random_height > height {
-            match self.height.compare_exchange(
+        let random_h = Self::random_height();
+        let node = Node::new(&self.arena, key, value, random_h)?;
+
+        while random_h > height {
+            if let Err(h) = self.height.compare_exchange_weak(
                 height,
-                random_height,
+                random_h,
                 Ordering::SeqCst,
-                Ordering::SeqCst,
+                Ordering::Relaxed,
             ) {
-                Ok(_) => {
-                    break;
-                }
-                Err(h) => {
-                    height = h;
-                }
+                height = h;
+            } else {
+                break;
             };
         }
-        height = random_height;
-        let node_offset = self.arena.offset(node).unwrap();
-        Ok(for h in 0..height {
+
+        for h in 0..random_h {
             loop {
-                let prev_node = match unsafe { prev[h].as_ref() } {
-                    Some(prev_node) => prev_node,
-                    None => {
-                        assert!(h > 1);
-                        let (p, n) = self.find_splice_for_level(key.into(), self.head.as_ptr(), h);
-                        prev[h] = p;
-                        next[h] = n;
-                        assert_ne!(prev[h], next[h]);
-                        unsafe { &*prev[h] }
-                    }
-                };
-                let mut next_offset = self.arena.offset(next[h]).unwrap_or_default();
-                node.tower[h].store(next_offset, Ordering::SeqCst);
-                if h == 0 {
-                    loop {
-                        let next_node = next[0];
-                        let prev_offset = self.arena.offset(prev[0]).unwrap_or(self.head_offset());
-                        node.prev.store(prev_offset, Ordering::SeqCst);
-                        if !next_node.is_null() {
-                            let next_node = unsafe { &*next_node };
-                            match next_node.prev.compare_exchange(
-                                prev_offset,
-                                node_offset,
-                                Ordering::SeqCst,
-                                Ordering::SeqCst,
-                            ) {
-                                Ok(_) => {
-                                    break;
-                                }
-                                Err(_) => {
-                                    let (p, n) = self.find_splice_for_level(key.into(), prev[0], 0);
-                                    if p == n {
-                                        self.try_set_value(prev[0], value);
-                                        return Ok(());
-                                    }
-                                    prev[0] = p;
-                                    next[0] = n;
-                                    next_offset = self.arena.offset(next[0]).unwrap_or_default();
-                                }
-                            }
-                        } else {
-                            break;
-                        }
-                    }
+                if prev[h].is_null() {
+                    assert!(h > 1);
+                    let (p, n) = self.find_splice_for_level(key.into(), self.head.as_ptr(), h);
+                    prev[h] = p;
+                    next[h] = n;
+                    assert_ne!(prev[h], next[h]);
                 }
 
-                match prev_node.tower[h].compare_exchange(
+                let next_offset = self.arena.offset(next[h]).unwrap_or_default();
+                node.tower[h].store(next_offset, Ordering::SeqCst);
+                if let Ok(_) = unsafe { prev[h].as_ref() }.unwrap().tower[h].compare_exchange_weak(
                     next_offset,
-                    node_offset,
+                    self.arena.offset(node).unwrap(),
                     Ordering::SeqCst,
-                    Ordering::SeqCst,
+                    Ordering::Relaxed,
                 ) {
-                    Ok(_) => {
-                        break;
-                    }
-                    Err(_) => {
-                        let (p, n) = self.find_splice_for_level(key.into(), prev_node as _, h);
-                        prev[h] = p;
-                        next[h] = n;
-                        if prev[h] == next[h] {
-                            assert!(h == 0);
-                            self.try_set_value(prev[h], value);
-                            return Ok(());
-                        }
-                    }
-                };
+                    break;
+                }
+                let (p, n) = self.find_splice_for_level(key.into(), prev[h], h);
+                if p == n {
+                    assert!(h == 0);
+                    return self.set_value(p, value);
+                }
+                prev[h] = p;
+                next[h] = n;
             }
-        })
+        }
+        Ok(())
     }
+    pub fn size(&self) -> usize {
+        self.arena.len()
+    }
+
+    pub fn get(&self, key: &[u8]) -> Result<Option<&[u8]>> {
+        if let Some(node) = self.find_or_next(key, false) {
+            return node.get_value(&self.arena);
+        }
+        Ok(None)
+    }
+    pub fn get_or_next(&self, key: &[u8]) -> Result<Option<&[u8]>> {
+        if let Some(node) = self.find_or_next(key, true) {
+            return node.get_value(&self.arena);
+        }
+        Ok(None)
+    }
+    pub fn get_next(&self, key: &[u8]) -> Result<&[u8]> {
+        self.find_next(key)?.get_key(&self.arena)
+    }
+    pub fn get_prev(&self, key: &[u8]) -> Result<&[u8]> {
+        if let Some(node) = self.find_prev(key) {
+            return node.get_key(&self.arena);
+        }
+        Err(MorsSkipListError::KeyNotFound)
+    }
+    pub fn is_empty(&self) -> bool {
+        self.find_last().is_none()
+    }
+
+    pub fn height(&self) -> usize {
+        self.height.load(Ordering::Relaxed)
+    }
+}
+impl SkipList {
+    ///find the splice for the level
     fn find_splice_for_level<'a>(
         &self,
         key: &[u8],
         mut before_ptr: *const Node,
         height: usize,
     ) -> (*const Node, *const Node) {
+        // (before,next)
         loop {
             if let Some(before) = unsafe { before_ptr.as_ref() } {
                 if let Ok(next) = before.next(&self.arena, height) {
@@ -192,11 +175,15 @@ impl Inner {
             return (before_ptr, std::ptr::null());
         }
     }
-    fn height(&self) -> usize {
-        self.height.load(Ordering::Acquire)
-    }
+
+    ///generate a random height
+    ///a probability of `numerator/denominator`.
+    ///for example,the probability of node.height==1 is 1/3
+    ///the probability of node.height==2 is (1/3)^2, node.height==3 is (1/3)^3;
     #[inline]
     fn random_height() -> usize {
+        const RANDOM_HEIGHT_NUMERATOR: u32 = 1;
+        const RANDOM_HEIGHT_DENOMINATOR: u32 = 3;
         let mut rng = rand::thread_rng();
         let mut h = 1;
         while h < SKL_MAX_HEIGHT
@@ -206,21 +193,22 @@ impl Inner {
         }
         return h;
     }
-    fn try_set_value(&self, ptr: *const Node, value: &[u8]) {
+    fn set_value(&self, ptr: *const Node, value: &[u8]) -> Result<()> {
         if let Some(node) = unsafe { ptr.as_ref() } {
-            if let Ok(v) = node.get_value(&self.arena) {
+            if let Ok(Some(v)) = node.get_value(&self.arena) {
                 if v == value {
-                    return;
+                    return Ok(());
                 }
-            };
-            node.set_value(&self.arena, value);
+            }
+            Ok(node.set_value(&self.arena, value)?)
         } else {
-            unreachable!()
+            Err(MorsSkipListError::NullPointerError)
         }
     }
-    fn find_or_near(&self, key: &[u8], allow_near: bool) -> Option<&Node> {
+
+    fn find_or_next(&self, key: &[u8], allow_near: bool) -> Option<&Node> {
         let mut node = unsafe { self.head.as_ref() };
-        let mut level = self.height() - 1;
+        let mut level = self.height.load(Ordering::Acquire) - 1;
         loop {
             match node.next(&self.arena, level) {
                 Ok(next) => {
@@ -258,11 +246,11 @@ impl Inner {
     }
     fn find_next(&self, key: &[u8]) -> Result<&Node> {
         let mut node = unsafe { self.head.as_ref() };
-        let mut level = self.height() - 1;
+        let mut level = self.height.load(Ordering::Acquire) - 1;
         loop {
             match node.next(&self.arena, level) {
                 Ok(next) => {
-                    let next_key = next.get_key(&self.arena).unwrap();
+                    let next_key = next.get_key(&self.arena).unwrap_or_default();
                     match (self.cmp)(key, next_key) {
                         std::cmp::Ordering::Less => {
                             if level > 0 {
@@ -294,7 +282,7 @@ impl Inner {
     fn find_prev(&self, key: &[u8]) -> Option<&Node> {
         let mut node = unsafe { self.head.as_ref() };
         let head_ptr = node as *const _;
-        let mut level = self.height() - 1;
+        let mut level = self.height.load(Ordering::Acquire) - 1;
         loop {
             match node.next(&self.arena, level) {
                 Ok(next) => {
@@ -323,7 +311,7 @@ impl Inner {
     }
     fn find_last(&self) -> Option<&Node> {
         let mut node = unsafe { self.head.as_ref() };
-        let mut level = self.height() - 1;
+        let mut level = self.height.load(Ordering::Acquire) - 1;
         loop {
             match node.next(&self.arena, level) {
                 Ok(next) => {
@@ -333,18 +321,19 @@ impl Inner {
                     if level > 0 {
                         level -= 1;
                     } else {
-                        return node.into();
+                        return if node as *const _ == self.head.as_ptr() {
+                            None
+                        } else {
+                            node.into()
+                        };
                     }
                 }
             }
         }
     }
-
-    fn head_offset(&self) -> usize {
-        self.arena.offset(self.head.as_ptr()).unwrap()
-    }
 }
-
+#[derive(Debug, Default)]
+pub(crate) struct NodeOffset(AtomicUsize);
 impl Deref for NodeOffset {
     type Target = AtomicUsize;
 
@@ -353,30 +342,42 @@ impl Deref for NodeOffset {
     }
 }
 impl NodeOffset {
-    fn new(arena: &Arena, node: &mut Node) -> Self {
-        Self(AtomicUsize::new(
-            arena.offset(node as *const _).unwrap_or_default(),
-        ))
-    }
     fn get_node<'a>(&self, arena: &'a Arena) -> Result<&'a Node> {
-        let offset = self.0.load(Ordering::SeqCst);
-        Ok(arena.get(offset as usize)?)
+        let offset = self.0.load(Ordering::Relaxed);
+        if offset == 0 {
+            return Err(MorsSkipListError::NullPointerError);
+        }
+        Ok(arena.get(offset)?)
     }
 }
-
-impl Deref for Tower {
+#[derive(Debug, Default)]
+struct NextTower([NodeOffset; SKL_MAX_HEIGHT]);
+impl Deref for NextTower {
     type Target = [NodeOffset; SKL_MAX_HEIGHT];
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl DerefMut for Tower {
+impl DerefMut for NextTower {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
-
+#[derive(Debug, Default)]
+#[repr(C, align(8))]
+pub(crate) struct Node {
+    ///the value of the node
+    value_slice: AtomicU64,
+    ///the offset of the key in the arena
+    key_offset: u32,
+    ///the length of the key
+    key_len: u16,
+    ///the height of the node
+    height: u16,
+    ///the tower of the node
+    tower: NextTower,
+}
 impl Node {
     pub(crate) fn new<'a>(
         arena: &'a Arena,
@@ -387,9 +388,9 @@ impl Node {
         let node = arena.alloc_with(Self::default)?;
         let key_p = arena.alloc_slice_copy(key)?;
         node.key_offset = arena.offset_slice(key_p) as u32;
+
         node.key_len = key.len() as u16;
         node.height = height as u16;
-        node.prev = NodeOffset(AtomicUsize::new(8));
         node.set_value(arena, value)?;
         Ok(node)
     }
@@ -397,27 +398,26 @@ impl Node {
         let value_p = arena.alloc_slice_copy(value)?;
         let offset = arena.offset_slice(value_p);
         let v = (offset as u64) << 32 | value.len() as u64;
-        self.value_slice.store(v, Ordering::SeqCst);
+        self.value_slice.store(v, Ordering::Relaxed);
         Ok(())
     }
 
-    fn value_slice(&self) -> (u32, u32) {
-        let v = self.value_slice.load(Ordering::SeqCst);
-        ((v >> 32) as u32, v as u32)
-    }
     fn get_key<'a>(&self, arena: &'a Arena) -> Result<&'a [u8]> {
         Ok(arena.get_slice::<u8>(self.key_offset as usize, self.key_len as usize)?)
     }
-    fn get_value<'a>(&self, arena: &'a Arena) -> Result<&'a [u8]> {
-        let (offset, len) = self.value_slice();
-        Ok(arena.get_slice::<u8>(offset as usize, len as usize)?)
+    fn get_value<'a>(&self, arena: &'a Arena) -> Result<Option<&'a [u8]>> {
+        // let (offset, len) = self.value_slice();
+        let v = self.value_slice.load(Ordering::Relaxed);
+        let len = v as u32;
+        if len == 0 {
+            return Ok(None);
+        }
+        let offset = (v >> 32) as usize;
+        Ok(Some(arena.get_slice::<u8>(offset as usize, len as usize)?))
     }
     #[inline]
     fn next<'a>(&self, arena: &'a Arena, level: usize) -> Result<&'a Node> {
         self.tower[level].get_node(arena)
-    }
-    fn prev<'a>(&self, arena: &'a Arena) -> Result<&'a Node> {
-        self.prev.get_node(arena)
     }
 
     fn set_height(&mut self, height: u16) {

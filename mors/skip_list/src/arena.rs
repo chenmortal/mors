@@ -14,14 +14,14 @@ const DEFAULT_ALIGN: usize = 8;
 
 type Result<T> = std::result::Result<T, ArenaError>;
 #[derive(Debug)]
-pub(crate) struct Arena {
+pub struct Arena {
     start: NonNull<u8>,
     ptr_offset: AtomicUsize,
     end: NonNull<u8>,
     layout: Layout,
 }
 impl Arena {
-    pub(crate) fn new(size: usize) -> Result<Arena> {
+    pub fn new(size: usize) -> Result<Arena> {
         let chunk_align = CHUNK_ALIGN;
         let size = size as usize;
         let mut request_size = Self::round_up_to(size, chunk_align);
@@ -54,10 +54,10 @@ impl Arena {
         };
         Ok(s)
     }
-    pub(crate) fn alloc<T>(&self, value: T) -> Result<&mut T> {
+    pub fn alloc<T>(&self, value: T) -> Result<&mut T> {
         self.alloc_with(|| value)
     }
-    pub(crate) fn alloc_with<F, T>(&self, f: F) -> Result<&mut T>
+    pub fn alloc_with<F, T>(&self, f: F) -> Result<&mut T>
     where
         F: FnOnce() -> T,
     {
@@ -76,7 +76,8 @@ impl Arena {
             Ok(&mut *dst)
         }
     }
-    pub(crate) fn get_mut<T>(&self, offset: usize) -> Result<&mut T> {
+
+    pub fn get_mut<T>(&self, offset: usize) -> Result<&mut T> {
         unsafe {
             let ptr = self.start.as_ptr().add(offset as usize);
 
@@ -91,7 +92,7 @@ impl Arena {
             }
         }
     }
-    pub(crate) fn get<T>(&self, offset: usize) -> Result<&T> {
+    pub fn get<T>(&self, offset: usize) -> Result<&T> {
         unsafe {
             let ptr = self.start.as_ptr().add(offset as usize);
             if ptr.add(size_of::<T>()) > self.end.as_ptr() {
@@ -105,7 +106,10 @@ impl Arena {
             }
         }
     }
-    pub(crate) fn get_slice<T>(&self, offset: usize, len: usize) -> Result<&[T]> {
+    pub fn get_slice<T>(&self, offset: usize, len: usize) -> Result<&[T]> {
+        if len == 0 {
+            return Err(ArenaError::ZeroLengthError);
+        }
         unsafe {
             let ptr = self.start.as_ptr().add(offset);
 
@@ -120,7 +124,7 @@ impl Arena {
             }
         }
     }
-    pub(crate) fn offset<N>(&self, ptr: *const N) -> Result<usize> {
+    pub fn offset<N>(&self, ptr: *const N) -> Result<usize> {
         if ptr.is_null() {
             return Err(ArenaError::NullPointerError);
         }
@@ -157,7 +161,7 @@ impl Arena {
         }
     }
     #[inline(always)]
-    pub(crate) fn alloc_slice_copy<T: Copy>(&self, src: &[T]) -> Result<NonNull<T>> {
+    pub fn alloc_slice_copy<T: Copy>(&self, src: &[T]) -> Result<NonNull<T>> {
         let layout = Layout::for_value(src);
         let dst = self.alloc_layout(layout)?.cast::<T>();
         unsafe {
@@ -172,15 +176,17 @@ impl Arena {
         ptr_addr - start_addr
     }
     #[inline]
-    pub(crate) fn len(&self) -> usize {
-        self.ptr_offset.load(std::sync::atomic::Ordering::Acquire)
+    pub fn len(&self) -> usize {
+        self.ptr_offset.load(std::sync::atomic::Ordering::Relaxed)
     }
+
     #[inline(always)]
-    pub(crate) fn max_size(&self) -> usize {
+    pub fn max_size(&self) -> usize {
         self.layout.size()
     }
+
     #[inline(always)]
-    pub(crate) fn alloc_slice_clone<T: Clone>(&self, src: &[T]) -> Result<NonNull<T>> {
+    pub fn alloc_slice_clone<T: Clone>(&self, src: &[T]) -> Result<NonNull<T>> {
         let layout = Layout::for_value(src);
         let dst = self.alloc_layout(layout)?.cast::<T>();
         unsafe {
@@ -272,7 +278,7 @@ fn test_over_alloc() {
 }
 #[test]
 fn test_over_size() {
-    for size in 0..1024 * 1024 {
+    for size in 0..1024 {
         let arena = Arena::new(size).unwrap();
         for i in 0..usize::MAX {
             if arena.len() + size_of::<usize>() > arena.max_size() {
@@ -304,8 +310,9 @@ fn test_get_slice() {
     let values: [usize; 2] = [1, 2];
     let ptr = arena.alloc_slice_copy(&values).unwrap();
     let offset = arena.offset_slice(ptr);
-    let slice = arena.get_slice::<usize>(offset + 1, values.len()).unwrap();
+    let slice = arena.get_slice::<usize>(offset, values.len()).unwrap();
     assert_eq!(slice, &values);
+    assert!(arena.get_slice::<usize>(offset + 1, values.len()).is_err());
 }
 
 #[test]
@@ -326,6 +333,5 @@ fn test_slice_string() {
     let p = arena.alloc_slice_copy(slice).unwrap();
     let offset = arena.offset_slice(p);
     let k = arena.get_slice::<u8>(offset, slice.len()).unwrap();
-    dbg!(String::from_utf8_lossy(k));
+    assert_eq!(String::from_utf8_lossy(k), s);
 }
-

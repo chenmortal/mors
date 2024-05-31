@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use mors_traits::skip_list::SkipList;
+use mors_traits::skip_list::SkipList as SkipListTrait;
 
-use crate::{error::MorsSkipListError, Inner};
+use crate::{error::MorsSkipListError, SkipList};
 type Result<T> = std::result::Result<T, MorsSkipListError>;
 pub struct MorsSkipList {
-    inner: Arc<Inner>,
+    inner: Arc<SkipList>,
 }
-impl SkipList for MorsSkipList {
+impl SkipListTrait for MorsSkipList {
     type ErrorType = MorsSkipListError;
 
     fn new(max_size: usize, cmp: fn(&[u8], &[u8]) -> std::cmp::Ordering) -> Result<Self>
@@ -15,7 +15,7 @@ impl SkipList for MorsSkipList {
         Self: Sized,
     {
         Ok(Self {
-            inner: Arc::new(Inner::new(max_size, cmp)?),
+            inner: Arc::new(SkipList::new(max_size, cmp)?),
         })
     }
 
@@ -27,19 +27,18 @@ impl SkipList for MorsSkipList {
         self.inner.push(key, value)
     }
 
-    fn get(&self, key: &[u8], allow_near: bool) -> Option<&[u8]> {
-        todo!()
+    fn get(&self, key: &[u8]) -> Result<Option<&[u8]>> {
+        self.inner.get(key)
     }
-
-    fn get_key_value(&self, key: &[u8], allow_near: bool) -> Option<(&[u8], &[u8])> {
-        todo!()
+    fn get_or_next(&self, key: &[u8]) -> Result<Option<&[u8]>> {
+        self.inner.get_or_next(key)
     }
 
     fn is_empty(&self) -> bool {
-        todo!()
+        self.inner.is_empty()
     }
 
     fn height(&self) -> usize {
-        todo!()
+        self.inner.height()
     }
 }
