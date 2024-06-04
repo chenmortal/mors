@@ -24,6 +24,8 @@ mors-sstable={path = "mors/sstable",version ="0.1"}
 mors-common={path = "mors/common",version ="0.1"}
 mors-traits={path = "mors/traits",version ="0.1"}
 mors-skip_list={path = "mors/skip_list",version ="0.1"}
+memmap2 = "0.9"
+criterion = "0.4"
 log = "0.4"
 tracing = "0.1.37"
 tokio = { version = "1", features = ["full"] }
@@ -48,7 +50,7 @@ rand = "0.8.5"
 integer-encoding = "4.0.0"
 ahash = "*"
 either = "1.9.0"
-memmap2 = "0.9"
+
 smallvec = "1.11.1"
 bitflags = "2.4.0"
 scopeguard = "1.2.0"

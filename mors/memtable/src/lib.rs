@@ -26,20 +26,3 @@ where
         todo!()
     }
 }
-
-#[cfg(test)]
-mod tests {
-
-    use std::collections::HashMap;
-
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let p: HashMap<u32, u32> = HashMap::new();
-        p.is_empty();
-        // p.get_key_value(k)
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}

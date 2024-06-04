@@ -1,10 +1,10 @@
 use std::alloc::{alloc, dealloc, handle_alloc_error, Layout};
 use std::mem::size_of;
 
-use mors_common::DEFAULT_PAGE_SIZE;
-
 use std::ptr::{self, NonNull};
 use std::sync::atomic::AtomicUsize;
+
+use mors_common::page_size;
 
 use crate::error::ArenaError;
 
@@ -26,8 +26,8 @@ impl Arena {
         let size = size as usize;
         let mut request_size = Self::round_up_to(size, chunk_align);
         debug_assert_eq!(chunk_align % CHUNK_ALIGN, 0);
-        if request_size >= DEFAULT_PAGE_SIZE.to_owned() {
-            request_size = Self::round_up_to(request_size, DEFAULT_PAGE_SIZE.to_owned());
+        if request_size >= page_size() {
+            request_size = Self::round_up_to(request_size, page_size());
         }
         debug_assert_eq!(request_size % CHUNK_ALIGN, 0);
 
