@@ -9,6 +9,7 @@
       <sourceFolder url="file://$MODULE_DIR$/mors/skip_list/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/mors/sstable/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/mors/traits/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/mors/encrypt/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
