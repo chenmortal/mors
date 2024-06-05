@@ -1,8 +1,11 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-mod mmap;
 // #[macro_use]
 extern crate lazy_static;
+
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+mod log_file;
+mod mmap;
+
 // lazy_static! {
 //     pub static ref DEFAULT_PAGE_SIZE: usize = unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize };
 // }

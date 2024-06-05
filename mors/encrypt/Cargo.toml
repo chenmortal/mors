@@ -1,0 +1,17 @@
+[package]
+name = "mors-encrypt"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+version.workspace = true
+
+[dependencies]
+prost = {workspace = true}
+mors-common = {workspace = true}
+mors-traits = {workspace = true}
+
+[build-dependencies]
+prost-build = {workspace = true}
+
+

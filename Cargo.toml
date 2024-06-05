@@ -1,5 +1,5 @@
 [workspace]
-members = ["mors/common", "mors/core", "mors/memtable", "mors/skip_list", "mors/sstable", "mors/traits"]
+members = ["mors/common", "mors/core", "mors/encrypt", "mors/memtable", "mors/skip_list", "mors/sstable", "mors/traits"]
 resolver="2"
 
 [workspace.package]
@@ -24,8 +24,9 @@ mors-sstable={path = "mors/sstable",version ="0.1"}
 mors-common={path = "mors/common",version ="0.1"}
 mors-traits={path = "mors/traits",version ="0.1"}
 mors-skip_list={path = "mors/skip_list",version ="0.1"}
+mors-encrypt={path = "mors/encrypt",version ="0.1"}
 memmap2 = "0.9"
-criterion = "0.4"
+criterion = "0.5"
 log = "0.4"
 tracing = "0.1.37"
 tokio = { version = "1", features = ["full"] }
@@ -58,3 +59,4 @@ parking_lot = "0.12.1"
 async-channel = "2.0.0"
 num_cpus = "1.16.0"
 rayon = "1.8.0"
+prost-build = "0.12.6"
