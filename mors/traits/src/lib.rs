@@ -6,3 +6,4 @@ pub mod memtable;
 pub mod skip_list;
 pub mod storage;
 pub mod ts;
+pub mod default;

@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::fmt::Display;
 use std::ops::{Add, AddAssign, Deref, Sub};
-use std::time::{SystemTime, SystemTimeError};
+use std::time::{Duration, SystemTime, SystemTimeError};
 
 use bytes::{Buf, BufMut, Bytes};
 
@@ -33,6 +33,13 @@ impl From<SystemTime> for PhyTs {
             .into()
     }
 }
+
+impl From<PhyTs> for SystemTime {
+    fn from(value: PhyTs) -> Self {
+        SystemTime::UNIX_EPOCH.add(Duration::from_secs(value.0))
+    }
+}
+
 impl PhyTs {
     pub fn now() -> Result<Self, SystemTimeError> {
         Ok(SystemTime::now()
