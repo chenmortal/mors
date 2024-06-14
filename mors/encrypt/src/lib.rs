@@ -1,8 +1,8 @@
-mod cipher;
+pub mod cipher;
+pub mod error;
 mod pb;
-mod registry;
-mod error;
-mod iter;
+pub mod registry;
+// mod iter;
 
 pub const KEY_REGISTRY_FILE_NAME: &str = "KEY_REGISTRY";
 pub const KEY_REGISTRY_REWRITE_FILE_NAME: &str = "REWRITE-KEY_REGISTRY";

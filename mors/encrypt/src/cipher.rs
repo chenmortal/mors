@@ -12,10 +12,10 @@ use aes_gcm_siv::Aes128GcmSiv as Aes128Gcm;
 #[cfg(feature = "aes-gcm-siv")]
 use aes_gcm_siv::Aes256GcmSiv as Aes256Gcm;
 
-use crate::error::MorsEncryptError;
+use crate::error::EncryptError;
 
 pub type Nonce = GenericArray<u8, U12>;
-type Result<T> = std::result::Result<T, MorsEncryptError>;
+type Result<T> = std::result::Result<T, EncryptError>;
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CipherKeyId(u64);
 impl Display for CipherKeyId {
@@ -73,7 +73,7 @@ impl AesCipher {
         let cipher = match key.len() {
             16 => Self::Aes128(Aes128Gcm::new_from_slice(key).unwrap(), id),
             32 => Self::Aes256(Aes256Gcm::new_from_slice(key).unwrap(), id),
-            _ => return Err(MorsEncryptError::InvalidEncryptionKey),
+            _ => return Err(EncryptError::InvalidEncryptionKey),
         };
         Ok(cipher)
     }
@@ -89,7 +89,7 @@ impl AesCipher {
             AesCipher::Aes128(ref cipher, _) => {
                 cipher
                     .encrypt(nonce, plaintext)
-                    .map_err(|_| MorsEncryptError::EncryptError {
+                    .map_err(|_| EncryptError::EncryptError {
                         nonce: format!("{:?}", nonce),
                         plaintext: format!("{:?}", plaintext),
                     })
@@ -97,7 +97,7 @@ impl AesCipher {
             AesCipher::Aes256(ref cipher, _) => {
                 cipher
                     .encrypt(nonce, plaintext)
-                    .map_err(|_| MorsEncryptError::EncryptError {
+                    .map_err(|_| EncryptError::EncryptError {
                         nonce: format!("{:?}", nonce),
                         plaintext: format!("{:?}", plaintext),
                     })
@@ -114,7 +114,7 @@ impl AesCipher {
             AesCipher::Aes128(ref cipher, _) => {
                 cipher
                     .decrypt(nonce, ciphertext)
-                    .map_err(|_| MorsEncryptError::DecryptError {
+                    .map_err(|_| EncryptError::DecryptError {
                         nonce: format!("{:?}", nonce),
                         ciphertext: format!("{:?}", ciphertext),
                     })
@@ -122,7 +122,7 @@ impl AesCipher {
             AesCipher::Aes256(ref cipher, _) => {
                 cipher
                     .decrypt(nonce, ciphertext)
-                    .map_err(|_| MorsEncryptError::DecryptError {
+                    .map_err(|_| EncryptError::DecryptError {
                         nonce: format!("{:?}", nonce),
                         ciphertext: format!("{:?}", ciphertext),
                     })
@@ -142,6 +142,6 @@ impl AesCipher {
     }
     #[inline]
     pub fn generate_nonce() -> Nonce {
-        Aes128Gcm::generate_nonce(&mut OsRng)
+        Aes128Gcm::generate_nonce(&mut OsRng).into()
     }
 }

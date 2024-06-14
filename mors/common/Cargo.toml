@@ -19,7 +19,7 @@ criterion = { workspace = true, features = ["html_reports"] }
 
 crc32fast = { workspace = true }
 
-tokio={workspace=true}
+tokio = { workspace = true }
 [[bench]]
 name = "io"
 harness = false

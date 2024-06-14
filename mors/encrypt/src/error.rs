@@ -1,8 +1,9 @@
-use crate::cipher::CipherKeyId;
 use thiserror::Error;
 
+use crate::cipher::CipherKeyId;
+
 #[derive(Error, Debug)]
-pub enum MorsEncryptError {
+pub enum EncryptError {
     #[error("Encryption key's length should be either 16 or 32 bytes")]
     InvalidEncryptionKey,
     #[error("Invalid nonce: {nonce}, plaintext: {plaintext}")]

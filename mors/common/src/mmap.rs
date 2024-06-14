@@ -1,6 +1,3 @@
-use std::cmp::Ordering;
-use std::io::{BufRead, Error, Read, SeekFrom, Write};
-use std::mem::replace;
 use std::{
     cmp::max,
     fs::{File, OpenOptions},
@@ -9,6 +6,8 @@ use std::{
     path::PathBuf,
     slice,
 };
+use std::cmp::Ordering;
+use std::io::{BufRead, Error, Read, SeekFrom, Write};
 
 use memmap2::{Advice, MmapRaw};
 
@@ -275,18 +274,16 @@ impl StorageBackend for MmapFile {
     }
 
     fn write_seek(&mut self, write_pos: SeekFrom) -> Result<(), Error> {
+        self.flush_buf()?;
         match write_pos {
             SeekFrom::Start(start) => {
                 self.w_pos = start as usize;
-                self.w_buf.clear();
             }
             SeekFrom::End(end) => {
                 self.w_pos = self.raw.len() - end as usize;
-                self.w_buf.clear();
             }
             SeekFrom::Current(current) => {
                 self.w_pos += current as usize;
-                self.w_buf.clear();
             }
         }
         Ok(())
@@ -344,10 +341,10 @@ impl MmapFileBuilder {
         self.advices.push(advice);
         self
     }
-    pub fn create(&self, path: PathBuf, max_size: u64) -> Result<MmapFile, io::Error> {
+    pub fn create(&self, path: &PathBuf, max_size: u64) -> Result<MmapFile, io::Error> {
         let file = self.open_option.open(&path)?;
         let file_len = file.metadata()?.len();
-        let size = max(file_len, max_size as u64);
+        let size = max(file_len, max_size);
         file.set_len(size)?;
         let mmap = MmapRaw::map_raw(&file)?;
 
@@ -363,7 +360,7 @@ impl MmapFileBuilder {
             last_flush_pos: 0,
             panicked: false,
             raw: mmap,
-            path,
+            path: path.clone(),
             fd: file,
         };
         mmap.fd.sync_all()?;

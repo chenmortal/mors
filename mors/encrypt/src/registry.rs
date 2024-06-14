@@ -1,10 +1,5 @@
-use log::error;
-use mors_traits::default::DEFAULT_DIR;
-use prost::bytes::{Buf, BufMut};
-use prost::Message;
 use std::collections::HashMap;
-
-use std::fs::{rename, File, OpenOptions};
+use std::fs::{File, OpenOptions, rename};
 use std::io::{BufReader, Read, Seek, Write};
 use std::ops::Deref;
 use std::os::unix::fs::OpenOptionsExt;
@@ -12,25 +7,30 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
-use crate::cipher::{AesCipher, CipherKeyId, Nonce};
-use crate::error::MorsEncryptError;
+use log::error;
+use prost::bytes::{Buf, BufMut};
+use prost::Message;
+
+use mors_traits::default::DEFAULT_DIR;
 use mors_traits::ts::PhyTs;
 
-use crate::pb::encryption::DataKey;
 use crate::{KEY_REGISTRY_FILE_NAME, KEY_REGISTRY_REWRITE_FILE_NAME, SANITY_TEXT};
+use crate::cipher::{AesCipher, CipherKeyId, Nonce};
+use crate::error::EncryptError;
+use crate::pb::encryption::DataKey;
 
-type Result<T> = std::result::Result<T, MorsEncryptError>;
+type Result<T> = std::result::Result<T, EncryptError>;
 #[derive(Debug, Default, Clone)]
-pub(crate) struct KeyRegistry(Arc<RwLock<KeyRegistryInner>>);
-impl Deref for KeyRegistry {
-    type Target = Arc<RwLock<KeyRegistryInner>>;
+pub struct Kms(Arc<RwLock<KmsInner>>);
+impl Deref for Kms {
+    type Target = Arc<RwLock<KmsInner>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 #[derive(Debug, Default)]
-pub(crate) struct KeyRegistryInner {
+pub struct KmsInner {
     data_keys: HashMap<CipherKeyId, DataKey>,
     last_created: PhyTs, //last_created is the timestamp(seconds) of the last data key,
     next_key_id: CipherKeyId,
@@ -74,13 +74,13 @@ impl KeyRegistryBuilder {
         self.dir = dir;
         self
     }
-    pub fn build(self) -> Result<KeyRegistry> {
+    pub fn build(self) -> Result<Kms> {
         let keys_len = self.encrypt_key.len();
 
         if keys_len > 0 && !vec![16, 32].contains(&keys_len) {
-            return Err(MorsEncryptError::InvalidEncryptionKey);
+            return Err(EncryptError::InvalidEncryptionKey);
         }
-        let mut key_registry = KeyRegistryInner {
+        let mut key_registry = KmsInner {
             data_keys: Default::default(),
             last_created: PhyTs::default(),
             next_key_id: 0.into(),
@@ -96,7 +96,7 @@ impl KeyRegistryBuilder {
 
         if !key_registry_path.exists() {
             if self.read_only {
-                return Ok(KeyRegistry(Arc::new(RwLock::new(key_registry))));
+                return Ok(Kms(Arc::new(RwLock::new(key_registry))));
             }
             key_registry.write_to_file(&self.dir)?;
         }
@@ -112,10 +112,10 @@ impl KeyRegistryBuilder {
             key_registry.file = Some(key_registry_file);
         }
 
-        return Ok(KeyRegistry(Arc::new(RwLock::new(key_registry))));
+        return Ok(Kms(Arc::new(RwLock::new(key_registry))));
     }
 }
-impl KeyRegistryInner {
+impl KmsInner {
     //     Structure of Key Registry.
     // +-------------------+---------------------+--------------------+--------------+------------------+------------------+------------------+
     // |   Nonce   |  SanityText.len() u32 | e_Sanity Text  | DataKey1(len_crc_buf(e_data_key.len,crc),e_data_key(..,e_data,..))     | DataKey2     | ...              |
@@ -209,7 +209,7 @@ impl<'a> KeyRegistryIter<'a> {
         };
 
         if saintytext != SANITY_TEXT {
-            return Err(MorsEncryptError::EncryptionKeyMismatch);
+            return Err(EncryptError::EncryptionKeyMismatch);
         };
         Ok(())
     }
@@ -293,23 +293,23 @@ impl<'a> Iterator for KeyRegistryIter<'a> {
         Some(data_key)
     }
 }
-impl KeyRegistry {
-    pub(crate) fn latest_cipher(&self) -> Result<Option<AesCipher>> {
+impl Kms {
+    pub fn latest_cipher(&self) -> Result<Option<AesCipher>> {
         if let Some(data_key) = self.latest_datakey()? {
             return Ok(AesCipher::new(&data_key.data, data_key.key_id.into())?.into());
         };
         Ok(None)
     }
 
-     fn latest_datakey(&self) -> Result<Option<DataKey>> {
+    fn latest_datakey(&self) -> Result<Option<DataKey>> {
         let inner_r = self
             .read()
-            .map_err(|e| MorsEncryptError::RwLockPoisoned(format!("{e}")))?;
+            .map_err(|e| EncryptError::RwLockPoisoned(format!("{e}")))?;
         if inner_r.cipher.is_none() {
             return Ok(None);
         }
 
-        let valid_key = |inner: &KeyRegistryInner| {
+        let valid_key = |inner: &KmsInner| {
             let last = inner.last_created.into();
             if let Ok(diff) = SystemTime::now().duration_since(last) {
                 if diff < inner.data_key_rotation_duration {
@@ -329,7 +329,9 @@ impl KeyRegistry {
             return Ok(key);
         }
         drop(inner_r);
-        let mut inner_w = self.write().map_err(|e| MorsEncryptError::RwLockPoisoned(format!("{e}")))?;
+        let mut inner_w = self
+            .write()
+            .map_err(|e| EncryptError::RwLockPoisoned(format!("{e}")))?;
         let (key, valid) = valid_key(&inner_w);
         if valid {
             return Ok(key);
@@ -349,7 +351,7 @@ impl KeyRegistry {
             created_at: created_at.into(),
         };
         let mut buf = Vec::new();
-        KeyRegistryInner::store_data_key(&mut buf, &inner_w.cipher, &mut data_key)?;
+        KmsInner::store_data_key(&mut buf, &inner_w.cipher, &mut data_key)?;
         if let Some(f) = &mut inner_w.file {
             f.write_all(&buf)?;
         }
@@ -359,21 +361,20 @@ impl KeyRegistry {
         Ok(Some(data_key))
     }
     fn get_data_key(&self, cipher_key_id: CipherKeyId) -> Result<Option<DataKey>> {
-        let inner_r = self.read().map_err(|e| MorsEncryptError::RwLockPoisoned(format!("{e}")))?;
+        let inner_r = self
+            .read()
+            .map_err(|e| EncryptError::RwLockPoisoned(format!("{e}")))?;
         if cipher_key_id == CipherKeyId::default() {
             return Ok(None);
         }
         match inner_r.data_keys.get(&cipher_key_id) {
             Some(s) => Ok(Some(s.clone())),
             None => {
-                return Err(MorsEncryptError::InvalidDataKeyID(cipher_key_id));
+                return Err(EncryptError::InvalidDataKeyID(cipher_key_id));
             }
         }
     }
-    pub(crate) fn get_cipher(
-        &self,
-        cipher_key_id: CipherKeyId,
-    ) -> Result<Option<AesCipher>> {
+    pub(crate) fn get_cipher(&self, cipher_key_id: CipherKeyId) -> Result<Option<AesCipher>> {
         if let Some(dk) = self.get_data_key(cipher_key_id)? {
             let cipher = AesCipher::new(&dk.data, cipher_key_id)?;
             return Ok(cipher.into());
