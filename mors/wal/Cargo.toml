@@ -1,0 +1,14 @@
+[package]
+name = "wal"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+version.workspace = true
+
+[dependencies]
+mors-traits = { workspace = true }
+mors-common = { workspace = true }
+mors-encrypt = { workspace = true }
+thiserror = "1.0.61"
+bytes = "1.0.1"
