@@ -15,10 +15,10 @@ mors-traits = { workspace = true }
 aes-gcm = { workspace = true, optional = true }
 aes-gcm-siv = { workspace = true, optional = true }
 aead = { workspace = true }
-thiserror = "1.0.61"
-libc = "0.2.155"
-crc32fast = "1.4.2"
-log = "0.4.21"
+thiserror = { workspace = true }
+libc = { workspace = true }
+crc32fast = { workspace = true }
+log = { workspace = true }
 [build-dependencies]
 prost-build = { workspace = true }
 

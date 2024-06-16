@@ -7,8 +7,11 @@ readme.workspace = true
 version.workspace = true
 
 [dependencies]
-mors-traits={workspace=true}
-
+mors-common = { workspace = true }
+mors-traits = { workspace = true }
+mors-encrypt = { workspace = true }
+mors-wal = { workspace = true }
+thiserror = { workspace = true }
 
 [lints]
 workspace = true

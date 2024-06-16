@@ -47,6 +47,9 @@ impl PhyTs {
             .as_secs()
             .into())
     }
+    pub fn to_u64(&self) -> u64 {
+        self.0
+    }
 }
 
 ///this means TransactionTimestamp
@@ -54,7 +57,7 @@ impl PhyTs {
 pub struct TxnTs(u64);
 impl TxnTs {
     #[inline(always)]
-    pub(crate) fn to_u64(&self) -> u64 {
+    pub fn to_u64(&self) -> u64 {
         self.0
     }
 }
@@ -94,11 +97,11 @@ pub struct KeyTs {
     txn_ts: TxnTs,
 }
 impl KeyTs {
-    pub(crate) fn new(key: Bytes, txn_ts: TxnTs) -> Self {
+    pub fn new(key: Bytes, txn_ts: TxnTs) -> Self {
         Self { key, txn_ts }
     }
 
-    pub(crate) fn serialize(&self) -> Vec<u8> {
+    pub fn serialize(&self) -> Vec<u8> {
         let mut v = Vec::with_capacity(self.key.len() + 8);
         v.put_slice(&self.key);
         v.put_u64(self.txn_ts.to_u64());
@@ -247,7 +250,7 @@ impl PartialOrd<KeyTs> for KeyTsBorrow<'_> {
     }
 }
 impl KeyTsBorrow<'_> {
-    pub(crate) fn cmp(left: &[u8], right: &[u8]) -> Ordering {
+    pub fn cmp(left: &[u8], right: &[u8]) -> Ordering {
         if left.len() > 8 && right.len() > 8 {
             let left_split = left.len() - 8;
             let right_split = right.len() - 8;

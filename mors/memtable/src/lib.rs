@@ -1,28 +1,23 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
+use mors_traits::file_id::FileId;
+
+mod error;
+pub mod memtable;
+mod write;
+
+pub(crate) const DEFAULT_DIR: &str = "./tmp/badger";
+pub(crate) type Result<T> = std::result::Result<T, error::MorsMemtableError>;
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct MorsMemtableId(u32);
+impl From<u32> for MorsMemtableId {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
 }
-use mors_traits::{memtable::Memtable, skip_list::SkipList};
-struct MorsMemtable<T: SkipList> {
-    data: Vec<(String, String)>,
-    skip_list: T,
+impl From<MorsMemtableId> for u32 {
+    fn from(value: MorsMemtableId) -> Self {
+        value.0
+    }
 }
-impl<T> Memtable for MorsMemtable<T>
-where
-    T: SkipList,
-{
-    fn insert(&mut self, key: String, value: String) {
-        todo!()
-    }
-
-    fn get(&self, key: &str) -> Option<&str> {
-        todo!()
-    }
-
-    fn remove(&mut self, key: &str) -> Option<String> {
-        todo!()
-    }
-
-    fn size(&self) -> usize {
-        todo!()
-    }
+impl FileId for MorsMemtableId {
+    const SUFFIX: &'static str = ".mem";
 }

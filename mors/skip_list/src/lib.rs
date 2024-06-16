@@ -1,14 +1,17 @@
+extern crate thiserror;
+
 use std::{
     ops::{Deref, DerefMut},
     ptr::NonNull,
     sync::atomic::{AtomicU64, AtomicUsize, Ordering},
 };
-const SKL_MAX_HEIGHT: usize = 20; //<20 !=20
 
-extern crate thiserror;
+use rand::Rng;
+
 use arena::Arena;
 use error::MorsSkipListError;
-use rand::Rng;
+
+const SKL_MAX_HEIGHT: usize = 20; //<20 !=20
 
 pub mod arena;
 mod error;
@@ -21,7 +24,8 @@ type Result<T> = std::result::Result<T, MorsSkipListError>;
 ///1 <head> ----------> [2] ----------> [4] ------------------> [7] ----------> [9] --> [10] ->  
 ///2 <head> ----------> [2] ------------------------------------[7] ----------> [9] ---------->  
 ///3 <head> ----------> [2] --------------------------------------------------> [9] ---------->  
-
+unsafe impl Send for SkipList {}
+unsafe impl Sync for SkipList {}
 pub struct SkipList {
     ///the height of the highest node in the list
     height: AtomicUsize,

@@ -374,7 +374,7 @@ impl Kms {
             }
         }
     }
-    pub(crate) fn get_cipher(&self, cipher_key_id: CipherKeyId) -> Result<Option<AesCipher>> {
+    pub fn get_cipher(&self, cipher_key_id: CipherKeyId) -> Result<Option<AesCipher>> {
         if let Some(dk) = self.get_data_key(cipher_key_id)? {
             let cipher = AesCipher::new(&dk.data, cipher_key_id)?;
             return Ok(cipher.into());

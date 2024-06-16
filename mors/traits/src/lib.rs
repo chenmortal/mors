@@ -4,5 +4,6 @@ pub mod iter;
 pub mod kv;
 pub mod memtable;
 pub mod skip_list;
-pub mod storage;
+
+pub mod log_header;
 pub mod ts;
