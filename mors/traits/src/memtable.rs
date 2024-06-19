@@ -1,6 +1,8 @@
+use crate::{kv::{Entry, ValueMeta}, ts::{KeyTs, TxnTs}};
+
 pub trait Memtable {
-    fn insert(&mut self, key: String, value: String);
-    fn get(&self, key: &str) -> Option<&str>;
-    fn remove(&mut self, key: &str) -> Option<String>;
+    type ErrorType;
+    fn get(&self, key_ts: &KeyTs) -> Option<(TxnTs,ValueMeta)>;
+    fn push(&mut self, entry: &Entry) -> Result<(),Self::ErrorType>;
     fn size(&self) -> usize;
 }

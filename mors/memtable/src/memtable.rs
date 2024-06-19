@@ -7,7 +7,6 @@ use mors_common::mmap::MmapFileBuilder;
 use mors_common::page_size;
 use mors_encrypt::registry::Kms;
 use mors_traits::file_id::FileId;
-use mors_traits::memtable::Memtable;
 use mors_traits::skip_list::SkipList;
 use mors_traits::ts::{KeyTsBorrow, TxnTs};
 use mors_wal::LogFile;
@@ -88,23 +87,4 @@ where
         Ok(memtable)
     }
 }
-impl<T> Memtable for MorsMemtable<T>
-where
-    T: SkipList,
-{
-    fn insert(&mut self, key: String, value: String) {
-        todo!()
-    }
 
-    fn get(&self, key: &str) -> Option<&str> {
-        todo!()
-    }
-
-    fn remove(&mut self, key: &str) -> Option<String> {
-        todo!()
-    }
-
-    fn size(&self) -> usize {
-        todo!()
-    }
-}

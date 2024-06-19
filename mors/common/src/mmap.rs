@@ -34,6 +34,9 @@ impl MmapFile {
     pub fn path(&self) -> &PathBuf {
         &self.path
     }
+    pub fn write_at(&self)->usize{
+        self.w_pos
+    }
     pub fn delete(&self) -> Result<(), io::Error> {
         self.fd.set_len(0)?;
         self.fd.sync_all()?;
@@ -132,7 +135,9 @@ impl MmapFile {
     }
 
     #[cfg(not(target_os = "linux"))]
-    fn set_len(&mut self, size: usize) -> Result<(), io::Error> {
+    pub fn set_len(&mut self, size: usize) -> Result<(), io::Error> {
+        use std::mem::replace;
+
         self.raw.flush()?;
         self.fd.set_len(size as u64)?;
         let _ = replace(&mut self.raw, MmapRaw::map_raw(&self.fd)?);
@@ -141,6 +146,7 @@ impl MmapFile {
     #[cfg(target_os = "linux")]
     pub fn set_len(&mut self, size: usize) -> Result<(), io::Error> {
         use memmap2::RemapOptions;
+        use std::mem::replace;
         self.raw.flush()?;
         self.fd.set_len(size as u64)?;
         unsafe { self.raw.remap(size, RemapOptions::new().may_move(true))? };

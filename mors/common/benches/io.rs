@@ -36,7 +36,7 @@ fn mmap_wirte(path: &str, iter: usize, size: usize) -> io::Result<()> {
     f.set_len(0)?;
     Ok(())
 }
-
+#[cfg(target_os = "linux")]
 fn direct_write(path: &str, iter: usize, size: usize) -> io::Result<()> {
     let mut f = OpenOptions::new()
         .create(true)
@@ -67,7 +67,7 @@ fn std_write_benchmark(c: &mut Criterion) {
         b.iter(|| std_write(black_box(path), black_box(iter), black_box(size)))
     });
 }
-
+#[cfg(target_os = "linux")]
 fn direct_write_benchmark(c: &mut Criterion) {
     let path = "/tmp/testfile";
     let iter = 1000;
@@ -85,6 +85,12 @@ fn mmap_write_benchmark(c: &mut Criterion) {
     });
 }
 
+criterion_group!(
+    benches,
+    std_write_benchmark,
+    mmap_write_benchmark
+);
+#[cfg(target_os = "linux")]
 criterion_group!(
     benches,
     std_write_benchmark,

@@ -8,3 +8,7 @@ readme.workspace = true
 [lints]
 workspace=true
 [dependencies]
+mors-common={workspace=true}
+thiserror={workspace=true}
+tokio={workspace=true,features = ["full"]}
+tokio-util={workspace=true,features = ["full"]}
