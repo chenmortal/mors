@@ -3,6 +3,7 @@ use mors_traits::{
 };
 
 use crate::{error::MorsMemtableError, memtable::MorsMemtable};
+use crate::memtable::MorsMemtableBuilder;
 
 impl<T: SkipList> Memtable for MorsMemtable<T>
 where
@@ -35,5 +36,11 @@ where
         key_ts: &KeyTs,
     ) -> Option<(mors_traits::ts::TxnTs, mors_traits::kv::ValueMeta)> {
         todo!()
+    }
+
+    type MemtableBuilder = MorsMemtableBuilder<T>;
+
+    fn new(builder: &Self::MemtableBuilder) -> Self {
+        builder.open();
     }
 }

@@ -6,18 +6,18 @@ use std::sync::atomic::AtomicU32;
 use mors_common::mmap::MmapFileBuilder;
 use mors_common::page_size;
 use mors_encrypt::registry::Kms;
-use mors_traits::file_id::FileId;
+use mors_traits::file_id::{FileId, MemtableId};
 use mors_traits::skip_list::SkipList;
 use mors_traits::ts::{KeyTsBorrow, TxnTs};
 use mors_wal::LogFile;
 
-use crate::{DEFAULT_DIR, MorsMemtableId};
+use crate::{DEFAULT_DIR, MemtableId};
 use crate::error::MorsMemtableError;
 use crate::Result;
 
 pub struct MorsMemtable<T: SkipList> {
     pub(crate) skip_list: T,
-    pub(crate) wal: LogFile<MorsMemtableId>,
+    pub(crate) wal: LogFile<MemtableId>,
     pub(crate) max_version: TxnTs,
     pub(crate) buf: Vec<u8>,
     pub(crate) memtable_size: usize,
@@ -63,7 +63,7 @@ where
         &self,
         mmap_builder: MmapFileBuilder,
         kms: Kms,
-        fid: MorsMemtableId,
+        fid: MemtableId,
     ) -> Result<MorsMemtable<T>> {
         let mem_path = fid.join_dir(self.dir.clone());
         let skip_list = T::new(self.arena_size(), KeyTsBorrow::cmp)?;
@@ -87,4 +87,3 @@ where
         Ok(memtable)
     }
 }
-

@@ -39,3 +39,19 @@ pub trait FileId: From<u32> + Into<u32> + Debug + Copy {
         dir.join(format!("{:06}{}", id, Self::SUFFIX))
     }
 }
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct MemtableId(u32);
+impl From<u32> for MemtableId {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+impl From<MemtableId> for u32 {
+    fn from(value: MemtableId) -> Self {
+        value.0
+    }
+}
+impl FileId for MemtableId {
+    const SUFFIX: &'static str = ".mem";
+}
+

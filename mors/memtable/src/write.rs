@@ -1,21 +1,21 @@
+use mors_traits::file_id::MemtableId;
 use mors_traits::kv::{Entry, Meta};
-
 use mors_traits::skip_list::SkipList;
-use mors_wal::read::LogFileIter;
 use mors_wal::LogFile;
+use mors_wal::read::LogFileIter;
 
+use crate::{MemtableId, Result};
 use crate::error::MorsMemtableError;
 use crate::memtable::MorsMemtable;
-use crate::{MorsMemtableId, Result};
 
 impl<T: SkipList> MorsMemtable<T>
 where
     MorsMemtableError: From<<T as SkipList>::ErrorType>,
 {
     pub(crate) fn reload(&mut self) -> Result<()> {
-        let mut wal_iter = LogFileIter::<MorsMemtableId>::new(
+        let mut wal_iter = LogFileIter::<MemtableId>::new(
             &self.wal,
-            LogFile::<MorsMemtableId>::LOG_HEADER_SIZE,
+            LogFile::<MemtableId>::LOG_HEADER_SIZE,
         )?;
 
         while let Some(next) = wal_iter.next()? {
@@ -48,7 +48,7 @@ where
             &entry.key_ts().serialize(),
             &entry.value_meta().serialize(),
         )?;
-        self.max_version=self.max_version.max(entry.version());
+        self.max_version = self.max_version.max(entry.version());
         Ok(())
     }
 }

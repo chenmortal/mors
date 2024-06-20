@@ -9,10 +9,9 @@ version.workspace = true
 [dependencies]
 lazy_static = { workspace = true }
 libc = { workspace = true }
-rustix = { workspace = true ,features = ["std","mm","fs"] }
+rustix = { workspace = true, features = ["std", "mm", "fs"] }
 memmap2 = { workspace = true }
 getrandom = { workspace = true }
-mors-traits = { workspace = true }
 bytes = { workspace = true }
 
 [dev-dependencies]

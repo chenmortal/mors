@@ -14,7 +14,9 @@ use prost::Message;
 use mors_traits::default::DEFAULT_DIR;
 use mors_traits::ts::PhyTs;
 
-use crate::{KEY_REGISTRY_FILE_NAME, KEY_REGISTRY_REWRITE_FILE_NAME, SANITY_TEXT};
+use crate::{
+    KEY_REGISTRY_FILE_NAME, KEY_REGISTRY_REWRITE_FILE_NAME, SANITY_TEXT,
+};
 use crate::cipher::{AesCipher, CipherKeyId, Nonce};
 use crate::error::EncryptError;
 use crate::pb::encryption::DataKey;
@@ -39,13 +41,13 @@ pub struct KmsInner {
     data_key_rotation_duration: Duration,
 }
 #[derive(Debug, Clone)]
-pub struct KeyRegistryBuilder {
+pub struct KmsBuilder {
     encrypt_key: Vec<u8>,                 // encryption key
     data_key_rotation_duration: Duration, // key rotation duration
     read_only: bool,
     dir: PathBuf,
 }
-impl Default for KeyRegistryBuilder {
+impl Default for KmsBuilder {
     fn default() -> Self {
         Self {
             encrypt_key: Default::default(),
@@ -55,14 +57,17 @@ impl Default for KeyRegistryBuilder {
         }
     }
 }
-impl KeyRegistryBuilder {
+impl KmsBuilder {
     pub fn new(encrypt_key: Vec<u8>) -> Self {
         Self {
             encrypt_key,
             ..Default::default()
         }
     }
-    pub fn with_data_key_rotation_duration(mut self, duration: Duration) -> Self {
+    pub fn with_data_key_rotation_duration(
+        mut self,
+        duration: Duration,
+    ) -> Self {
         self.data_key_rotation_duration = duration;
         self
     }
@@ -74,7 +79,7 @@ impl KeyRegistryBuilder {
         self.dir = dir;
         self
     }
-    pub fn build(self) -> Result<Kms> {
+    pub fn build(&self) -> Result<Kms> {
         let keys_len = self.encrypt_key.len();
 
         if keys_len > 0 && !vec![16, 32].contains(&keys_len) {
@@ -155,7 +160,8 @@ impl KmsInner {
         let key_iter = KeyRegistryIter::new(fp, &self.cipher)?;
         for data_key in key_iter {
             self.next_key_id = self.next_key_id.max(data_key.key_id.into());
-            self.last_created = self.last_created.max(data_key.created_at.into());
+            self.last_created =
+                self.last_created.max(data_key.created_at.into());
             self.data_keys.insert(data_key.key_id.into(), data_key);
         }
         Ok(())
@@ -252,7 +258,9 @@ impl<'a> Iterator for KeyRegistryIter<'a> {
                 match e.kind() {
                     std::io::ErrorKind::UnexpectedEof => {}
                     _ => {
-                        error!("While reading data in keyRegistryIter.next {e}");
+                        error!(
+                            "While reading data in keyRegistryIter.next {e}"
+                        );
                     }
                 }
                 return None;
@@ -296,7 +304,9 @@ impl<'a> Iterator for KeyRegistryIter<'a> {
 impl Kms {
     pub fn latest_cipher(&self) -> Result<Option<AesCipher>> {
         if let Some(data_key) = self.latest_datakey()? {
-            return Ok(AesCipher::new(&data_key.data, data_key.key_id.into())?.into());
+            return Ok(
+                AesCipher::new(&data_key.data, data_key.key_id.into())?.into()
+            );
         };
         Ok(None)
     }
@@ -360,7 +370,10 @@ impl Kms {
         inner_w.data_keys.insert(key_id, data_key.clone());
         Ok(Some(data_key))
     }
-    fn get_data_key(&self, cipher_key_id: CipherKeyId) -> Result<Option<DataKey>> {
+    fn get_data_key(
+        &self,
+        cipher_key_id: CipherKeyId,
+    ) -> Result<Option<DataKey>> {
         let inner_r = self
             .read()
             .map_err(|e| EncryptError::RwLockPoisoned(format!("{e}")))?;
@@ -374,7 +387,10 @@ impl Kms {
             }
         }
     }
-    pub fn get_cipher(&self, cipher_key_id: CipherKeyId) -> Result<Option<AesCipher>> {
+    pub fn get_cipher(
+        &self,
+        cipher_key_id: CipherKeyId,
+    ) -> Result<Option<AesCipher>> {
         if let Some(dk) = self.get_data_key(cipher_key_id)? {
             let cipher = AesCipher::new(&dk.data, cipher_key_id)?;
             return Ok(cipher.into());
