@@ -1,6 +1,5 @@
 use std::{
-    fmt::Debug,
-    path::{Path, PathBuf},
+    collections::HashSet, fmt::{Debug, Display}, fs::read_dir, path::{Path, PathBuf}
 };
 
 use thiserror::Error;
@@ -55,3 +54,43 @@ impl FileId for MemtableId {
     const SUFFIX: &'static str = ".mem";
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SSTableId(u32);
+impl From<u32> for SSTableId {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+impl Into<u32> for SSTableId {
+    fn into(self) -> u32 {
+        self.0
+    }
+}
+impl FileId for SSTableId {
+    const SUFFIX: &'static str = ".sst";
+}
+impl Display for SSTableId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:06}.sst", self.0)
+    }
+    
+}
+impl SSTableId {
+    pub fn parse_set_from_dir<P: AsRef<Path>>(dir: P) -> HashSet<SSTableId> {
+        let mut id_set = HashSet::new();
+        let dir = dir.as_ref();
+        if let Ok(read_dir) = read_dir(dir) {
+            for ele in read_dir {
+                if let Ok(entry) = ele {
+                    let path = entry.path();
+                    if path.is_file() {
+                        if let Ok(id) = Self::parse(path) {
+                            id_set.insert(id);
+                        };
+                    }
+                }
+            }
+        };
+        return id_set;
+    }
+}

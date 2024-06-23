@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 pub mod mmap;
 pub mod lock;
 mod sys;
+pub mod compress;
 
 // lazy_static! {
 //     pub static ref DEFAULT_PAGE_SIZE: usize = unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize };

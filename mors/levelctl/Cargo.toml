@@ -7,6 +7,14 @@ readme.workspace = true
 version.workspace = true
 
 [dependencies]
+mors-traits={workspace=true}
+mors-common={workspace=true}
+thiserror={workspace=true}
+bytes={workspace=true}
+crc32fast={workspace=true}
+prost = { workspace = true }
 
+[build-dependencies]
+prost-build = { workspace = true }
 [lints]
 workspace = true

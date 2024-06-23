@@ -13,12 +13,12 @@ rustix = { workspace = true, features = ["std", "mm", "fs"] }
 memmap2 = { workspace = true }
 getrandom = { workspace = true }
 bytes = { workspace = true }
-
+snap = { workspace = true }
+zstd = { workspace = true }
+thiserror = { workspace = true }
 [dev-dependencies]
 criterion = { workspace = true, features = ["html_reports"] }
-
 crc32fast = { workspace = true }
-
 tokio = { workspace = true }
 [[bench]]
 name = "io"
