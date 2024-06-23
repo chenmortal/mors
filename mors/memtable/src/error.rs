@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use thiserror::Error;
 
 use mors_traits::skip_list::SkipListError;
@@ -17,4 +19,6 @@ pub enum MorsMemtableError {
     NullPointerError,
     #[error("Log truncate required to run DB. This might result in data loss ; end offset: {0} < size: {1} ")]
     TruncateNeeded(usize, usize),
+    #[error("File {0} already exists, please delete it first")]
+    FileExists(PathBuf),
 }

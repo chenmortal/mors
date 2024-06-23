@@ -11,6 +11,7 @@ mors-common = { workspace = true }
 mors-traits = { workspace = true }
 mors-encrypt = { workspace = true }
 mors-wal = { workspace = true }
+memmap2 = { workspace = true }
 thiserror = { workspace = true }
 
 [lints]

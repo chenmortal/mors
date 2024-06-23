@@ -1,10 +1,5 @@
 use std::{
-    cmp::max,
-    fs::{File, OpenOptions},
-    io,
-    os::unix::fs::OpenOptionsExt,
-    path::PathBuf,
-    slice,
+    cmp::max, fs::{File, OpenOptions}, io, ops::{Deref, DerefMut}, os::unix::fs::OpenOptionsExt, path::PathBuf, slice
 };
 use std::cmp::Ordering;
 use std::io::{Error, Read, SeekFrom, Write};
@@ -36,6 +31,7 @@ impl MmapFile {
     }
     pub fn write_at(&self)->usize{
         self.w_pos
+
     }
     pub fn delete(&self) -> Result<(), io::Error> {
         self.fd.set_len(0)?;
@@ -215,7 +211,18 @@ pub struct MmapFileBuilder {
     advices: Vec<Advice>,
     open_option: OpenOptions,
 }
+impl Deref for MmapFileBuilder{
+    type Target=OpenOptions;
 
+    fn deref(&self) -> &Self::Target {
+        &self.open_option
+    }
+}
+impl DerefMut for MmapFileBuilder {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.open_option
+    }
+}
 impl MmapFileBuilder {
     pub fn new() -> Self {
         Self {
@@ -224,18 +231,18 @@ impl MmapFileBuilder {
         }
     }
 
-    pub fn write(&mut self, write: bool) -> &mut Self {
-        self.open_option.write(write);
-        self
-    }
-    pub fn custom_flags(&mut self, flags: i32) -> &mut Self {
-        self.open_option.custom_flags(flags);
-        self
-    }
-    pub fn mode(&mut self, mode: u32) -> &mut Self {
-        self.open_option.mode(mode);
-        self
-    }
+    // pub fn write(&mut self, write: bool) -> &mut Self {
+    //     self.open_option.write(write);
+    //     self
+    // }
+    // pub fn custom_flags(&mut self, flags: i32) -> &mut Self {
+    //     self.open_option.custom_flags(flags);
+    //     self
+    // }
+    // pub fn mode(&mut self, mode: u32) -> &mut Self {
+    //     self.open_option.mode(mode);
+    //     self
+    // }
 
     pub fn advice(&mut self, advice: Advice) -> &mut Self {
         self.advices.push(advice);

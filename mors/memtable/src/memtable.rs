@@ -1,29 +1,33 @@
+use std::collections::VecDeque;
+use std::fs::read_dir;
 use std::marker::PhantomData;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
-use std::sync::atomic::AtomicU32;
 
+use memmap2::Advice;
 use mors_common::mmap::MmapFileBuilder;
 use mors_common::page_size;
-use mors_encrypt::registry::Kms;
 use mors_traits::file_id::{FileId, MemtableId};
+use mors_traits::kms::{Kms, KmsCipher};
+use mors_traits::memtable::MemtableBuilder;
 use mors_traits::skip_list::SkipList;
 use mors_traits::ts::{KeyTsBorrow, TxnTs};
+use mors_wal::error::MorsWalError;
 use mors_wal::LogFile;
 
-use crate::{DEFAULT_DIR, MemtableId};
 use crate::error::MorsMemtableError;
 use crate::Result;
+use crate::DEFAULT_DIR;
 
-pub struct MorsMemtable<T: SkipList> {
+pub struct MorsMemtable<T: SkipList, K: Kms> {
     pub(crate) skip_list: T,
-    pub(crate) wal: LogFile<MemtableId>,
+    pub(crate) wal: LogFile<MemtableId, K>,
     pub(crate) max_version: TxnTs,
     pub(crate) buf: Vec<u8>,
     pub(crate) memtable_size: usize,
     pub(crate) read_only: bool,
 }
-
 pub struct MorsMemtableBuilder<T: SkipList> {
     dir: PathBuf,
     read_only: bool,
@@ -59,17 +63,26 @@ where
     fn max_batch_count(&self) -> usize {
         self.max_batch_size() / T::MAX_NODE_SIZE
     }
-    pub fn open(
-        &self,
-        mmap_builder: MmapFileBuilder,
-        kms: Kms,
-        fid: MemtableId,
-    ) -> Result<MorsMemtable<T>> {
-        let mem_path = fid.join_dir(self.dir.clone());
+}
+impl<T: SkipList, K: Kms> MemtableBuilder<MorsMemtable<T, K>, K>
+    for MorsMemtableBuilder<T>
+where
+    MorsMemtableError: From<<T as SkipList>::ErrorType>,
+    MorsWalError: From<<K as Kms>::ErrorType>
+        + From<<<K as Kms>::Cipher as KmsCipher>::ErrorType>,
+{
+    fn open(&self, kms: K, id: MemtableId) -> Result<MorsMemtable<T, K>> {
+        let mut mmap_builder = MmapFileBuilder::new();
+        mmap_builder
+            .advice(Advice::Sequential)
+            .read(true)
+            .write(!self.read_only);
+
+        let mem_path = id.join_dir(self.dir.clone());
         let skip_list = T::new(self.arena_size(), KeyTsBorrow::cmp)?;
 
         let wal = LogFile::open(
-            fid,
+            id,
             mem_path,
             2 * self.memtable_size as u64,
             mmap_builder,
@@ -85,5 +98,43 @@ where
         };
         memtable.reload()?;
         Ok(memtable)
+    }
+
+    fn open_exist(&self, kms: K) -> Result<VecDeque<Arc<MorsMemtable<T, K>>>> {
+        let mut ids = read_dir(&self.dir)?
+            .filter_map(std::result::Result::ok)
+            .filter_map(|e| MemtableId::parse(e.path()).ok())
+            .collect::<Vec<_>>();
+        ids.sort();
+
+        let mut immut_memtable = VecDeque::with_capacity(self.num_memtables);
+
+        for id in ids.iter() {
+            let memtable = self.open(kms.clone(), *id)?;
+            if memtable.skip_list.is_empty() {
+                continue;
+            };
+            immut_memtable.push_back(Arc::new(memtable));
+        }
+        if ids.len() != 0 {
+            self.next_fid
+                .store((*ids.last().unwrap()).into(), Ordering::SeqCst);
+        }
+        self.next_fid.fetch_add(1, Ordering::SeqCst);
+        Ok(immut_memtable)
+    }
+
+    fn new(&self, kms: K) -> Result<MorsMemtable<T, K>> {
+        let id: MemtableId =
+            self.next_fid.fetch_add(1, Ordering::SeqCst).into();
+        let path = id.join_dir(&self.dir);
+        if path.exists() {
+            return Err(MorsMemtableError::FileExists(path));
+        }
+        Ok(self.open(kms, id)?)
+    }
+    
+    fn read_only(&self)->bool {
+        self.read_only
     }
 }

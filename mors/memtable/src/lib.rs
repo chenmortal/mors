@@ -1,7 +1,4 @@
-use mors_traits::file_id::FileId;
-
 mod error;
-mod impls;
 pub mod memtable;
 mod write;
 

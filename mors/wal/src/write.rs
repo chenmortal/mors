@@ -5,11 +5,15 @@ use std::{
 };
 
 use bytes::BufMut;
-use mors_traits::{file_id::FileId, kv::Entry, log_header::LogEntryHeader};
+use mors_traits::{file_id::FileId, kms::{Kms, KmsCipher}, kv::Entry, log_header::LogEntryHeader};
 
-use crate::LogFile;
+use crate::{error::MorsWalError, LogFile};
 use crate::Result;
-impl<F: FileId> LogFile<F> {
+impl<F: FileId,K:Kms> LogFile<F,K> 
+where
+    MorsWalError:
+        From<<K as Kms>::ErrorType> + From<<K::Cipher as KmsCipher>::ErrorType>,
+{
     pub fn truncate(&mut self, end_offset: usize) -> io::Result<()> {
         let file_size = self.mmap.file_len()? as usize;
         if end_offset == file_size {

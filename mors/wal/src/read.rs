@@ -5,31 +5,36 @@ use std::io::{BufRead, BufReader, Read};
 use bytes::Buf;
 
 use mors_traits::file_id::FileId;
+use mors_traits::kms::{Kms, KmsCipher};
 use mors_traits::kv::{Entry, Meta, ValuePointer};
 use mors_traits::log_header::LogEntryHeader;
 use mors_traits::ts::TxnTs;
 
-use crate::error::MorsWalError::{self, IoError};
+use crate::error::MorsWalError::{self};
 use crate::LogFile;
 use crate::Result;
-pub struct LogFileIter<'a, F: FileId> {
-    log_file: &'a LogFile<F>,
+pub struct LogFileIter<'a, F: FileId, K: Kms> {
+    log_file: &'a LogFile<F, K>,
     record_offset: usize,
     reader: BufReader<&'a [u8]>,
     entries_vptrs: Vec<(Entry, ValuePointer)>,
     valid_end_offset: usize,
 }
-impl<'a, F: FileId> LogFileIter<'a, F> {
-    pub fn new(log_file: &'a LogFile<F>, offset: usize) -> Result<Self> {
+impl<'a, F: FileId, K: Kms> LogFileIter<'a, F, K>
+where
+    MorsWalError:
+        From<<K as Kms>::ErrorType> + From<<K::Cipher as KmsCipher>::ErrorType>,
+{
+    pub fn new(log_file: &'a LogFile<F, K>, offset: usize) -> Self {
         let reader = BufReader::new(&log_file.mmap.as_ref()[offset..]);
 
-        Ok(Self {
+        Self {
             log_file,
             record_offset: offset,
             reader,
             entries_vptrs: Vec::new(),
             valid_end_offset: offset,
-        })
+        }
     }
 
     pub fn read_entry(&mut self) -> Result<(Entry, ValuePointer)> {

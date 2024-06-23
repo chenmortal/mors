@@ -1,15 +1,12 @@
+use mors_traits::kms::CipherKeyId;
+use mors_traits::kms::EncryptError;
+use mors_traits::kms::KmsError;
 use thiserror::Error;
 
-use crate::cipher::CipherKeyId;
+
 
 #[derive(Error, Debug)]
-pub enum EncryptError {
-    #[error("Encryption key's length should be either 16 or 32 bytes")]
-    InvalidEncryptionKey,
-    #[error("Invalid nonce: {nonce}, plaintext: {plaintext}")]
-    EncryptError { nonce: String, plaintext: String },
-    #[error("Invalid nonce: {nonce}, ciphertext: {ciphertext}")]
-    DecryptError { nonce: String, ciphertext: String },
+pub enum MorsKmsError {
     #[error(transparent)]
     IOErr(#[from] std::io::Error),
     #[error(transparent)]
@@ -20,4 +17,27 @@ pub enum EncryptError {
     EncryptionKeyMismatch,
     #[error("Invalid data key id {0}")]
     InvalidDataKeyID(CipherKeyId),
+    #[error(transparent)]
+    MorsEncryptError(#[from] MorsEncryptError),
+}
+
+#[derive(Error, Debug)]
+pub enum MorsEncryptError {
+    #[error("Encryption key's length should be either 16 or 32 bytes")]
+    InvalidEncryptionKey,
+    #[error("Invalid nonce: {nonce}, plaintext: {plaintext}")]
+    EncryptError { nonce: String, plaintext: String },
+    #[error("Invalid nonce: {nonce}, ciphertext: {ciphertext}")]
+    DecryptError { nonce: String, ciphertext: String },
+}
+impl Into<EncryptError> for MorsEncryptError {
+    fn into(self) -> EncryptError {
+        EncryptError::new(self)
+    }
+}
+impl Into<KmsError> for MorsKmsError {
+    fn into(self) -> KmsError {
+        KmsError::new(self)
+    }
+    
 }

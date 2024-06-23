@@ -1,22 +1,29 @@
 use mors_traits::file_id::MemtableId;
+use mors_traits::kms::{Kms, KmsCipher};
 use mors_traits::kv::{Entry, Meta};
+use mors_traits::memtable::Memtable;
 use mors_traits::skip_list::SkipList;
-use mors_wal::LogFile;
+use mors_traits::ts::KeyTs;
+
+use mors_wal::error::MorsWalError;
 use mors_wal::read::LogFileIter;
+use mors_wal::LogFile;
 
-use crate::{MemtableId, Result};
 use crate::error::MorsMemtableError;
-use crate::memtable::MorsMemtable;
+use crate::memtable::{MorsMemtable, MorsMemtableBuilder};
+use crate::Result;
 
-impl<T: SkipList> MorsMemtable<T>
+impl<T: SkipList, K: Kms> MorsMemtable<T, K>
 where
     MorsMemtableError: From<<T as SkipList>::ErrorType>,
+    MorsWalError: From<<K as Kms>::ErrorType>
+        + From<<<K as Kms>::Cipher as KmsCipher>::ErrorType>,
 {
     pub(crate) fn reload(&mut self) -> Result<()> {
-        let mut wal_iter = LogFileIter::<MemtableId>::new(
+        let mut wal_iter = LogFileIter::<MemtableId, K>::new(
             &self.wal,
-            LogFile::<MemtableId>::LOG_HEADER_SIZE,
-        )?;
+            LogFile::<MemtableId, K>::LOG_HEADER_SIZE,
+        );
 
         while let Some(next) = wal_iter.next()? {
             for (entry, _vptr) in next {
@@ -50,5 +57,38 @@ where
         )?;
         self.max_version = self.max_version.max(entry.version());
         Ok(())
+    }
+}
+impl<T: SkipList, K: Kms> Memtable<K> for MorsMemtable<T, K>
+where
+    MorsMemtableError: From<<T as SkipList>::ErrorType>,
+    MorsWalError: From<<K as Kms>::ErrorType>
+        + From<<<K as Kms>::Cipher as KmsCipher>::ErrorType>,
+{
+    type ErrorType = MorsMemtableError;
+    type MemtableBuilder = MorsMemtableBuilder<T>;
+
+    fn push(&mut self, entry: &mors_traits::kv::Entry) -> Result<()> {
+        self.wal.write_entry(&mut self.buf, entry)?;
+        if entry.meta().contains(Meta::FIN_TXN) {
+            return Ok(());
+        }
+        self.skip_list.push(
+            &entry.key_ts().serialize(),
+            &entry.value_meta().serialize(),
+        )?;
+        self.max_version = self.max_version.max(entry.version());
+        Ok(())
+    }
+
+    fn size(&self) -> usize {
+        todo!()
+    }
+
+    fn get(
+        &self,
+        key_ts: &KeyTs,
+    ) -> Option<(mors_traits::ts::TxnTs, mors_traits::kv::ValueMeta)> {
+        todo!()
     }
 }

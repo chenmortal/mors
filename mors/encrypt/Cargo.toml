@@ -11,6 +11,7 @@ default = ["aes-gcm"]
 [dependencies]
 prost = { workspace = true }
 mors-common = { workspace = true }
+mors-traits={workspace=true}
 aes-gcm = { workspace = true, optional = true }
 aes-gcm-siv = { workspace = true, optional = true }
 aead = { workspace = true }

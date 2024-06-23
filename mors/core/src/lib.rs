@@ -1,6 +1,4 @@
 use error::MorsError;
-
-mod builder;
 mod core;
 mod error;
 mod test;

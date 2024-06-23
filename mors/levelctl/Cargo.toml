@@ -1,0 +1,12 @@
+[package]
+name = "levelctl"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+version.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

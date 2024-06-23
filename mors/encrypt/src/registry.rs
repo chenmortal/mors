@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fs::{File, OpenOptions, rename};
+use std::fs::{rename, File, OpenOptions};
 use std::io::{BufReader, Read, Seek, Write};
 use std::ops::Deref;
 use std::os::unix::fs::OpenOptionsExt;
@@ -8,29 +8,57 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
 use log::error;
+use mors_traits::kms::{CipherKeyId, Kms, KmsBuilder, KmsCipher};
 use prost::bytes::{Buf, BufMut};
 use prost::Message;
 
 use mors_traits::default::DEFAULT_DIR;
 use mors_traits::ts::PhyTs;
 
+use crate::cipher::{AesCipher, Nonce};
+use crate::error::{MorsEncryptError, MorsKmsError};
+use crate::pb::encryption::DataKey;
 use crate::{
     KEY_REGISTRY_FILE_NAME, KEY_REGISTRY_REWRITE_FILE_NAME, SANITY_TEXT,
 };
-use crate::cipher::{AesCipher, CipherKeyId, Nonce};
-use crate::error::EncryptError;
-use crate::pb::encryption::DataKey;
 
-type Result<T> = std::result::Result<T, EncryptError>;
+type Result<T> = std::result::Result<T, MorsKmsError>;
 #[derive(Debug, Default, Clone)]
-pub struct Kms(Arc<RwLock<KmsInner>>);
-impl Deref for Kms {
+pub struct MorsKms(Arc<RwLock<KmsInner>>);
+impl Deref for MorsKms {
     type Target = Arc<RwLock<KmsInner>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
+impl Kms for MorsKms {
+    type ErrorType = MorsKmsError;
+    type Cipher = AesCipher;
+    fn get_cipher(&self, key_id: CipherKeyId) -> Result<Option<AesCipher>> {
+        if let Some(dk) = self.get_data_key(key_id)? {
+            let cipher = AesCipher::new(&dk.data, key_id)?;
+            return Ok(cipher.into());
+        };
+        Ok(None)
+    }
+
+    fn latest_cipher(
+        &self,
+    ) -> std::result::Result<Option<Self::Cipher>, Self::ErrorType> {
+        if let Some(data_key) = self.latest_datakey()? {
+            return Ok(
+                AesCipher::new(&data_key.data, data_key.key_id.into())?.into()
+            );
+        };
+        Ok(None)
+    }
+
+    const NONCE_SIZE: usize = 12;
+    
+    type KmsBuilder=MorsKmsBuilder;
+}
+
 #[derive(Debug, Default)]
 pub struct KmsInner {
     data_keys: HashMap<CipherKeyId, DataKey>,
@@ -41,13 +69,14 @@ pub struct KmsInner {
     data_key_rotation_duration: Duration,
 }
 #[derive(Debug, Clone)]
-pub struct KmsBuilder {
+pub struct MorsKmsBuilder {
     encrypt_key: Vec<u8>,                 // encryption key
     data_key_rotation_duration: Duration, // key rotation duration
     read_only: bool,
     dir: PathBuf,
 }
-impl Default for KmsBuilder {
+
+impl Default for MorsKmsBuilder {
     fn default() -> Self {
         Self {
             encrypt_key: Default::default(),
@@ -57,7 +86,7 @@ impl Default for KmsBuilder {
         }
     }
 }
-impl KmsBuilder {
+impl MorsKmsBuilder {
     pub fn new(encrypt_key: Vec<u8>) -> Self {
         Self {
             encrypt_key,
@@ -79,11 +108,13 @@ impl KmsBuilder {
         self.dir = dir;
         self
     }
-    pub fn build(&self) -> Result<Kms> {
+}
+impl KmsBuilder<MorsKms> for MorsKmsBuilder {
+    fn build(&self) -> std::result::Result<MorsKms, <MorsKms as Kms>::ErrorType> {
         let keys_len = self.encrypt_key.len();
 
         if keys_len > 0 && !vec![16, 32].contains(&keys_len) {
-            return Err(EncryptError::InvalidEncryptionKey);
+            return Err(MorsEncryptError::InvalidEncryptionKey.into());
         }
         let mut key_registry = KmsInner {
             data_keys: Default::default(),
@@ -101,7 +132,7 @@ impl KmsBuilder {
 
         if !key_registry_path.exists() {
             if self.read_only {
-                return Ok(Kms(Arc::new(RwLock::new(key_registry))));
+                return Ok(MorsKms(Arc::new(RwLock::new(key_registry))));
             }
             key_registry.write_to_file(&self.dir)?;
         }
@@ -117,7 +148,7 @@ impl KmsBuilder {
             key_registry.file = Some(key_registry_file);
         }
 
-        return Ok(Kms(Arc::new(RwLock::new(key_registry))));
+        return Ok(MorsKms(Arc::new(RwLock::new(key_registry))));
     }
 }
 impl KmsInner {
@@ -215,7 +246,7 @@ impl<'a> KeyRegistryIter<'a> {
         };
 
         if saintytext != SANITY_TEXT {
-            return Err(EncryptError::EncryptionKeyMismatch);
+            return Err(MorsKmsError::EncryptionKeyMismatch);
         };
         Ok(())
     }
@@ -301,20 +332,11 @@ impl<'a> Iterator for KeyRegistryIter<'a> {
         Some(data_key)
     }
 }
-impl Kms {
-    pub fn latest_cipher(&self) -> Result<Option<AesCipher>> {
-        if let Some(data_key) = self.latest_datakey()? {
-            return Ok(
-                AesCipher::new(&data_key.data, data_key.key_id.into())?.into()
-            );
-        };
-        Ok(None)
-    }
-
+impl MorsKms {
     fn latest_datakey(&self) -> Result<Option<DataKey>> {
         let inner_r = self
             .read()
-            .map_err(|e| EncryptError::RwLockPoisoned(format!("{e}")))?;
+            .map_err(|e| MorsKmsError::RwLockPoisoned(format!("{e}")))?;
         if inner_r.cipher.is_none() {
             return Ok(None);
         }
@@ -341,7 +363,7 @@ impl Kms {
         drop(inner_r);
         let mut inner_w = self
             .write()
-            .map_err(|e| EncryptError::RwLockPoisoned(format!("{e}")))?;
+            .map_err(|e| MorsKmsError::RwLockPoisoned(format!("{e}")))?;
         let (key, valid) = valid_key(&inner_w);
         if valid {
             return Ok(key);
@@ -376,25 +398,15 @@ impl Kms {
     ) -> Result<Option<DataKey>> {
         let inner_r = self
             .read()
-            .map_err(|e| EncryptError::RwLockPoisoned(format!("{e}")))?;
+            .map_err(|e| MorsKmsError::RwLockPoisoned(format!("{e}")))?;
         if cipher_key_id == CipherKeyId::default() {
             return Ok(None);
         }
         match inner_r.data_keys.get(&cipher_key_id) {
             Some(s) => Ok(Some(s.clone())),
             None => {
-                return Err(EncryptError::InvalidDataKeyID(cipher_key_id));
+                return Err(MorsKmsError::InvalidDataKeyID(cipher_key_id));
             }
         }
-    }
-    pub fn get_cipher(
-        &self,
-        cipher_key_id: CipherKeyId,
-    ) -> Result<Option<AesCipher>> {
-        if let Some(dk) = self.get_data_key(cipher_key_id)? {
-            let cipher = AesCipher::new(&dk.data, cipher_key_id)?;
-            return Ok(cipher.into());
-        };
-        Ok(None)
     }
 }

@@ -1,6 +1,6 @@
+use mors_traits::kms::{EncryptError, KmsError};
 use thiserror::Error;
 
-use mors_encrypt::error::EncryptError;
 
 #[derive(Error, Debug)]
 pub enum MorsError {
@@ -8,4 +8,6 @@ pub enum MorsError {
     IOErr(#[from] std::io::Error),
     #[error("Error in encryption: {0}")]
     EncryptErr(#[from] EncryptError),
+    #[error("Error in KMS: {0}")]
+    KmsError(#[from] KmsError),
 }
