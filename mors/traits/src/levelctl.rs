@@ -10,7 +10,7 @@ pub trait LevelCtl<T:Table>: Sized {
     type LevelCtlBuilder: LevelCtlBuilder<Self,T>;
 }
 pub trait LevelCtlBuilder<L:LevelCtl<T>,T:Table>: Default {
-    fn build(&self,kms:impl Kms)->Result<(),L::ErrorType>;
+    fn build(&self,kms:impl Kms)->impl std::future::Future<Output = Result<(),L::ErrorType>>;
 }
 
 pub const LEVEL0: Level = Level(0);

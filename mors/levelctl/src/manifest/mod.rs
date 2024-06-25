@@ -55,11 +55,11 @@ pub(crate) struct ManifestInfo {
     creations: usize,
     deletions: usize,
 }
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub(crate) struct LevelManifest {
     tables: HashSet<SSTableId>,
 }
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct TableManifest {
     level: Level,
     key_id: CipherKeyId,
@@ -356,8 +356,17 @@ impl Manifest {
         }
         Ok(())
     }
-
-    pub(crate) fn table_len(&self) -> usize {
-        self.lock().info.tables.len()
+}
+impl ManifestInner {
+    pub(crate) fn tables(&self)->&HashMap<SSTableId, TableManifest>{
+        &self.info.tables
+    }
+}
+impl TableManifest {
+    pub(crate) fn compress(&self) -> CompressionType {
+        self.compress
+    }
+    pub(crate) fn key_id(&self) -> CipherKeyId {
+        self.key_id
     }
 }

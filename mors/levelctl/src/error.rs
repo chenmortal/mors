@@ -9,5 +9,7 @@ pub enum MorsLevelCtlError {
     IOErr(#[from] std::io::Error),
     #[error("Manifest Error: {0}")]
     ManifestErr(#[from] ManifestError),
+    #[error("Acquire Error: {0}")]
+    AcquireError(#[from] tokio::sync::AcquireError),
 
 }

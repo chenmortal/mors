@@ -16,6 +16,7 @@ bytes = { workspace = true }
 snap = { workspace = true }
 zstd = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 [dev-dependencies]
 criterion = { workspace = true, features = ["html_reports"] }
 crc32fast = { workspace = true }

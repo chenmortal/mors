@@ -7,6 +7,7 @@ pub mod mmap;
 pub mod lock;
 mod sys;
 pub mod compress;
+pub mod closer;
 
 // lazy_static! {
 //     pub static ref DEFAULT_PAGE_SIZE: usize = unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize };
