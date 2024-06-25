@@ -356,4 +356,8 @@ impl Manifest {
         }
         Ok(())
     }
+
+    pub(crate) fn table_len(&self) -> usize {
+        self.lock().info.tables.len()
+    }
 }

@@ -46,7 +46,7 @@ impl DBLockGuardBuilder {
         let mut guards = Vec::new();
         for dir in &self.dirs {
             guards.push(DirLockGuard::acquire_lock(
-                &dir,
+                dir,
                 "LOCK",
                 self.read_only,
             )?);

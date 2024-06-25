@@ -33,6 +33,8 @@ fn mmap_wirte(path: &str, iter: usize, size: usize) -> io::Result<()> {
 }
 #[cfg(target_os = "linux")]
 fn direct_write(path: &str, iter: usize, size: usize) -> io::Result<()> {
+    use rustix::fs::OpenOptionsExt;
+
     let mut f = OpenOptions::new()
         .create(true)
         .write(true)
@@ -82,6 +84,7 @@ fn mmap_write_benchmark(c: &mut Criterion) {
     });
 }
 
+#[cfg(not(target_os = "linux"))]
 criterion_group!(benches, std_write_benchmark, mmap_write_benchmark);
 #[cfg(target_os = "linux")]
 criterion_group!(

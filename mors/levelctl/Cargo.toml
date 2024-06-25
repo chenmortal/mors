@@ -7,14 +7,16 @@ readme.workspace = true
 version.workspace = true
 
 [dependencies]
-mors-traits={workspace=true}
-mors-common={workspace=true}
-thiserror={workspace=true}
-bytes={workspace=true}
-crc32fast={workspace=true}
+mors-traits = { workspace = true }
+mors-common = { workspace = true }
+thiserror = { workspace = true }
+bytes = { workspace = true }
+crc32fast = { workspace = true }
 prost = { workspace = true }
 parking_lot = { workspace = true }
 log = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
 [build-dependencies]
 prost-build = { workspace = true }
 [lints]
