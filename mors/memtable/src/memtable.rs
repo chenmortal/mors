@@ -116,7 +116,7 @@ where
             };
             immut_memtable.push_back(Arc::new(memtable));
         }
-        if ids.len() != 0 {
+        if !ids.is_empty() {
             self.next_fid
                 .store((*ids.last().unwrap()).into(), Ordering::SeqCst);
         }
@@ -124,14 +124,14 @@ where
         Ok(immut_memtable)
     }
 
-    fn new(&self, kms: K) -> Result<MorsMemtable<T, K>> {
+    fn build(&self, kms: K) -> Result<MorsMemtable<T, K>> {
         let id: MemtableId =
             self.next_fid.fetch_add(1, Ordering::SeqCst).into();
         let path = id.join_dir(&self.dir);
         if path.exists() {
             return Err(MorsMemtableError::FileExists(path));
         }
-        Ok(self.open(kms, id)?)
+        self.open(kms, id)
     }
     
     fn read_only(&self)->bool {

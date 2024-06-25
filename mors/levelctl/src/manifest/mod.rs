@@ -1,15 +1,21 @@
 use error::ManifestError;
+use log::info;
 use manifest_change::{
     manifest_change::Operation, EncryptionAlgo, ManifestChange,
 };
 use mors_common::compress::CompressionType;
-use mors_traits::{file_id::SSTableId, kms::CipherKeyId, levelctl::Level};
+use mors_traits::{
+    file_id::{FileId, SSTableId},
+    kms::CipherKeyId,
+    levelctl::Level,
+};
 use std::{
     collections::{HashMap, HashSet},
-    fs::{rename, File, OpenOptions},
+    fs::{remove_file, rename, File, OpenOptions},
     io::{BufReader, ErrorKind, Read, Seek, SeekFrom, Write},
+    ops::Deref,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use bytes::{Buf, BufMut};
@@ -17,8 +23,8 @@ use mors_traits::default::DEFAULT_DIR;
 use prost::Message;
 
 use crate::manifest::manifest_change::ManifestChangeSet;
-
-mod error;
+use parking_lot::Mutex;
+pub mod error;
 pub(crate) mod manifest_change;
 
 const MANIFEST_FILE_NAME: &str = "MANIFEST";
@@ -30,6 +36,13 @@ const MAGIC_TEXT: &[u8; 4] = b"Mors";
 
 type Result<T> = std::result::Result<T, ManifestError>;
 pub(crate) struct Manifest(Arc<Mutex<ManifestInner>>);
+impl Deref for Manifest {
+    type Target = Mutex<ManifestInner>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 pub(crate) struct ManifestInner {
     file: File,
     deletions_rewrite_threshold: usize,
@@ -71,7 +84,7 @@ impl Default for ManifestBuilder {
     }
 }
 impl ManifestBuilder {
-    fn build(&self) -> Result<Manifest> {
+    pub(crate) fn build(&self) -> Result<Manifest> {
         let path = self.dir.join(MANIFEST_FILE_NAME);
         match OpenOptions::new()
             .read(true)
@@ -102,7 +115,7 @@ impl ManifestBuilder {
                         return Err(ManifestError::NoManifest);
                     }
                     let info = ManifestInfo::default();
-                    let (file,table_creations) = self.help_rewrite(&info)?;
+                    let (file, table_creations) = self.help_rewrite(&info)?;
                     assert_eq!(table_creations, 0);
                     let manifest = Manifest(
                         Mutex::new(ManifestInner {
@@ -114,9 +127,8 @@ impl ManifestBuilder {
                         .into(),
                     );
                     Ok(manifest)
-
                 } else {
-                    return Err(e.into());
+                    Err(e.into())
                 }
             }
         }
@@ -256,7 +268,7 @@ impl ManifestInfo {
         match change.op() {
             Operation::Create => {
                 if self.tables.contains_key(&change.table_id()) {
-                    return Err(ManifestError::TableExist(change.table_id()));
+                    return Err(ManifestError::CreateError(change.table_id()));
                 };
                 self.tables.insert(
                     change.table_id(),
@@ -277,9 +289,7 @@ impl ManifestInfo {
             }
             Operation::Delete => {
                 if !self.tables.contains_key(&change.table_id()) {
-                    return Err(ManifestError::TableNonExist(
-                        change.table_id(),
-                    ));
+                    return Err(ManifestError::DeleteError(change.table_id()));
                 };
                 self.levels[change.level as usize]
                     .tables
@@ -319,5 +329,31 @@ impl ManifestChange {
     }
     pub fn table_id(&self) -> SSTableId {
         self.id.into()
+    }
+}
+impl Manifest {
+    pub(crate) fn revert(&self, dir: &PathBuf) -> Result<()> {
+        let sst_id_set = SSTableId::parse_set_from_dir(dir);
+        let mut inner = self.lock();
+        let info = &mut inner.info;
+
+        //check all files in manifest exist;
+        for (id, _) in info.tables.iter() {
+            if !sst_id_set.contains(id) {
+                return Err(ManifestError::TableNotFound(*id));
+            }
+        }
+        //delete files that shouldn't exist
+        for id in sst_id_set {
+            if !info.tables.contains_key(&id) {
+                info!(
+                    "Table file {} not referenced in Manifest, Deleting it",
+                    id
+                );
+                let sst_path = id.join_dir(dir);
+                remove_file(sst_path)?;
+            };
+        }
+        Ok(())
     }
 }

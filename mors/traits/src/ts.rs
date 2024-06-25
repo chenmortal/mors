@@ -230,7 +230,7 @@ impl PartialOrd for KeyTsBorrow<'_> {
 }
 impl Ord for KeyTsBorrow<'_> {
     fn cmp(&self, other: &Self) -> Ordering {
-        KeyTsBorrow::cmp(&self, &other)
+        KeyTsBorrow::cmp(self, other)
     }
 }
 impl PartialEq<KeyTs> for KeyTsBorrow<'_> {
@@ -282,11 +282,11 @@ impl<'a> From<&'a [u8]> for KeyTsBorrow<'a> {
 }
 impl<'a> AsRef<[u8]> for KeyTsBorrow<'a> {
     fn as_ref(&self) -> &[u8] {
-        &self.0
+        self.0
     }
 }
-impl<'a> Into<&'a [u8]> for KeyTsBorrow<'a> {
-    fn into(self) -> &'a [u8] {
-        &self.0
+impl<'a> From<KeyTsBorrow<'a>> for &'a [u8] {
+    fn from(val: KeyTsBorrow<'a>) -> Self {
+        val.0
     }
 }

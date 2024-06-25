@@ -136,7 +136,7 @@ where
         })
     }
     pub fn size(&self) -> usize {
-        return self.size.load(Ordering::Relaxed);
+        self.size.load(Ordering::Relaxed)
     }
     pub(crate) fn set_size(&self, size: usize) {
         self.size.store(size, Ordering::Relaxed);

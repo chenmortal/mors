@@ -103,7 +103,7 @@ impl LogEntryHeader {
         self.expires_at
     }
     pub fn check_key_len(&self)->Result<(),io::Error>{
-        if self.key_len() > 1 << 16 as u32 {
+        if self.key_len() > 1 << 16_u32 {
             return Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
                 format!("key length must be below u16 {:?}",self)

@@ -46,8 +46,8 @@ impl SkipListTrait for MorsSkipList {
     }
     const MAX_NODE_SIZE: usize = size_of::<Node>();
 }
-impl Into<SkipListError> for MorsSkipListError {
-    fn into(self) -> SkipListError {
-        SkipListError::new(self)
+impl From<MorsSkipListError> for SkipListError {
+    fn from(val: MorsSkipListError) -> Self {
+        SkipListError::new(val)
     }
 }

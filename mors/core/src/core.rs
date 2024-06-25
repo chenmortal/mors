@@ -56,7 +56,7 @@ where
         let mut memtable = None;
         if !self.memtable.read_only() {
             memtable =
-                Arc::new(RwLock::new(self.memtable.new(kms.clone())?)).into();
+                Arc::new(RwLock::new(self.memtable.build(kms.clone())?)).into();
         }
         Ok(Mors {
             core: Core {

@@ -16,6 +16,7 @@ pub struct DirLockGuard {
     pid_path: PathBuf,
     read_only: bool,
 }
+#[derive(Debug,Default)]
 pub struct DBLockGuardBuilder {
     dirs: HashSet<PathBuf>,
     bypass_lock_guard: bool,
@@ -75,6 +76,7 @@ impl DirLockGuard {
         if !read_only {
             let mut pid_f = OpenOptions::new()
                 .create(true)
+                .truncate(true)
                 .write(true)
                 .open(&pid_path)?;
             pid_f.set_permissions(Permissions::from_mode(0o666))?;

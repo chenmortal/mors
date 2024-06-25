@@ -13,7 +13,8 @@ thiserror={workspace=true}
 bytes={workspace=true}
 crc32fast={workspace=true}
 prost = { workspace = true }
-
+parking_lot = { workspace = true }
+log = { workspace = true }
 [build-dependencies]
 prost-build = { workspace = true }
 [lints]

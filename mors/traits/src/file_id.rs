@@ -61,9 +61,9 @@ impl From<u32> for SSTableId {
         Self(value)
     }
 }
-impl Into<u32> for SSTableId {
-    fn into(self) -> u32 {
-        self.0
+impl From<SSTableId> for u32 {
+    fn from(val: SSTableId) -> Self {
+        val.0
     }
 }
 impl FileId for SSTableId {
@@ -80,17 +80,15 @@ impl SSTableId {
         let mut id_set = HashSet::new();
         let dir = dir.as_ref();
         if let Ok(read_dir) = read_dir(dir) {
-            for ele in read_dir {
-                if let Ok(entry) = ele {
-                    let path = entry.path();
-                    if path.is_file() {
-                        if let Ok(id) = Self::parse(path) {
-                            id_set.insert(id);
-                        };
-                    }
+            for dir_entry in read_dir.flatten() {
+                let path = dir_entry.path();
+                if path.is_file() {
+                    if let Ok(id) = Self::parse(path) {
+                        id_set.insert(id);
+                    };
                 }
             }
         };
-        return id_set;
+        id_set
     }
 }

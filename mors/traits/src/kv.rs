@@ -2,7 +2,7 @@ use bytes::Bytes;
 use integer_encoding::VarInt;
 use lazy_static::lazy_static;
 
-use crate::{file_id::FileId, log_header::LogEntryHeader, ts::{KeyTs, PhyTs, TxnTs}};
+use crate::{file_id::FileId,  ts::{KeyTs, PhyTs, TxnTs}};
 
 pub trait Key {}
 #[derive(Debug, Default, Clone)]

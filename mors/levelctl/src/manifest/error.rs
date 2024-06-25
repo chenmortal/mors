@@ -18,9 +18,11 @@ pub enum ManifestError {
     #[error("Decode Error: {0}")]
     DecodeError(#[from] prost::DecodeError),
     #[error("MANIFEST invalid, table {0} exists")]
-    TableExist(SSTableId),
+    CreateError(SSTableId),
     #[error("MANIFEST removes non-existing table {0}")]
-    TableNonExist(SSTableId),
+    DeleteError(SSTableId),
     #[error("No Manifest Found,no write operation is allowed.")]
     NoManifest,
+    #[error("Table {0} not found")]
+    TableNotFound(SSTableId),
 }

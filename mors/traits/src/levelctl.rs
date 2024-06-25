@@ -3,12 +3,14 @@ use std::{
     ops::{Add, AddAssign, Sub},
 };
 
-pub trait LevelCtl: Sized {
+use crate::{kms::Kms, sstable::Table};
+
+pub trait LevelCtl<T:Table>: Sized {
     type ErrorType;
-    type LevelCtlBuilder: LevelCtlBuilder;
+    type LevelCtlBuilder: LevelCtlBuilder<Self,T>;
 }
-pub trait LevelCtlBuilder: Default {
-    fn build(&self);
+pub trait LevelCtlBuilder<L:LevelCtl<T>,T:Table>: Default {
+    fn build(&self,kms:impl Kms)->Result<(),L::ErrorType>;
 }
 
 pub const LEVEL0: Level = Level(0);
@@ -29,14 +31,14 @@ impl From<usize> for Level {
         Self(value as u8)
     }
 }
-impl Into<usize> for Level {
-    fn into(self) -> usize {
-        self.0 as usize
+impl From<Level> for usize {
+    fn from(val: Level) -> Self {
+        val.0 as usize
     }
 }
-impl Into<u32> for Level {
-    fn into(self) -> u32 {
-        self.0 as u32
+impl From<Level> for u32 {
+    fn from(val: Level) -> Self {
+        val.0 as u32
     }
 }
 impl Level {
@@ -80,7 +82,7 @@ fn test_level_step() {
     let end_l: Level = end.into();
     let mut step = start;
     for l in start_l.to_u8()..end_l.to_u8() {
-        assert_eq!(l, step.into());
+        assert_eq!(l, step);
         step += 1;
     }
     assert_eq!(step, end);

@@ -354,7 +354,7 @@ impl MorsKms {
                     );
                 }
             };
-            return (None, false);
+            (None, false)
         };
         let (key, valid) = valid_key(&inner_r);
         if valid {

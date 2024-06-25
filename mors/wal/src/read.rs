@@ -54,7 +54,7 @@ where
         let mut kv_buf = vec![0; key_len + value_len];
         hash_reader.read_exact(&mut kv_buf)?;
 
-        if kv_buf.len() == 0 {
+        if kv_buf.is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
                 "kv len can't be zero",
@@ -75,7 +75,7 @@ where
         );
 
         let hash = hash_reader.hasher.finalize();
-        let mut crc_buf = (0 as u32).to_be_bytes();
+        let mut crc_buf = 0_u32.to_be_bytes();
         hash_reader.reader.read_exact(&mut crc_buf)?;
 
         let crc = crc_buf.as_slice().get_u32();

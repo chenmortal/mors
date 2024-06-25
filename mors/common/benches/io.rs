@@ -1,15 +1,10 @@
 use std::{
     fs::OpenOptions,
     io::{self, Write},
-    os::unix::fs::OpenOptionsExt,
 };
 
 fn std_write(path: &str, iter: usize, size: usize) -> io::Result<()> {
-    let mut f = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .append(true)
-        .open(path)?;
+    let mut f = OpenOptions::new().create(true).append(true).open(path)?;
     for _ in 0..iter {
         let buf = generate_data(size);
         f.write_all(&buf)?;
@@ -73,7 +68,9 @@ fn direct_write_benchmark(c: &mut Criterion) {
     let iter = 1000;
     let size = 4 * 4096;
     c.bench_function("direct_write", |b| {
-        b.iter(|| direct_write(black_box(path), black_box(iter), black_box(size)))
+        b.iter(|| {
+            direct_write(black_box(path), black_box(iter), black_box(size))
+        })
     });
 }
 fn mmap_write_benchmark(c: &mut Criterion) {
@@ -85,11 +82,7 @@ fn mmap_write_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group!(
-    benches,
-    std_write_benchmark,
-    mmap_write_benchmark
-);
+criterion_group!(benches, std_write_benchmark, mmap_write_benchmark);
 #[cfg(target_os = "linux")]
 criterion_group!(
     benches,

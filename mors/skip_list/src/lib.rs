@@ -64,7 +64,7 @@ impl SkipList {
 
         for h in (0..height).rev() {
             // [height-1,0]
-            let (p, n) = self.find_splice_for_level(key.into(), prev[h + 1], h); //[height,1]
+            let (p, n) = self.find_splice_for_level(key, prev[h + 1], h); //[height,1]
             if p == n {
                 return self.set_value(p, value);
             }
@@ -91,7 +91,7 @@ impl SkipList {
             loop {
                 if prev[h].is_null() {
                     assert!(h > 1);
-                    let (p, n) = self.find_splice_for_level(key.into(), self.head.as_ptr(), h);
+                    let (p, n) = self.find_splice_for_level(key, self.head.as_ptr(), h);
                     prev[h] = p;
                     next[h] = n;
                     assert_ne!(prev[h], next[h]);
@@ -99,15 +99,15 @@ impl SkipList {
 
                 let next_offset = self.arena.offset(next[h]).unwrap_or_default();
                 node.tower[h].store(next_offset, Ordering::SeqCst);
-                if let Ok(_) = unsafe { prev[h].as_ref() }.unwrap().tower[h].compare_exchange_weak(
+                if unsafe { prev[h].as_ref() }.unwrap().tower[h].compare_exchange_weak(
                     next_offset,
                     self.arena.offset(node).unwrap(),
                     Ordering::SeqCst,
                     Ordering::Relaxed,
-                ) {
+                ).is_ok() {
                     break;
                 }
-                let (p, n) = self.find_splice_for_level(key.into(), prev[h], h);
+                let (p, n) = self.find_splice_for_level(key, prev[h], h);
                 if p == n {
                     assert!(h == 0);
                     return self.set_value(p, value);
@@ -195,7 +195,7 @@ impl SkipList {
         {
             h += 1;
         }
-        return h;
+        h
     }
     fn set_value(&self, ptr: *const Node, value: &[u8]) -> Result<()> {
         if let Some(node) = unsafe { ptr.as_ref() } {

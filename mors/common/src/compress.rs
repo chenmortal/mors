@@ -8,7 +8,7 @@ pub enum CompressionType {
 }
 impl Default for CompressionType {
     fn default() -> Self {
-        CompressionType::None
+        Self::None
     }
 }
 impl From<u32> for CompressionType {
@@ -20,9 +20,9 @@ impl From<u32> for CompressionType {
         }
     }
 }
-impl Into<u32> for CompressionType {
-    fn into(self) -> u32 {
-        match self {
+impl From<CompressionType> for u32 {
+    fn from(val: CompressionType) -> Self {
+        match val {
             CompressionType::None => 0,
             CompressionType::Snappy => 1,
             CompressionType::ZSTD(_) => 2,
@@ -53,10 +53,7 @@ impl CompressionType {
 }
 impl CompressionType {
     pub fn is_none(&self) -> bool {
-        match self {
-            CompressionType::None => true,
-            _ => false,
-        }
+        matches!(self, CompressionType::None)
     }
 }
 #[derive(Error, Debug)]
