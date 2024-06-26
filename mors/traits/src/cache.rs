@@ -1,13 +1,36 @@
 use bytes::BufMut;
 
-use crate::{file_id::SSTableId, sstable::BlockIndex};
+use crate::{
+    file_id::SSTableId,
+    sstable::{Block, BlockIndex, TableIndexBuf},
+};
 
-pub trait Cache: Sized {
+pub trait Cache<B: Block, T: TableIndexBuf>: Sized {
     type ErrorType;
-    type CacheBuilder: CacheBuilder<Self>;
+    type CacheBuilder: CacheBuilder<Self, B, T>;
+    fn get_block(
+        &self,
+        key: &BlockCacheKey,
+    ) -> impl std::future::Future<Output = Option<B>> + Send;
+    fn insert_block(
+        &self,
+        key: BlockCacheKey,
+        block: B,
+    ) -> impl std::future::Future<Output = ()> + Send;
+    fn get_index(
+        &self,
+        key: SSTableId,
+    ) -> impl std::future::Future<Output = Option<T>> + Send;
+    fn insert_index(
+        &self,
+        key: SSTableId,
+        index: T,
+    ) -> impl std::future::Future<Output = ()> + Send;
 }
-pub trait CacheBuilder<C:Cache>: Default {
-    fn build(&self)->Result<C,C::ErrorType>;
+pub trait CacheBuilder<C: Cache<B, T>, B: Block, T: TableIndexBuf>:
+    Default
+{
+    fn build(&self) -> Result<C, C::ErrorType>;
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BlockCacheKey((SSTableId, BlockIndex));
