@@ -9,9 +9,10 @@ use aes_gcm::{Aes128Gcm, Aes256Gcm};
 use aes_gcm_siv::Aes128GcmSiv as Aes128Gcm;
 #[cfg(feature = "aes-gcm-siv")]
 use aes_gcm_siv::Aes256GcmSiv as Aes256Gcm;
-use mors_traits::kms::{CipherKeyId, KmsCipher};
+use mors_traits::kms::{CipherKeyId, EncryptError, KmsCipher};
 
 use crate::error::MorsEncryptError;
+use crate::NONCE_SIZE;
 
 pub type Nonce = GenericArray<u8, U12>;
 type Result<T> = std::result::Result<T, MorsEncryptError>;
@@ -35,16 +36,36 @@ impl KmsCipher for AesCipher {
         &self,
         nonce: &[u8],
         ciphertext: &[u8],
-    ) -> std::result::Result<Vec<u8>, Self::ErrorType> {
-        self.decrypt(Nonce::from_slice(nonce), ciphertext)
+    ) -> std::result::Result<Vec<u8>, EncryptError> {
+        Ok(self.decrypt(Nonce::from_slice(nonce), ciphertext)?)
     }
 
     fn encrypt_with_slice(
         &self,
         nonce: &[u8],
         plaintext: &[u8],
-    ) -> std::result::Result<Vec<u8>, Self::ErrorType> {
-        self.encrypt(Nonce::from_slice(nonce), plaintext)
+    ) -> std::result::Result<Vec<u8>, EncryptError> {
+        Ok(self.encrypt(Nonce::from_slice(nonce), plaintext)?)
+    }
+
+    fn decrypt(
+        &self,
+        data: &[u8],
+    ) -> std::result::Result<Vec<u8>, EncryptError> {
+        let nonce = &data[data.len() - NONCE_SIZE..];
+        let ciphertext = &data[..data.len() - NONCE_SIZE];
+        self.decrypt_with_slice(nonce, ciphertext)
+      
+    }
+
+    fn encrypt(
+        &self,
+        data: &[u8],
+    ) -> std::result::Result<Vec<u8>, EncryptError> {
+        let nonce = Self::generate_nonce();
+        let mut ciphertext = self.encrypt_with_slice(nonce.as_slice(), data)?;
+        ciphertext.extend_from_slice(nonce.as_slice());
+        Ok(ciphertext)
     }
 }
 impl Debug for AesCipher {

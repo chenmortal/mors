@@ -14,7 +14,7 @@ use mors_traits::{
     file_id::{FileId, SSTableId},
     kms::Kms,
     levelctl::{Level, LevelCtl, LevelCtlBuilder},
-    sstable::Table,
+    sstable::TableTrait,
 };
 
 use tokio::select;
@@ -24,22 +24,22 @@ use crate::{
     error::MorsLevelCtlError,
     manifest::{Manifest, ManifestBuilder},
 };
-pub struct MorsLevelCtl<T: Table> {
+pub struct MorsLevelCtl<T: TableTrait> {
     table: T,
 }
-impl<T: Table> LevelCtl<T> for MorsLevelCtl<T> {
+impl<T: TableTrait> LevelCtl<T> for MorsLevelCtl<T> {
     type ErrorType = MorsLevelCtlError;
 
     type LevelCtlBuilder = MorsLevelCtlBuilder<T>;
 }
 type Result<T> = std::result::Result<T, MorsLevelCtlError>;
-pub struct MorsLevelCtlBuilder<T: Table> {
+pub struct MorsLevelCtlBuilder<T: TableTrait> {
     manifest: ManifestBuilder,
     table: T::TableBuilder,
     max_level: Level,
     dir: PathBuf,
 }
-impl<T: Table> Default for MorsLevelCtlBuilder<T> {
+impl<T: TableTrait> Default for MorsLevelCtlBuilder<T> {
     fn default() -> Self {
         Self {
             manifest: ManifestBuilder::default(),
@@ -49,7 +49,7 @@ impl<T: Table> Default for MorsLevelCtlBuilder<T> {
         }
     }
 }
-impl<T: Table> LevelCtlBuilder<MorsLevelCtl<T>, T> for MorsLevelCtlBuilder<T> {
+impl<T: TableTrait> LevelCtlBuilder<MorsLevelCtl<T>, T> for MorsLevelCtlBuilder<T> {
     async fn build(&self, kms: impl Kms) -> Result<()> {
         let compact_status = CompactStatus::new(self.max_level.to_usize());
         let manifest = self.manifest.build()?;
@@ -59,7 +59,7 @@ impl<T: Table> LevelCtlBuilder<MorsLevelCtl<T>, T> for MorsLevelCtlBuilder<T> {
         Ok(())
     }
 }
-impl<T: Table> MorsLevelCtlBuilder<T> {
+impl<T: TableTrait> MorsLevelCtlBuilder<T> {
     async fn open_tables_by_manifest(
         &self,
         manifest: &Manifest,

@@ -30,14 +30,15 @@ pub enum MorsEncryptError {
     #[error("Invalid nonce: {nonce}, ciphertext: {ciphertext}")]
     DecryptError { nonce: String, ciphertext: String },
 }
-impl Into<EncryptError> for MorsEncryptError {
-    fn into(self) -> EncryptError {
-        EncryptError::new(self)
+
+impl From<MorsEncryptError> for EncryptError {
+    fn from(err: MorsEncryptError) -> EncryptError {
+        EncryptError::new(err)
     }
+    
 }
 impl Into<KmsError> for MorsKmsError {
     fn into(self) -> KmsError {
         KmsError::new(self)
     }
-    
 }

@@ -1,9 +1,16 @@
-use std::{
-    cmp::max, fs::{File, OpenOptions}, io, ops::{Deref, DerefMut}, os::unix::fs::OpenOptionsExt, path::PathBuf, slice
-};
 use std::cmp::Ordering;
 use std::io::{Error, Read, SeekFrom, Write};
 use std::path::Path;
+use std::{
+    cmp::max,
+    fs::{File, OpenOptions},
+    io,
+    ops::{Deref, DerefMut},
+    os::unix::fs::OpenOptionsExt,
+    path::PathBuf,
+    slice,
+    time::SystemTime,
+};
 
 use memmap2::{Advice, MmapRaw};
 
@@ -29,9 +36,8 @@ impl MmapFile {
     pub fn path(&self) -> &PathBuf {
         &self.path
     }
-    pub fn write_at(&self)->usize{
+    pub fn write_at(&self) -> usize {
         self.w_pos
-
     }
     pub fn delete(&self) -> Result<(), io::Error> {
         self.fd.set_len(0)?;
@@ -125,11 +131,16 @@ impl MmapFile {
     pub fn len(&self) -> Result<usize, Error> {
         Ok(self.raw.len())
     }
+    pub fn is_empty(&self) -> Result<bool, Error> {
+        Ok(self.raw.len() == 0)
+    }
     #[inline]
-    pub fn file_len(&self)->io::Result<u64>{
+    pub fn file_len(&self) -> io::Result<u64> {
         Ok(self.fd.metadata()?.len())
     }
-
+    pub fn file_modified(&self) -> io::Result<SystemTime> {
+        self.fd.metadata()?.modified()
+    }
     #[cfg(not(target_os = "linux"))]
     pub fn set_len(&mut self, size: usize) -> Result<(), io::Error> {
         use std::mem::replace;
@@ -211,8 +222,8 @@ pub struct MmapFileBuilder {
     advices: Vec<Advice>,
     open_option: OpenOptions,
 }
-impl Deref for MmapFileBuilder{
-    type Target=OpenOptions;
+impl Deref for MmapFileBuilder {
+    type Target = OpenOptions;
 
     fn deref(&self) -> &Self::Target {
         &self.open_option
@@ -248,7 +259,7 @@ impl MmapFileBuilder {
         self.advices.push(advice);
         self
     }
-    pub fn create<P: AsRef<Path>>(
+    pub fn build<P: AsRef<Path>>(
         &self,
         path: P,
         size: u64,
@@ -260,7 +271,7 @@ impl MmapFileBuilder {
         let mmap = MmapRaw::map_raw(&file)?;
 
         for advice in &self.advices {
-            mmap.advise(advice.clone())?;
+            mmap.advise(*advice)?;
         }
         let mmap = MmapFile {
             w_pos: 0,

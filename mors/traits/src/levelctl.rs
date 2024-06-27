@@ -3,13 +3,13 @@ use std::{
     ops::{Add, AddAssign, Sub},
 };
 
-use crate::{kms::Kms, sstable::Table};
+use crate::{kms::Kms, sstable::TableTrait};
 
-pub trait LevelCtl<T:Table>: Sized {
+pub trait LevelCtl<T:TableTrait>: Sized {
     type ErrorType;
     type LevelCtlBuilder: LevelCtlBuilder<Self,T>;
 }
-pub trait LevelCtlBuilder<L:LevelCtl<T>,T:Table>: Default {
+pub trait LevelCtlBuilder<L:LevelCtl<T>,T:TableTrait>: Default {
     fn build(&self,kms:impl Kms)->impl std::future::Future<Output = Result<(),L::ErrorType>>;
 }
 

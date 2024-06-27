@@ -8,10 +8,17 @@ version.workspace = true
 
 
 [dependencies]
-mors-common={workspace=true}
+mors-common = { workspace = true }
+mors-traits = { workspace = true }
 prost = { workspace = true }
-
+thiserror = { workspace = true }
+memmap2 = { workspace = true }
+bytes = { workspace = true }
+crc32fast = { workspace = true }
+xxhash-rust = { workspace = true }
+flatbuffers = { workspace = true }
 [build-dependencies]
 prost-build = { workspace = true }
+flatc-rust = { workspace = true }
 [lints]
 workspace = true

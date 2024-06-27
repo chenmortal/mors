@@ -57,13 +57,16 @@ pub trait KmsCipher {
         &self,
         nonce: &[u8],
         ciphertext: &[u8],
-    ) -> Result<Vec<u8>, Self::ErrorType>;
+    ) -> Result<Vec<u8>, EncryptError>;
 
     fn encrypt_with_slice(
         &self,
         nonce: &[u8],
         plaintext: &[u8],
-    ) -> Result<Vec<u8>, Self::ErrorType>;
+    ) -> Result<Vec<u8>, EncryptError>;
+
+    fn decrypt(&self,data:&[u8])->Result<Vec<u8>,EncryptError>;
+    fn encrypt(&self,data:&[u8])->Result<Vec<u8>,EncryptError>;
 }
 pub trait KmsBuilder<K:Kms>: Default {
     fn build(&self) -> Result<K, K::ErrorType>;

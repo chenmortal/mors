@@ -47,7 +47,7 @@ where
         kms: K,
     ) -> Result<Self> {
         let is_exist = Path::new(path_buf.as_path()).exists();
-        let mmap = builder.create(&path_buf, max_size)?;
+        let mmap = builder.build(&path_buf, max_size)?;
         let mut log_file = Self {
             id,
             kms,

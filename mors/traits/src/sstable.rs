@@ -1,12 +1,24 @@
-use std::sync::Arc;
+use std::path::PathBuf;
 
-pub trait Table: Sized {
+use mors_common::compress::CompressionType;
+
+use crate::{file_id::SSTableId, kms::KmsCipher};
+
+pub trait TableTrait: Sized {
     type ErrorType;
-    type TableBuilder: TableBuilder;
+    type TableBuilder: TableBuilderTrait<Self>;
 }
-pub trait TableBuilder: Default {}
+pub trait TableBuilderTrait<T: TableTrait>: Default {
+    fn set_compression(&mut self, compression: CompressionType);
+    fn set_dir(&mut self, dir: PathBuf);
+    fn open<K: KmsCipher>(
+        &self,
+        id: SSTableId,
+        cipher: Option<K>,
+    ) -> Result<T, T::ErrorType>;
+}
 pub trait Block: Sized + Clone + Send + Sync + 'static {}
-pub trait TableIndexBuf: Sized + Clone + Send + Sync + 'static {}
+pub trait TableIndexBufTrait: Sized + Clone + Send + Sync + 'static {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct BlockIndex(u32);
 impl From<u32> for BlockIndex {

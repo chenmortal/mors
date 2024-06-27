@@ -2,10 +2,10 @@ use bytes::BufMut;
 
 use crate::{
     file_id::SSTableId,
-    sstable::{Block, BlockIndex, TableIndexBuf},
+    sstable::{Block, BlockIndex, TableIndexBufTrait},
 };
 
-pub trait Cache<B: Block, T: TableIndexBuf>: Sized {
+pub trait Cache<B: Block, T: TableIndexBufTrait>: Sized {
     type ErrorType;
     type CacheBuilder: CacheBuilder<Self, B, T>;
     fn get_block(
@@ -27,7 +27,7 @@ pub trait Cache<B: Block, T: TableIndexBuf>: Sized {
         index: T,
     ) -> impl std::future::Future<Output = ()> + Send;
 }
-pub trait CacheBuilder<C: Cache<B, T>, B: Block, T: TableIndexBuf>:
+pub trait CacheBuilder<C: Cache<B, T>, B: Block, T: TableIndexBufTrait>:
     Default
 {
     fn build(&self) -> Result<C, C::ErrorType>;
