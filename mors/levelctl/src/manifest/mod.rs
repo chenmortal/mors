@@ -35,6 +35,7 @@ const MAGIC_VERSION: u16 = 1;
 const MAGIC_TEXT: &[u8; 4] = b"Mors";
 
 type Result<T> = std::result::Result<T, ManifestError>;
+#[derive(Clone)]
 pub(crate) struct Manifest(Arc<Mutex<ManifestInner>>);
 impl Deref for Manifest {
     type Target = Mutex<ManifestInner>;
@@ -368,5 +369,8 @@ impl TableManifest {
     }
     pub(crate) fn key_id(&self) -> CipherKeyId {
         self.key_id
+    }
+    pub(crate) fn level(&self) -> Level {
+        self.level
     }
 }

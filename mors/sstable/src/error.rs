@@ -1,5 +1,5 @@
 use mors_common::compress::CompressError;
-use mors_traits::kms::EncryptError;
+use mors_traits::{kms::EncryptError, sstable::SSTableError};
 use prost::DecodeError;
 use thiserror::Error;
 #[derive(Error, Debug)]
@@ -24,4 +24,10 @@ pub enum MorsTableError {
     EncryptError(#[from] EncryptError),
     #[error("Compression error: {0}")]
     CompressionError(#[from] CompressError),
+}
+
+impl From<MorsTableError> for SSTableError {
+    fn from(err: MorsTableError) -> Self {
+        SSTableError::new(err)
+    }
 }

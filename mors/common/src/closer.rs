@@ -72,7 +72,7 @@ impl<E: Error + From<AcquireError>> Throttle<E> {
     }
 }
 impl<E: Error> ThrottlePermit<E> {
-    pub async fn do_future<T>(
+    pub async fn do_future<T:Send>(
         self,
         future: impl std::future::Future<Output = Result<T, E>>,
     ) -> Option<T> {

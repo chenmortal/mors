@@ -150,6 +150,6 @@ impl AesCipher {
     }
     #[inline]
     pub fn generate_nonce() -> Nonce {
-        Aes128Gcm::generate_nonce(&mut OsRng).into()
+        Aes128Gcm::generate_nonce(&mut OsRng)
     }
 }

@@ -35,18 +35,18 @@ impl AddAssign<u64> for CipherKeyId {
         self.0 += rhs
     }
 }
-pub trait Kms: Clone + Send + Sync {
+pub trait Kms: Clone + Send + Sync + 'static {
     type ErrorType: Into<KmsError>;
     type Cipher: KmsCipher;
     type KmsBuilder: KmsBuilder<Self>;
     fn get_cipher(
         &self,
         key_id: CipherKeyId,
-    ) -> Result<Option<Self::Cipher>, Self::ErrorType>;
-    fn latest_cipher(&self) -> Result<Option<Self::Cipher>, Self::ErrorType>;
+    ) -> Result<Option<Self::Cipher>, KmsError>;
+    fn latest_cipher(&self) -> Result<Option<Self::Cipher>, KmsError>;
     const NONCE_SIZE: usize;
 }
-pub trait KmsCipher:Send+Sync {
+pub trait KmsCipher: Send + Sync+'static {
     type ErrorType: Into<EncryptError>;
 
     fn cipher_key_id(&self) -> CipherKeyId;
@@ -65,10 +65,10 @@ pub trait KmsCipher:Send+Sync {
         plaintext: &[u8],
     ) -> Result<Vec<u8>, EncryptError>;
 
-    fn decrypt(&self,data:&[u8])->Result<Vec<u8>,EncryptError>;
-    fn encrypt(&self,data:&[u8])->Result<Vec<u8>,EncryptError>;
+    fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, EncryptError>;
+    fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, EncryptError>;
 }
-pub trait KmsBuilder<K:Kms>: Default {
+pub trait KmsBuilder<K: Kms>: Default {
     fn build(&self) -> Result<K, K::ErrorType>;
 }
 #[derive(Error, Debug)]

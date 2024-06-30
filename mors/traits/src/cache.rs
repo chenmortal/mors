@@ -6,7 +6,7 @@ use crate::{
 };
 
 pub trait Cache<B: BlockTrait, T: TableIndexBufTrait>:
-    Sized + Send + Sync + Clone
+    Sized + Send + Sync + Clone+'static
 {
     type ErrorType;
     type CacheBuilder: CacheBuilder<Self, B, T>;

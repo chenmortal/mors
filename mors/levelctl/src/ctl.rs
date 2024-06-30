@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     marker::PhantomData,
     path::PathBuf,
     sync::{
@@ -13,13 +14,15 @@ use mors_common::closer::{CloseNotify, Throttle};
 use mors_traits::{
     cache::Cache,
     default::DEFAULT_DIR,
-    file_id::{FileId, SSTableId},
-    kms::{Kms, KmsCipher},
+    file_id::SSTableId,
+    kms::Kms,
     levelctl::{Level, LevelCtl, LevelCtlBuilder},
-    sstable::{BlockTrait, TableIndexBufTrait, TableTrait},
+    sstable::{BlockTrait, TableBuilderTrait, TableIndexBufTrait, TableTrait},
 };
 
-use tokio::select;
+use tokio::{select, task::JoinHandle};
+
+// use futures::Future;
 
 use crate::{
     compact::status::CompactStatus,
@@ -27,11 +30,11 @@ use crate::{
     manifest::{Manifest, ManifestBuilder},
 };
 pub struct MorsLevelCtl<
-    T: TableTrait<C, B, TB, K>,
+    T: TableTrait<C, B, TB, K::Cipher>,
     C: Cache<B, TB>,
     B: BlockTrait,
     TB: TableIndexBufTrait,
-    K: KmsCipher,
+    K: Kms,
 > {
     table: T,
     c: PhantomData<C>,
@@ -40,11 +43,11 @@ pub struct MorsLevelCtl<
     k: PhantomData<K>,
 }
 impl<
-        T: TableTrait<C, B, TB, K>,
+        T: TableTrait<C, B, TB, K::Cipher>,
         C: Cache<B, TB>,
         B: BlockTrait,
         TB: TableIndexBufTrait,
-        K: KmsCipher,
+        K: Kms,
     > LevelCtl<T, C, B, TB, K> for MorsLevelCtl<T, C, B, TB, K>
 {
     type ErrorType = MorsLevelCtlError;
@@ -53,23 +56,24 @@ impl<
 }
 type Result<T> = std::result::Result<T, MorsLevelCtlError>;
 pub struct MorsLevelCtlBuilder<
-    T: TableTrait<C, B, TB, K>,
+    T: TableTrait<C, B, TB, K::Cipher>,
     C: Cache<B, TB>,
     B: BlockTrait,
     TB: TableIndexBufTrait,
-    K: KmsCipher,
+    K: Kms,
 > {
     manifest: ManifestBuilder,
     table: T::TableBuilder,
     max_level: Level,
+    cache: Option<C>,
     dir: PathBuf,
 }
 impl<
-        T: TableTrait<C, B, TB, K>,
+        T: TableTrait<C, B, TB, K::Cipher>,
         C: Cache<B, TB>,
         B: BlockTrait,
         TB: TableIndexBufTrait,
-        K: KmsCipher,
+        K: Kms,
     > Default for MorsLevelCtlBuilder<T, C, B, TB, K>
 {
     fn default() -> Self {
@@ -78,40 +82,41 @@ impl<
             table: T::TableBuilder::default(),
             max_level: 6_u8.into(),
             dir: PathBuf::from(DEFAULT_DIR),
+            cache: None,
         }
     }
 }
 impl<
-        T: TableTrait<C, B, TB, K>,
+        T: TableTrait<C, B, TB, K::Cipher>,
         C: Cache<B, TB>,
         B: BlockTrait,
         TB: TableIndexBufTrait,
-        K: KmsCipher,
+        K: Kms,
     > LevelCtlBuilder<MorsLevelCtl<T, C, B, TB, K>, T, C, B, TB, K>
     for MorsLevelCtlBuilder<T, C, B, TB, K>
 {
-    async fn build(&self, kms: impl Kms) -> Result<()> {
+    async fn build(&self, kms: K) -> Result<()> {
         let compact_status = CompactStatus::new(self.max_level.to_usize());
         let manifest = self.manifest.build()?;
 
-        self.open_tables_by_manifest(&manifest, kms).await?;
+        self.open_tables_by_manifest(manifest.clone(), kms).await?;
 
         Ok(())
     }
 }
 impl<
-        T: TableTrait<C, B, TB,K>,
+        T: TableTrait<C, B, TB, K::Cipher>,
         C: Cache<B, TB>,
         B: BlockTrait,
         TB: TableIndexBufTrait,
-        K: KmsCipher,
-    > MorsLevelCtlBuilder<T, C, B, TB,K>
+        K: Kms,
+    > MorsLevelCtlBuilder<T, C, B, TB, K>
 {
     async fn open_tables_by_manifest(
         &self,
-        manifest: &Manifest,
-        kms: impl Kms,
-    ) -> Result<()> {
+        manifest: Manifest,
+        kms: K,
+    ) -> Result<(SSTableId, Vec<Vec<T>>)> {
         manifest.revert(&self.dir)?;
 
         let num_opened = Arc::new(AtomicUsize::new(0));
@@ -125,20 +130,62 @@ impl<
         let mut max_id: SSTableId = 0.into();
         let mut throttle = Throttle::<MorsLevelCtlError>::new(3);
 
-        // let mut tasks=vec![Vec::new();self.max_level.to_usize()];
+        let mut tasks: HashMap<Level, Vec<JoinHandle<Option<T>>>> =
+            HashMap::new();
 
         for (id, table) in tables.iter() {
-            let opened = num_opened.clone();
-            let path = id.join_dir(&self.dir);
             let permit = throttle.acquire().await?;
-
+            let num_opened_clone = num_opened.clone();
             max_id = max_id.max(*id);
 
-            let compress = table.compress();
             let cipher_id = table.key_id();
-        }
 
-        Ok(())
+            let mut table_builder = self.table.clone();
+            if let Some(c) = self.cache.as_ref() {
+                table_builder.set_cache(c.clone());
+            }
+            table_builder.set_compression(table.compress());
+            table_builder.set_dir(self.dir.clone());
+            let kms_clone = kms.clone();
+            let table_id = *id;
+            let future = async move {
+                let cipher = kms_clone.get_cipher(cipher_id)?;
+                let table = table_builder.open(table_id, cipher).await?;
+                Ok::<Option<T>, MorsLevelCtlError>(table)
+            };
+
+            let task = tokio::spawn(async move {
+                let table = permit.do_future(future).await;
+                num_opened_clone.fetch_add(1, Ordering::SeqCst);
+                table.and_then(|x| x)
+            });
+            tasks
+                .entry(table.level().min(self.max_level))
+                .or_default()
+                .push(task);
+        }
+        drop(manifest_lock);
+        throttle.finish().await?;
+        watch_close_notify.notify();
+
+        let mut level_tables = Vec::new();
+        for level in 0..self.max_level.to_u8() {
+            match tasks.remove(&level.into()) {
+                Some(task_vec) => {
+                    let mut tables = Vec::with_capacity(task_vec.len());
+                    for handle in task_vec {
+                        if let Some(t) = handle.await? {
+                            tables.push(t);
+                        };
+                    }
+                    level_tables.push(tables);
+                }
+                None => {
+                    level_tables.push(Vec::new());
+                }
+            }
+        }
+        Ok((max_id, level_tables))
     }
     fn watch_num_opened(
         num_opened: Arc<AtomicUsize>,

@@ -37,8 +37,14 @@ impl From<MorsEncryptError> for EncryptError {
     }
     
 }
-impl Into<KmsError> for MorsKmsError {
-    fn into(self) -> KmsError {
-        KmsError::new(self)
+impl From<MorsEncryptError> for KmsError {
+    fn from(err: MorsEncryptError) -> KmsError {
+        KmsError::new(err)
+    }
+    
+}
+impl From<MorsKmsError> for KmsError {
+    fn from(val: MorsKmsError) -> Self {
+        KmsError::new(val)
     }
 }

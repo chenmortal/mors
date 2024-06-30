@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use bytes::Buf;
+use log::error;
 use memmap2::Advice;
 use mors_common::compress::CompressionType;
 use mors_common::mmap::{MmapFile, MmapFileBuilder};
@@ -11,7 +12,9 @@ use mors_traits::default::DEFAULT_DIR;
 use mors_traits::file_id::{FileId, SSTableId};
 use mors_traits::iter::{DoubleEndedCacheIterator, KvDoubleEndedCacheIter};
 use mors_traits::kms::KmsCipher;
-use mors_traits::sstable::{BlockIndex, TableBuilderTrait, TableTrait};
+use mors_traits::sstable::{
+    BlockIndex, SSTableError, TableBuilderTrait, TableTrait,
+};
 use mors_traits::ts::{KeyTs, TxnTs};
 use prost::Message;
 
@@ -41,6 +44,7 @@ impl Default for ChecksumVerificationMode {
         Self::NoVerification
     }
 }
+#[derive(Debug, Clone)]
 
 pub struct TableBuilder<C: Cache<Block, TableIndexBuf>> {
     read_only: bool,
@@ -87,8 +91,29 @@ impl<C: Cache<Block, TableIndexBuf>, K: KmsCipher>
     fn set_compression(&mut self, compression: CompressionType) {
         self.compression = compression;
     }
+    
+    fn set_dir(&mut self, dir: PathBuf) {
+        self.dir = dir;
+    }
 
-    async fn open(&self, id: SSTableId, cipher: Option<K>) -> Result<Table<C, K>> {
+    fn set_cache(&mut self, cache: C) {
+        self.cache = Some(cache);
+    }
+    
+    async fn open(
+        &self,
+        id: SSTableId,
+        cipher: Option<K>,
+    ) -> std::result::Result<Option<Table<C, K>>,SSTableError> {
+        Ok(self.open_impl(id, cipher).await?)
+    }
+}
+impl<C: Cache<Block, TableIndexBuf>> TableBuilder<C> {
+    async fn open_impl<K:KmsCipher>(
+        &self,
+        id: SSTableId,
+        cipher: Option<K>,
+    ) -> Result<Option<Table<C, K>>> {
         if self.compression.is_none() && self.block_size == 0 {
             return Err(MorsTableError::InvalidConfig);
         }
@@ -130,23 +155,23 @@ impl<C: Cache<Block, TableIndexBuf>, K: KmsCipher>
         match table.0.checksum_verify_mode {
             ChecksumVerificationMode::OnBlockRead
             | ChecksumVerificationMode::OnTableAndBlockRead => {
-                table.verify().await?;
+                if let Err(e) = table.verify().await {
+                    if let MorsTableError::ChecksumVerify(_, _) = &e {
+                        error!(
+                            "Ignore table {} checksum verify error: {}",
+                            id, e
+                        );
+                        return Ok(None);
+                    }
+                    return Err(e);
+                }
             }
             _ => {}
         }
-        Ok(table)
+        Ok(table.into())
     }
 
-    fn set_dir(&mut self, dir: PathBuf) {
-        self.dir = dir;
-    }
-
-    fn set_cache(&mut self, cache: C) {
-        self.cache = Some(cache);
-    }
-}
-impl<C: Cache<Block, TableIndexBuf>> TableBuilder<C> {
-    fn init_index<K: KmsCipher>(
+    fn init_index<K:KmsCipher>(
         mmap: &MmapFile,
         cipher: &Option<K>,
     ) -> Result<(TableIndexBuf, usize, usize)> {
@@ -193,7 +218,7 @@ impl<C: Cache<Block, TableIndexBuf>> TableBuilder<C> {
 
         Ok((index_buf, read_pos, index_len))
     }
-    fn smallest_biggest<K: KmsCipher>(
+    fn smallest_biggest<K:KmsCipher>(
         &self,
         index_buf: &TableIndexBuf,
         mmap: &MmapFile,
@@ -237,6 +262,7 @@ impl<C: Cache<Block, TableIndexBuf>> TableBuilder<C> {
         Ok((smallest, biggest))
     }
 }
+
 pub struct Table<C: Cache<Block, TableIndexBuf>, K: KmsCipher>(
     Arc<TableInner<C, K>>,
 );

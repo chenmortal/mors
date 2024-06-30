@@ -8,7 +8,7 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
 use log::error;
-use mors_traits::kms::{CipherKeyId, Kms, KmsBuilder, KmsCipher};
+use mors_traits::kms::{CipherKeyId, Kms, KmsBuilder, KmsCipher, KmsError};
 use prost::bytes::{Buf, BufMut};
 use prost::Message;
 
@@ -35,7 +35,7 @@ impl Deref for MorsKms {
 impl Kms for MorsKms {
     type ErrorType = MorsKmsError;
     type Cipher = AesCipher;
-    fn get_cipher(&self, key_id: CipherKeyId) -> Result<Option<AesCipher>> {
+    fn get_cipher(&self, key_id: CipherKeyId) -> std::result::Result<Option<AesCipher>,KmsError> {
         if let Some(dk) = self.get_data_key(key_id)? {
             let cipher = AesCipher::new(&dk.data, key_id)?;
             return Ok(cipher.into());
@@ -45,7 +45,7 @@ impl Kms for MorsKms {
 
     fn latest_cipher(
         &self,
-    ) -> std::result::Result<Option<Self::Cipher>, Self::ErrorType> {
+    ) -> std::result::Result<Option<Self::Cipher>, KmsError> {
         if let Some(data_key) = self.latest_datakey()? {
             return Ok(
                 AesCipher::new(&data_key.data, data_key.key_id.into())?.into()
@@ -113,7 +113,7 @@ impl KmsBuilder<MorsKms> for MorsKmsBuilder {
     fn build(&self) -> std::result::Result<MorsKms, <MorsKms as Kms>::ErrorType> {
         let keys_len = self.encrypt_key.len();
 
-        if keys_len > 0 && !vec![16, 32].contains(&keys_len) {
+        if keys_len > 0 && ![16, 32].contains(&keys_len) {
             return Err(MorsEncryptError::InvalidEncryptionKey.into());
         }
         let mut key_registry = KmsInner {
@@ -148,7 +148,7 @@ impl KmsBuilder<MorsKms> for MorsKmsBuilder {
             key_registry.file = Some(key_registry_file);
         }
 
-        return Ok(MorsKms(Arc::new(RwLock::new(key_registry))));
+        Ok(MorsKms(Arc::new(RwLock::new(key_registry))))
     }
 }
 impl KmsInner {
@@ -161,7 +161,7 @@ impl KmsInner {
         let mut e_sanity = SANITY_TEXT.to_vec();
 
         if let Some(c) = &self.cipher {
-            e_sanity = c.encrypt(&nonce, &mut e_sanity)?;
+            e_sanity = c.encrypt(&nonce, &e_sanity)?;
         }
         let mut buf = Vec::with_capacity(12 + 4 + 12 + 16);
         buf.put_slice(nonce.as_slice());
@@ -405,7 +405,7 @@ impl MorsKms {
         match inner_r.data_keys.get(&cipher_key_id) {
             Some(s) => Ok(Some(s.clone())),
             None => {
-                return Err(MorsKmsError::InvalidDataKeyID(cipher_key_id));
+                Err(MorsKmsError::InvalidDataKeyID(cipher_key_id))
             }
         }
     }
