@@ -1,12 +1,15 @@
+use std::mem::size_of;
 use std::sync::Arc;
 
-use mors_traits::skip_list::SkipList as SkipListTrait;
+use mors_traits::skip_list::{SkipList as SkipListTrait, SkipListError};
 
-use crate::{error::MorsSkipListError, SkipList};
+use crate::{error::MorsSkipListError, Node, SkipList};
+
 type Result<T> = std::result::Result<T, MorsSkipListError>;
 pub struct MorsSkipList {
     inner: Arc<SkipList>,
 }
+
 impl SkipListTrait for MorsSkipList {
     type ErrorType = MorsSkipListError;
 
@@ -40,5 +43,11 @@ impl SkipListTrait for MorsSkipList {
 
     fn height(&self) -> usize {
         self.inner.height()
+    }
+    const MAX_NODE_SIZE: usize = size_of::<Node>();
+}
+impl From<MorsSkipListError> for SkipListError {
+    fn from(val: MorsSkipListError) -> Self {
+        SkipListError::new(val)
     }
 }

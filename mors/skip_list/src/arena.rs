@@ -1,10 +1,10 @@
 use std::alloc::{alloc, dealloc, handle_alloc_error, Layout};
 use std::mem::size_of;
 
-use mors_common::DEFAULT_PAGE_SIZE;
-
 use std::ptr::{self, NonNull};
 use std::sync::atomic::AtomicUsize;
+
+use mors_common::page_size;
 
 use crate::error::ArenaError;
 
@@ -23,11 +23,10 @@ pub struct Arena {
 impl Arena {
     pub fn new(size: usize) -> Result<Arena> {
         let chunk_align = CHUNK_ALIGN;
-        let size = size as usize;
         let mut request_size = Self::round_up_to(size, chunk_align);
         debug_assert_eq!(chunk_align % CHUNK_ALIGN, 0);
-        if request_size >= DEFAULT_PAGE_SIZE.to_owned() {
-            request_size = Self::round_up_to(request_size, DEFAULT_PAGE_SIZE.to_owned());
+        if request_size >= page_size() {
+            request_size = Self::round_up_to(request_size, page_size());
         }
         debug_assert_eq!(request_size % CHUNK_ALIGN, 0);
 
@@ -79,7 +78,7 @@ impl Arena {
 
     pub fn get_mut<T>(&self, offset: usize) -> Result<&mut T> {
         unsafe {
-            let ptr = self.start.as_ptr().add(offset as usize);
+            let ptr = self.start.as_ptr().add(offset);
 
             if ptr.add(size_of::<T>()) > self.end.as_ptr() {
                 Err(ArenaError::OffsetOutOfBound {
@@ -94,7 +93,7 @@ impl Arena {
     }
     pub fn get<T>(&self, offset: usize) -> Result<&T> {
         unsafe {
-            let ptr = self.start.as_ptr().add(offset as usize);
+            let ptr = self.start.as_ptr().add(offset);
             if ptr.add(size_of::<T>()) > self.end.as_ptr() {
                 Err(ArenaError::OffsetOutOfBound {
                     offset,
@@ -143,8 +142,7 @@ impl Arena {
         let old_ptr = unsafe {
             self.start.as_ptr().add(
                 self.ptr_offset
-                    .fetch_add(alloc_size, std::sync::atomic::Ordering::AcqRel)
-                    as usize,
+                    .fetch_add(alloc_size, std::sync::atomic::Ordering::AcqRel),
             )
         };
         debug_assert_eq!(old_ptr as usize % 8, 0);
@@ -286,14 +284,14 @@ fn test_over_size() {
             }
             assert!(arena.alloc(i).is_ok());
         }
-        assert!(arena.alloc(11 as usize).is_err());
+        assert!(arena.alloc(11_usize).is_err());
     }
 }
 #[test]
 fn test_get_mut() {
     let arena = Arena::new(4).unwrap();
-    arena.alloc(1 as usize).unwrap();
-    let value = 42 as usize;
+    arena.alloc(1_usize).unwrap();
+    let value = 42_usize;
     let ptr = arena.alloc(value).unwrap();
     let offset = arena.offset(ptr).unwrap();
 

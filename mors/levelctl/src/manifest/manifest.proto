@@ -1,0 +1,39 @@
+syntax="proto3";
+
+package manifest_change;
+
+message ManifestChangeSet {
+    // A set of changes that are applied atomically.
+    repeated ManifestChange changes = 1;
+}
+  
+  enum EncryptionAlgo {
+    aes = 0;
+  }
+  
+  message ManifestChange {
+    uint32 Id = 1;            // Table ID.
+    enum Operation {
+            CREATE = 0;
+            DELETE = 1;
+    }
+    Operation Op   = 2;
+    uint32 Level   = 3;       // Only used for CREATE.
+    uint64 key_id  = 4;
+    EncryptionAlgo encryption_algo = 5;
+    uint32 compression = 6;   // Only used for CREATE Op.
+  }
+  
+
+  
+  // message DataKey {
+  //   uint64 key_id      = 1; //this is table's id
+  //   bytes  data       = 2; //this is other encryption key
+  //   bytes  iv         = 3; //just for decrypt or  encrypt DataKey.data with Config.encryptionkey
+  //   uint64  created_at = 4;
+  // }
+  
+  // message Match {
+  //     bytes prefix = 1;
+  //     string ignore_bytes = 2; // Comma separated with dash to represent ranges "1, 2-3, 4-7, 9"
+  // }

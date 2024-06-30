@@ -1,14 +1,8 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+mod error;
+mod pb;
+mod table;
+mod block;
+mod block_iter;
+mod fb;
+mod table_index;
+type Result<T> = std::result::Result<T, error::MorsTableError>;

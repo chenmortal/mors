@@ -1,0 +1,11 @@
+syntax="proto3";
+package proto;
+
+message Checksum {
+    enum Algorithm {
+        CRC32C = 0;
+        XXHash64 = 1;
+    }
+    Algorithm algo = 1; // For storing type of Checksum algorithm used
+    uint64 sum = 2;
+}

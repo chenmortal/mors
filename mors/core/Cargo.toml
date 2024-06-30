@@ -6,5 +6,11 @@ license.workspace = true
 readme.workspace = true
 
 [lints]
-workspace=true
+workspace = true
 [dependencies]
+mors-common = { workspace = true }
+mors-encrypt = { workspace = true }
+mors-traits={workspace=true}
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true, features = ["full"] }
