@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bytes::Bytes;
 use flatbuffers::InvalidFlatbuffer;
 use mors_traits::{sstable::TableIndexBufTrait, ts::KeyTs};
@@ -5,7 +7,9 @@ use mors_traits::{sstable::TableIndexBufTrait, ts::KeyTs};
 use crate::fb::table_generated::TableIndex;
 
 #[derive(Clone, Debug, Default)]
-pub struct TableIndexBuf {
+pub struct TableIndexBuf(Arc<TableIndexBufInner>);
+#[derive(Debug,Default)]
+struct TableIndexBufInner{
     offsets: Vec<BlockOffsetBuf>,
     bloom_filter: Option<Bytes>,
     max_version: u64,
@@ -36,7 +40,7 @@ impl TableIndexBuf {
         let bloom_filter = table_index
             .bloom_filter()
             .and_then(|x| Bytes::from(x.bytes().to_vec()).into());
-        Ok(Self {
+        Ok(Self(TableIndexBufInner {
             offsets,
             bloom_filter,
             max_version: table_index.max_version(),
@@ -44,28 +48,28 @@ impl TableIndexBuf {
             uncompressed_size: table_index.uncompressed_size(),
             on_disk_size: table_index.on_disk_size(),
             stale_data_size: table_index.stale_data_size(),
-        })
+        }.into()))
     }
     pub(crate) fn offsets(&self) -> &[BlockOffsetBuf] {
-        &self.offsets
+        &self.0.offsets
     }
     pub(crate) fn bloom_filter(&self) -> Option<&Bytes> {
-        self.bloom_filter.as_ref()
+        self.0.bloom_filter.as_ref()
     }
     pub(crate) fn max_version(&self) -> u64 {
-        self.max_version
+        self.0.max_version
     }
     pub(crate) fn key_count(&self) -> u32 {
-        self.key_count
+        self.0.key_count
     }
     pub(crate) fn uncompressed_size(&self) -> u32 {
-        self.uncompressed_size
+        self.0.uncompressed_size
     }
     pub(crate) fn on_disk_size(&self) -> u32 {
-        self.on_disk_size
+        self.0.on_disk_size
     }
     pub(crate) fn stale_data_size(&self) -> u32 {
-        self.stale_data_size
+        self.0.stale_data_size
     }
 }
 #[derive(Debug, Clone)]

@@ -25,7 +25,7 @@ pub trait TableBuilderTrait<
         &self,
         id: SSTableId,
         cipher: Option<K>,
-    ) -> Result<T, T::ErrorType>;
+    ) -> impl std::future::Future<Output = Result<T, T::ErrorType>> + Send;
 }
 pub trait BlockTrait: Sized + Clone + Send + Sync + 'static {}
 pub trait TableIndexBufTrait: Sized + Clone + Send + Sync + 'static {}

@@ -80,18 +80,15 @@ impl<C: Cache<Block, TableIndexBuf>> Default for TableBuilder<C> {
     }
 }
 
-impl<C: Cache<Block, TableIndexBuf>,K:KmsCipher>
-    TableBuilderTrait<Table<C,K>, C, Block, TableIndexBuf,K> for TableBuilder<C>
+impl<C: Cache<Block, TableIndexBuf>, K: KmsCipher>
+    TableBuilderTrait<Table<C, K>, C, Block, TableIndexBuf, K>
+    for TableBuilder<C>
 {
     fn set_compression(&mut self, compression: CompressionType) {
         self.compression = compression;
     }
 
-    fn open(
-        &self,
-        id: SSTableId,
-        cipher: Option<K>,
-    ) -> Result<Table<C,K>> {
+    async fn open(&self, id: SSTableId, cipher: Option<K>) -> Result<Table<C, K>> {
         if self.compression.is_none() && self.block_size == 0 {
             return Err(MorsTableError::InvalidConfig);
         }
@@ -126,10 +123,17 @@ impl<C: Cache<Block, TableIndexBuf>,K:KmsCipher>
                 cheap_index,
                 cache: self.cache.clone(),
                 cipher,
+                checksum_verify_mode: self.checksum_verify_mode,
             }
             .into(),
         );
-
+        match table.0.checksum_verify_mode {
+            ChecksumVerificationMode::OnBlockRead
+            | ChecksumVerificationMode::OnTableAndBlockRead => {
+                table.verify().await?;
+            }
+            _ => {}
+        }
         Ok(table)
     }
 
@@ -233,8 +237,10 @@ impl<C: Cache<Block, TableIndexBuf>> TableBuilder<C> {
         Ok((smallest, biggest))
     }
 }
-pub struct Table<C: Cache<Block, TableIndexBuf>,K:KmsCipher>(Arc<TableInner<C,K>>);
-pub(crate) struct TableInner<C: Cache<Block, TableIndexBuf>,K:KmsCipher> {
+pub struct Table<C: Cache<Block, TableIndexBuf>, K: KmsCipher>(
+    Arc<TableInner<C, K>>,
+);
+pub(crate) struct TableInner<C: Cache<Block, TableIndexBuf>, K: KmsCipher> {
     id: SSTableId,
     mmap: MmapFile,
     table_size: u64,
@@ -247,26 +253,48 @@ pub(crate) struct TableInner<C: Cache<Block, TableIndexBuf>,K:KmsCipher> {
     cheap_index: CheapTableIndex,
     cache: Option<C>,
     cipher: Option<K>,
+    checksum_verify_mode: ChecksumVerificationMode,
 }
-impl<C: Cache<Block, TableIndexBuf>,K:KmsCipher> TableTrait<C, Block, TableIndexBuf,K>
-    for Table<C,K>
+impl<C: Cache<Block, TableIndexBuf>, K: KmsCipher>
+    TableTrait<C, Block, TableIndexBuf, K> for Table<C, K>
 {
     type ErrorType = MorsTableError;
     type TableBuilder = TableBuilder<C>;
 }
-// impl<C:Cache<B,TableIndexBuf>,B:Block,T:TableIndexBuf> TableTrait<C,B,T> for Table {
-//     type ErrorType = MorsTableError;
-//     type TableBuilder = TableBuilder;
-// }
-impl<C: Cache<Block, TableIndexBuf>,K:KmsCipher> Table<C,K> {
-    fn verify(&self) {
-        for i in 0..self.0.cheap_index.offsets_len {}
-        // for i in 0..self.0. {
 
-        // }
+impl<C: Cache<Block, TableIndexBuf>, K: KmsCipher> Table<C, K> {
+    async fn verify(&self) -> Result<()> {
+        for i in 0..self.0.cheap_index.offsets_len {
+            let block = self.get_block(i.into(), true).await?;
+
+            match self.0.checksum_verify_mode {
+                ChecksumVerificationMode::OnBlockRead
+                | ChecksumVerificationMode::OnTableAndBlockRead => {}
+                _ => {
+                    block.verify()?;
+                }
+            }
+        }
+
+        Ok(())
     }
-    fn table_index(&self){
-        
+    async fn table_index(&self) -> Result<TableIndexBuf> {
+        if self.0.cipher.is_none() {
+            return Ok(self.0.index_buf.clone());
+        }
+
+        let mut data = vec![0; self.0.index_len];
+        debug_assert_eq!(
+            self.0.mmap.pread(&mut data, self.0.index_start)?,
+            self.0.index_len
+        );
+        let index_buf = TableIndexBuf::from_vec(
+            self.0.cipher.as_ref().unwrap().decrypt(&data)?,
+        )?;
+        if let Some(c) = self.0.cache.as_ref() {
+            c.insert_index(self.0.id, index_buf.clone()).await;
+        }
+        Ok(index_buf)
     }
     async fn get_block(
         &self,
@@ -276,7 +304,7 @@ impl<C: Cache<Block, TableIndexBuf>,K:KmsCipher> Table<C,K> {
         if block_index >= self.0.cheap_index.offsets_len.into() {
             return Err(MorsTableError::BlockIndexOutOfRange);
         }
-        let key:BlockCacheKey = (self.0.id,block_index).into();
+        let key: BlockCacheKey = (self.0.id, block_index).into();
 
         if let Some(c) = self.0.cache.as_ref() {
             if let Some(b) = c.get_block(&key).await {
@@ -284,9 +312,40 @@ impl<C: Cache<Block, TableIndexBuf>,K:KmsCipher> Table<C,K> {
             };
         }
 
+        let table_index = self.table_index().await?;
 
-        
-        todo!();
+        let block_id: usize = block_index.into();
+        let block = &table_index.offsets()[block_id];
+
+        let raw_data_ref = self
+            .0
+            .mmap
+            .pread_ref(block.offset() as usize, block.size() as usize);
+        let data = self
+            .0
+            .cipher
+            .as_ref()
+            .map(|c| c.decrypt(raw_data_ref))
+            .transpose()?
+            .unwrap_or_else(|| raw_data_ref.to_vec());
+
+        let block =
+            Block::decode(self.0.id, block_index, block.offset(), data)?;
+
+        match self.0.checksum_verify_mode {
+            ChecksumVerificationMode::OnBlockRead
+            | ChecksumVerificationMode::OnTableAndBlockRead => {
+                block.verify()?;
+            }
+            _ => {}
+        }
+
+        if insert_cache {
+            if let Some(c) = self.0.cache.as_ref() {
+                c.insert_block(key, block.clone()).await;
+            }
+        }
+        Ok(block)
     }
 }
 struct CheapTableIndex {

@@ -207,6 +207,10 @@ impl MmapFile {
         Ok(buf_len)
     }
 
+    pub fn pread_ref(&self,offset: usize,len:usize)->&[u8]{
+        let buf = unsafe { slice::from_raw_parts(self.raw.as_ptr().add(offset) as _, len) };
+        buf
+    }
     pub fn pwrite(
         &mut self,
         buf: &[u8],
