@@ -5,26 +5,28 @@ use std::{
 
 use crate::{
     cache::Cache,
-    kms::Kms,
+    kms::{Kms, KmsCipher},
     sstable::{BlockTrait, TableIndexBufTrait, TableTrait},
 };
 
 pub trait LevelCtl<
-    T: TableTrait<C, B, TB>,
+    T: TableTrait<C, B, TB, K>,
     C: Cache<B, TB>,
     B: BlockTrait,
     TB: TableIndexBufTrait,
+    K: KmsCipher,
 >: Sized
 {
     type ErrorType;
-    type LevelCtlBuilder: LevelCtlBuilder<Self, T, C, B, TB>;
+    type LevelCtlBuilder: LevelCtlBuilder<Self, T, C, B, TB, K>;
 }
 pub trait LevelCtlBuilder<
-    L: LevelCtl<T, C, B, TB>,
-    T: TableTrait<C, B, TB>,
+    L: LevelCtl<T, C, B, TB, K>,
+    T: TableTrait<C, B, TB, K>,
     C: Cache<B, TB>,
     B: BlockTrait,
     TB: TableIndexBufTrait,
+    K: KmsCipher,
 >: Default
 {
     fn build(

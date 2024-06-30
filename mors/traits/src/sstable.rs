@@ -4,23 +4,24 @@ use mors_common::compress::CompressionType;
 
 use crate::{cache::Cache, file_id::SSTableId, kms::KmsCipher};
 
-pub trait TableTrait<C: Cache<B, T>, B: BlockTrait, T: TableIndexBufTrait>:
+pub trait TableTrait<C: Cache<B, T>, B: BlockTrait, T: TableIndexBufTrait,K:KmsCipher>:
     Sized
 {
     type ErrorType;
-    type TableBuilder: TableBuilderTrait<Self, C, B, T>;
+    type TableBuilder: TableBuilderTrait<Self, C, B, T,K>;
 }
 pub trait TableBuilderTrait<
-    T: TableTrait<C, B, TB>,
+    T: TableTrait<C, B, TB,K>,
     C: Cache<B, TB>,
     B: BlockTrait,
     TB: TableIndexBufTrait,
+    K:KmsCipher
 >: Default
 {
     fn set_compression(&mut self, compression: CompressionType);
     fn set_cache(&mut self, cache: C);
     fn set_dir(&mut self, dir: PathBuf);
-    fn open<K: KmsCipher>(
+    fn open(
         &self,
         id: SSTableId,
         cipher: Option<K>,

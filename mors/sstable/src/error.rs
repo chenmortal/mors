@@ -18,6 +18,8 @@ pub enum MorsTableError {
     TableIndexOffsetEmpty,
     #[error("InvalidChecksumLen, Either the data is corrupt or the table Config are incorrectly set ")]
     InvalidChecksumLen,
+    #[error("BlockIndexOutOfRange")]
+    BlockIndexOutOfRange,
     #[error(transparent)]
     EncryptError(#[from] EncryptError),
     #[error("Compression error: {0}")]
