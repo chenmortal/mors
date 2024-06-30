@@ -101,7 +101,7 @@ impl KeyTs {
         Self { key, txn_ts }
     }
 
-    pub fn serialize(&self) -> Vec<u8> {
+    pub fn encode(&self) -> Vec<u8> {
         let mut v = Vec::with_capacity(self.key.len() + 8);
         v.put_slice(&self.key);
         v.put_u64(self.txn_ts.to_u64());
@@ -130,6 +130,11 @@ impl KeyTs {
 
     pub(crate) fn is_empty(&self) -> bool {
         self == &Self::default()
+    }
+}
+impl From<KeyTsBorrow<'_>> for KeyTs {
+    fn from(value: KeyTsBorrow<'_>) -> Self {
+        value.as_ref().into()
     }
 }
 impl PartialOrd for KeyTs {

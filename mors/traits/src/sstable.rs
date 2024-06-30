@@ -17,10 +17,10 @@ pub trait TableBuilderTrait<T: TableTrait>: Default {
         cipher: Option<K>,
     ) -> Result<T, T::ErrorType>;
 }
-pub trait Block: Sized + Clone + Send + Sync + 'static {}
+pub trait BlockTrait: Sized + Clone + Send + Sync + 'static {}
 pub trait TableIndexBufTrait: Sized + Clone + Send + Sync + 'static {}
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct BlockIndex(u32);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash,Default)]
+pub struct BlockIndex(u32);
 impl From<u32> for BlockIndex {
     fn from(value: u32) -> Self {
         Self(value)

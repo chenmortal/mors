@@ -112,16 +112,16 @@ pub struct ValueMeta {
     meta: Meta,
 }
 lazy_static! {
-    static ref VALUEMETA_MIN_SERIALIZED_SIZE: usize =
-        ValueMeta::default().serialized_size();
+    static ref VALUEMETA_MIN_encodeD_SIZE: usize =
+        ValueMeta::default().encoded_size();
 }
 impl ValueMeta {
-    pub fn serialized_size(&self) -> usize {
+    pub fn encoded_size(&self) -> usize {
         2 + self.expires_at.required_space() + self.value.len()
     }
 
-    pub fn serialize(&self) -> Vec<u8> {
-        let mut v = vec![0u8; self.serialized_size()];
+    pub fn encode(&self) -> Vec<u8> {
+        let mut v = vec![0u8; self.encoded_size()];
         v[0] = self.user_meta;
         v[1] = self.meta().0;
         let p = self.expires_at.encode_var(&mut v[2..]);
@@ -129,8 +129,8 @@ impl ValueMeta {
         v
     }
 
-    pub fn deserialize(data: &[u8]) -> Option<Self> {
-        if data.len() < VALUEMETA_MIN_SERIALIZED_SIZE.to_owned() {
+    pub fn decode(data: &[u8]) -> Option<Self> {
+        if data.len() < VALUEMETA_MIN_encodeD_SIZE.to_owned() {
             return None;
         }
         if let Some((expires_at, size)) = u64::decode_var(&data[2..]) {

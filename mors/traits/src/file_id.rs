@@ -54,7 +54,7 @@ impl FileId for MemtableId {
     const SUFFIX: &'static str = ".mem";
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash,Default)]
 pub struct SSTableId(u32);
 impl From<u32> for SSTableId {
     fn from(value: u32) -> Self {

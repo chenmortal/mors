@@ -29,8 +29,8 @@ where
             for (entry, _vptr) in next {
                 self.max_version = self.max_version.max(entry.version());
                 self.skip_list.push(
-                    &entry.key_ts().serialize(),
-                    &entry.value_meta().serialize(),
+                    &entry.key_ts().encode(),
+                    &entry.value_meta().encode(),
                 )?;
             }
         }
@@ -52,8 +52,8 @@ where
             return Ok(());
         }
         self.skip_list.push(
-            &entry.key_ts().serialize(),
-            &entry.value_meta().serialize(),
+            &entry.key_ts().encode(),
+            &entry.value_meta().encode(),
         )?;
         self.max_version = self.max_version.max(entry.version());
         Ok(())
@@ -74,8 +74,8 @@ where
             return Ok(());
         }
         self.skip_list.push(
-            &entry.key_ts().serialize(),
-            &entry.value_meta().serialize(),
+            &entry.key_ts().encode(),
+            &entry.value_meta().encode(),
         )?;
         self.max_version = self.max_version.max(entry.version());
         Ok(())

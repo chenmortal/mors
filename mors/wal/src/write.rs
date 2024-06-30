@@ -44,7 +44,7 @@ where
         };
         let header_encode = header.encode();
         let header_len = hash_writer.write(&header_encode)?;
-        let mut kv_buf = entry.key_ts().serialize();
+        let mut kv_buf = entry.key_ts().encode();
         kv_buf.extend_from_slice(entry.value_meta().value());
 
         kv_buf = self.encrypt(&kv_buf, offset)?.unwrap_or(kv_buf);

@@ -1,4 +1,6 @@
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::SystemTime;
 
 use bytes::Buf;
 use memmap2::Advice;
@@ -6,10 +8,13 @@ use mors_common::compress::CompressionType;
 use mors_common::mmap::{MmapFile, MmapFileBuilder};
 use mors_traits::default::DEFAULT_DIR;
 use mors_traits::file_id::{FileId, SSTableId};
+use mors_traits::iter::{DoubleEndedCacheIterator, KvDoubleEndedCacheIter};
 use mors_traits::kms::KmsCipher;
 use mors_traits::sstable::{TableBuilderTrait, TableTrait};
+use mors_traits::ts::{KeyTs, TxnTs};
 use prost::Message;
 
+use crate::block::Block;
 use crate::pb::proto::Checksum;
 use crate::table_index::TableIndexBuf;
 use crate::Result;
@@ -96,9 +101,26 @@ impl TableBuilderTrait<Table> for TableBuilder {
         let create_at = mmap.file_modified()?;
 
         let (index_buf, index_start, index_len) =
-            TableBuilder::init_index(&mmap, cipher)?;
+            TableBuilder::init_index(&mmap, &cipher)?;
 
-        todo!()
+        let (smallest, biggest) =
+            self.smallest_biggest(&index_buf, &mmap, &cipher)?;
+        let table = Table(
+            TableInner {
+                id,
+                mmap,
+                table_size,
+                create_at,
+                index_buf,
+                index_start,
+                index_len,
+                smallest,
+                biggest,
+            }
+            .into(),
+        );
+
+        Ok(table)
     }
 
     fn set_dir(&mut self, dir: PathBuf) {
@@ -108,7 +130,7 @@ impl TableBuilderTrait<Table> for TableBuilder {
 impl TableBuilder {
     fn init_index<K: KmsCipher>(
         mmap: &MmapFile,
-        cipher: Option<K>,
+        cipher: &Option<K>,
     ) -> Result<(TableIndexBuf, usize, usize)> {
         let mut read_pos = mmap.file_len()? as usize;
 
@@ -140,6 +162,13 @@ impl TableBuilder {
         debug_assert_eq!(mmap.pread(&mut data, read_pos)?, index_len);
 
         checksum.verify(data.as_ref())?;
+
+        let data = cipher
+            .as_ref()
+            .map(|c| c.decrypt(&data))
+            .transpose()?
+            .unwrap_or(data);
+
         let index_buf = TableIndexBuf::from_vec(data)?;
 
         debug_assert!(!index_buf.offsets().is_empty());
@@ -150,8 +179,8 @@ impl TableBuilder {
         &self,
         index_buf: &TableIndexBuf,
         mmap: &MmapFile,
-        cipher: Option<K>,
-    ) -> Result<()> {
+        cipher: &Option<K>,
+    ) -> Result<(KeyTs, KeyTs)> {
         //get smallest
         let first_block_offset = index_buf
             .offsets()
@@ -169,16 +198,72 @@ impl TableBuilder {
             ..last_block_offset.size() as usize];
 
         let plaintext = cipher
+            .as_ref()
             .map(|c| c.decrypt(data))
             .transpose()?
             .unwrap_or_else(|| data.to_vec());
 
         let uncompress_data = self.compression.decompress(plaintext)?;
-        todo!()
+        let block = Block::decode(
+            0.into(),     //here don't care about it.
+            0_u32.into(), //here don't care about it.
+            last_block_offset.offset(),
+            uncompress_data,
+        )?;
+
+        block.verify()?;
+
+        let mut cache_block_iter = block.iter();
+        debug_assert!(cache_block_iter.next_back()?);
+        let biggest: KeyTs = cache_block_iter.key_back().unwrap().into();
+        Ok((smallest, biggest))
     }
 }
-pub struct Table {}
+pub struct Table(Arc<TableInner>);
+pub(crate) struct TableInner {
+    id: SSTableId,
+    mmap: MmapFile,
+    table_size: u64,
+    create_at: SystemTime,
+    index_buf: TableIndexBuf,
+    index_start: usize,
+    index_len: usize,
+    smallest: KeyTs,
+    biggest: KeyTs,
+}
 impl TableTrait for Table {
     type ErrorType = MorsTableError;
     type TableBuilder = TableBuilder;
+}
+impl Table {
+    fn verify(&self) {
+        // for i in 0..self.0. {
+
+        // }
+    }
+}
+struct CheapTableIndex {
+    max_version: TxnTs,
+    key_count: u32,
+    uncompressed_size: u32,
+    on_disk_size: u32,
+    stale_data_size: u32,
+    offsets_len: usize,
+    bloom_filter_len: usize,
+}
+impl From<&TableIndexBuf> for CheapTableIndex {
+    fn from(value: &TableIndexBuf) -> Self {
+        Self {
+            max_version: value.max_version().into(),
+            key_count: value.key_count(),
+            uncompressed_size: value.uncompressed_size(),
+            on_disk_size: value.on_disk_size(),
+            stale_data_size: value.stale_data_size(),
+            offsets_len: value.offsets().len(),
+            bloom_filter_len: value
+                .bloom_filter()
+                .map(|x| x.len())
+                .unwrap_or(0),
+        }
+    }
 }

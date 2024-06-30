@@ -49,6 +49,24 @@ impl TableIndexBuf {
     pub(crate) fn offsets(&self) -> &[BlockOffsetBuf] {
         &self.offsets
     }
+    pub(crate) fn bloom_filter(&self) -> Option<&Bytes> {
+        self.bloom_filter.as_ref()
+    }
+    pub(crate) fn max_version(&self) -> u64 {
+        self.max_version
+    }
+    pub(crate) fn key_count(&self) -> u32 {
+        self.key_count
+    }
+    pub(crate) fn uncompressed_size(&self) -> u32 {
+        self.uncompressed_size
+    }
+    pub(crate) fn on_disk_size(&self) -> u32 {
+        self.on_disk_size
+    }
+    pub(crate) fn stale_data_size(&self) -> u32 {
+        self.stale_data_size
+    }
 }
 #[derive(Debug, Clone)]
 pub(crate) struct BlockOffsetBuf {

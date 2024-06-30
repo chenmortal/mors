@@ -16,6 +16,8 @@ pub enum MorsTableError {
     InvalidFlatbuffer(#[from] flatbuffers::InvalidFlatbuffer),
     #[error("TableIndexOffsetEmpty")]
     TableIndexOffsetEmpty,
+    #[error("InvalidChecksumLen, Either the data is corrupt or the table Config are incorrectly set ")]
+    InvalidChecksumLen,
     #[error(transparent)]
     EncryptError(#[from] EncryptError),
     #[error("Compression error: {0}")]

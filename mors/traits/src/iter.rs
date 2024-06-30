@@ -4,64 +4,64 @@ use crate::ts::KeyTsBorrow;
 // use crate::kv::{KeyTsBorrow, ValueMeta};
 
 // here use async fn look at https://blog.rust-lang.org/inside-rust/2022/11/17/async-fn-in-trait-nightly.html
-pub struct SinkIterRev<T> {
+pub struct CacheIterRev<T> {
     iter: T,
 }
-impl<T> SinkIter for SinkIterRev<T>
+impl<T> CacheIter for CacheIterRev<T>
 where
-    T: DoubleEndedSinkIter,
+    T: DoubleEndedCacheIter,
 {
-    type Item = <T as SinkIter>::Item;
+    type Item = <T as CacheIter>::Item;
 
     fn item(&self) -> Option<&Self::Item> {
         self.iter.item_back()
     }
 }
-impl<T> DoubleEndedSinkIter for SinkIterRev<T>
+impl<T> DoubleEndedCacheIter for CacheIterRev<T>
 where
-    T: SinkIter + DoubleEndedSinkIter,
+    T: CacheIter + DoubleEndedCacheIter,
 {
-    fn item_back(&self) -> Option<&<Self as SinkIter>::Item> {
+    fn item_back(&self) -> Option<&<Self as CacheIter>::Item> {
         self.iter.item()
     }
 }
-impl<T> AsyncSinkIterator for SinkIterRev<T>
+impl<T> AsyncCacheIterator for CacheIterRev<T>
 where
-    T: AsyncDoubleEndedSinkIterator,
+    T: AsyncDoubleEndedCacheIterator,
 {
     type ErrorType = T::ErrorType;
     async fn next(&mut self) -> Result<(), Self::ErrorType> {
         self.iter.next_back().await
     }
 }
-impl<T> SinkIterator for SinkIterRev<T>
+impl<T> CacheIterator for CacheIterRev<T>
 where
-    T: DoubleEndedSinkIterator,
+    T: DoubleEndedCacheIterator,
 {
     type ErrorType = T::ErrorType;
     fn next(&mut self) -> Result<bool, Self::ErrorType> {
         self.iter.next_back()
     }
 }
-impl<T> DoubleEndedSinkIterator for SinkIterRev<T>
+impl<T> DoubleEndedCacheIterator for CacheIterRev<T>
 where
-    T: DoubleEndedSinkIterator,
+    T: DoubleEndedCacheIterator,
 {
     fn next_back(&mut self) -> Result<bool, Self::ErrorType> {
         self.iter.next()
     }
 }
-impl<T> AsyncDoubleEndedSinkIterator for SinkIterRev<T>
+impl<T> AsyncDoubleEndedCacheIterator for CacheIterRev<T>
 where
-    T: AsyncDoubleEndedSinkIterator,
+    T: AsyncDoubleEndedCacheIterator,
 {
     async fn next_back(&mut self) -> Result<(), Self::ErrorType> {
         self.iter.next().await
     }
 }
-impl<'a, T, V> KvSinkIter<V> for SinkIterRev<T>
+impl<'a, T, V> KvCacheIter<V> for CacheIterRev<T>
 where
-    T: KvDoubleEndedSinkIter<V>,
+    T: KvDoubleEndedCacheIter<V>,
     V: Into<ValueMeta>,
 {
     fn key(&self) -> Option<KeyTsBorrow<'_>> {
@@ -72,9 +72,9 @@ where
         self.iter.value_back()
     }
 }
-impl<T, V> KvDoubleEndedSinkIter<V> for SinkIterRev<T>
+impl<T, V> KvDoubleEndedCacheIter<V> for CacheIterRev<T>
 where
-    T: KvSinkIter<V> + KvDoubleEndedSinkIter<V>,
+    T: KvCacheIter<V> + KvDoubleEndedCacheIter<V>,
     V: Into<ValueMeta>,
 {
     fn key_back(&self) -> Option<KeyTsBorrow<'_>> {
@@ -85,57 +85,57 @@ where
         self.iter.value()
     }
 }
-pub(crate) trait SinkIter {
+pub trait CacheIter {
     type Item;
     fn item(&self) -> Option<&Self::Item>;
 }
-pub(crate) trait DoubleEndedSinkIter: SinkIter {
-    fn item_back(&self) -> Option<&<Self as SinkIter>::Item>;
+pub trait DoubleEndedCacheIter: CacheIter {
+    fn item_back(&self) -> Option<&<Self as CacheIter>::Item>;
 }
-pub(crate) trait AsyncSinkIterator: SinkIter {
+pub trait AsyncCacheIterator: CacheIter {
     type ErrorType;
     async fn next(&mut self) -> Result<(), Self::ErrorType>;
-    async fn rev(self) -> SinkIterRev<Self>
+    async fn rev(self) -> CacheIterRev<Self>
     where
-        Self: Sized + AsyncDoubleEndedSinkIterator,
+        Self: Sized + AsyncDoubleEndedCacheIterator,
     {
-        SinkIterRev { iter: self }
+        CacheIterRev { iter: self }
     }
 }
-pub(crate) trait SinkIterator {
+pub trait CacheIterator {
     type ErrorType;
     fn next(&mut self) -> Result<bool, Self::ErrorType>;
-    fn rev(self) -> SinkIterRev<Self>
+    fn rev(self) -> CacheIterRev<Self>
     where
-        Self: Sized + DoubleEndedSinkIterator,
+        Self: Sized + DoubleEndedCacheIterator,
     {
-        SinkIterRev { iter: self }
+        CacheIterRev { iter: self }
     }
 }
-pub(crate) trait DoubleEndedSinkIterator: SinkIterator {
+pub trait DoubleEndedCacheIterator: CacheIterator {
     fn next_back(&mut self) -> Result<bool, Self::ErrorType>;
 }
-pub(crate) trait AsyncDoubleEndedSinkIterator:
-    AsyncSinkIterator + DoubleEndedSinkIter
+pub trait AsyncDoubleEndedCacheIterator:
+    AsyncCacheIterator + DoubleEndedCacheIter
 {
     async fn next_back(&mut self) -> Result<(), Self::ErrorType>;
 }
-pub(crate) trait KvSinkIter<V>
+pub trait KvCacheIter<V>
 where
     V: Into<ValueMeta>,
 {
     fn key(&self) -> Option<KeyTsBorrow<'_>>;
     fn value(&self) -> Option<V>;
 }
-pub(crate) trait KvDoubleEndedSinkIter<V>
+pub trait KvDoubleEndedCacheIter<V>
 where
     V: Into<ValueMeta>,
 {
     fn key_back(&self) -> Option<KeyTsBorrow<'_>>;
     fn value_back(&self) -> Option<V>;
 }
-// if true then KvSinkIter.key() >= k
-pub(crate) trait KvSeekIter: SinkIterator {
+// if true then KvCacheIter.key() >= k
+pub trait KvSeekIter: CacheIterator {
     fn seek(&mut self, k: KeyTsBorrow<'_>) -> Result<bool, Self::ErrorType>;
 }
 mod test {
@@ -167,7 +167,7 @@ mod test {
         }
     }
 
-    impl SinkIter for TestIter {
+    impl CacheIter for TestIter {
         type Item = [u8; 8];
 
         fn item(&self) -> Option<&Self::Item> {
@@ -175,13 +175,13 @@ mod test {
         }
     }
 
-    impl DoubleEndedSinkIter for TestIter {
-        fn item_back(&self) -> Option<&<Self as SinkIter>::Item> {
+    impl DoubleEndedCacheIter for TestIter {
+        fn item_back(&self) -> Option<&<Self as CacheIter>::Item> {
             self.back_data.as_ref()
         }
     }
 
-    impl SinkIterator for TestIter {
+    impl CacheIterator for TestIter {
         type ErrorType = TestIterError;
         fn next(&mut self) -> Result<bool, Self::ErrorType> {
             if let Some(d) = self.data.as_mut() {
@@ -204,7 +204,7 @@ mod test {
         }
     }
 
-    impl DoubleEndedSinkIterator for TestIter {
+    impl DoubleEndedCacheIterator for TestIter {
         fn next_back(&mut self) -> Result<bool, Self::ErrorType> {
             if let Some(d) = self.back_data.as_mut() {
                 let now = (*d).as_ref().get_u64();
@@ -227,7 +227,7 @@ mod test {
         }
     }
 
-    impl KvSinkIter<ValueMeta> for TestIter {
+    impl KvCacheIter<ValueMeta> for TestIter {
         fn key(&self) -> Option<KeyTsBorrow<'_>> {
             if let Some(s) = self.item() {
                 return Some(s.as_ref().into());
@@ -245,7 +245,7 @@ mod test {
         }
     }
 
-    impl KvDoubleEndedSinkIter<ValueMeta> for TestIter {
+    impl KvDoubleEndedCacheIter<ValueMeta> for TestIter {
         fn key_back(&self) -> Option<KeyTsBorrow<'_>> {
             if let Some(s) = self.item_back() {
                 return Some(s.as_ref().into());
