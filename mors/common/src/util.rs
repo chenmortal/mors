@@ -1,3 +1,5 @@
+use std::mem::size_of;
+
 use bytes::Buf;
 
 pub trait BufExt: Buf {

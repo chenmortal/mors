@@ -15,6 +15,7 @@ use mors_traits::{
 
 use crate::error::MorsCacheError;
 type Result<T> = std::result::Result<T, MorsCacheError>;
+#[derive(Clone)]
 pub struct MorsCache<B: BlockTrait, T: TableIndexBufTrait> {
     block_cache: Option<MokaCache<BlockCacheKey, B>>,
     index_cache: MokaCache<SSTableId, T>,

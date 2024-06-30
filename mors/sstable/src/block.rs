@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bytes::Buf;
 use mors_common::util::BufExt;
-use mors_traits::{file_id::SSTableId, sstable::BlockIndex};
+use mors_traits::{file_id::SSTableId, sstable::{BlockIndex, BlockTrait}};
 use prost::Message;
 
 use crate::{block_iter::CacheBlockIter, error::MorsTableError, pb::proto::Checksum, Result};
@@ -92,4 +92,7 @@ impl Block {
     pub(crate)  fn iter(&self)->CacheBlockIter{
         self.clone().into()
     }
+}
+impl BlockTrait for Block {
+    
 }

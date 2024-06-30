@@ -1,4 +1,5 @@
 use std::{
+    marker::PhantomData,
     path::PathBuf,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -10,11 +11,12 @@ use std::{
 use log::info;
 use mors_common::closer::{CloseNotify, Throttle};
 use mors_traits::{
+    cache::Cache,
     default::DEFAULT_DIR,
     file_id::{FileId, SSTableId},
     kms::Kms,
     levelctl::{Level, LevelCtl, LevelCtlBuilder},
-    sstable::TableTrait,
+    sstable::{BlockTrait, TableIndexBufTrait, TableTrait},
 };
 
 use tokio::select;
@@ -24,22 +26,44 @@ use crate::{
     error::MorsLevelCtlError,
     manifest::{Manifest, ManifestBuilder},
 };
-pub struct MorsLevelCtl<T: TableTrait> {
+pub struct MorsLevelCtl<
+    T: TableTrait<C, B, TB>,
+    C: Cache<B, TB>,
+    B: BlockTrait,
+    TB: TableIndexBufTrait,
+> {
     table: T,
+    c: PhantomData<C>,
+    b: PhantomData<B>,
+    tb: PhantomData<TB>,
 }
-impl<T: TableTrait> LevelCtl<T> for MorsLevelCtl<T> {
+impl<
+        T: TableTrait<C, B, TB>,
+        C: Cache<B, TB>,
+        B: BlockTrait,
+        TB: TableIndexBufTrait,
+    > LevelCtl<T, C, B, TB> for MorsLevelCtl<T, C, B, TB>
+{
     type ErrorType = MorsLevelCtlError;
 
-    type LevelCtlBuilder = MorsLevelCtlBuilder<T>;
+    type LevelCtlBuilder = MorsLevelCtlBuilder<T,C,B,TB>;
 }
 type Result<T> = std::result::Result<T, MorsLevelCtlError>;
-pub struct MorsLevelCtlBuilder<T: TableTrait> {
+pub struct MorsLevelCtlBuilder<
+    T: TableTrait<C, B, TB>,
+    C: Cache<B, TB>,
+    B: BlockTrait,
+    TB: TableIndexBufTrait,
+> {
     manifest: ManifestBuilder,
     table: T::TableBuilder,
     max_level: Level,
     dir: PathBuf,
 }
-impl<T: TableTrait> Default for MorsLevelCtlBuilder<T> {
+impl<T: TableTrait<C, B, TB>,
+C: Cache<B, TB>,
+B: BlockTrait,
+TB: TableIndexBufTrait> Default for MorsLevelCtlBuilder<T,C,B,TB> {
     fn default() -> Self {
         Self {
             manifest: ManifestBuilder::default(),
@@ -49,7 +73,12 @@ impl<T: TableTrait> Default for MorsLevelCtlBuilder<T> {
         }
     }
 }
-impl<T: TableTrait> LevelCtlBuilder<MorsLevelCtl<T>, T> for MorsLevelCtlBuilder<T> {
+impl<T: TableTrait<C, B, TB>,
+C: Cache<B, TB>,
+B: BlockTrait,
+TB: TableIndexBufTrait> LevelCtlBuilder<MorsLevelCtl<T,C,B,TB>, T,C,B,TB>
+    for MorsLevelCtlBuilder<T,C,B,TB>
+{
     async fn build(&self, kms: impl Kms) -> Result<()> {
         let compact_status = CompactStatus::new(self.max_level.to_usize());
         let manifest = self.manifest.build()?;
@@ -59,7 +88,10 @@ impl<T: TableTrait> LevelCtlBuilder<MorsLevelCtl<T>, T> for MorsLevelCtlBuilder<
         Ok(())
     }
 }
-impl<T: TableTrait> MorsLevelCtlBuilder<T> {
+impl<T: TableTrait<C, B, TB>,
+C: Cache<B, TB>,
+B: BlockTrait,
+TB: TableIndexBufTrait> MorsLevelCtlBuilder<T,C,B,TB> {
     async fn open_tables_by_manifest(
         &self,
         manifest: &Manifest,

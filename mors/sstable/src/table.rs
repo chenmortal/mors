@@ -6,6 +6,7 @@ use bytes::Buf;
 use memmap2::Advice;
 use mors_common::compress::CompressionType;
 use mors_common::mmap::{MmapFile, MmapFileBuilder};
+use mors_traits::cache::Cache;
 use mors_traits::default::DEFAULT_DIR;
 use mors_traits::file_id::{FileId, SSTableId};
 use mors_traits::iter::{DoubleEndedCacheIterator, KvDoubleEndedCacheIter};
@@ -41,7 +42,7 @@ impl Default for ChecksumVerificationMode {
     }
 }
 
-pub struct TableBuilder {
+pub struct TableBuilder<C: Cache<Block, TableIndexBuf>> {
     read_only: bool,
     dir: PathBuf,
     table_size: usize,
@@ -59,8 +60,9 @@ pub struct TableBuilder {
     compression: CompressionType,
 
     zstd_compression_level: i32,
+    cache: Option<C>,
 }
-impl Default for TableBuilder {
+impl<C: Cache<Block, TableIndexBuf>> Default for TableBuilder<C> {
     fn default() -> Self {
         Self {
             table_size: 2 << 20,
@@ -73,11 +75,14 @@ impl Default for TableBuilder {
             zstd_compression_level: 1,
             read_only: false,
             dir: PathBuf::from(DEFAULT_DIR),
+            cache: None,
         }
     }
 }
 
-impl TableBuilderTrait<Table> for TableBuilder {
+impl<C: Cache<Block, TableIndexBuf>>
+    TableBuilderTrait<Table<C>, C, Block, TableIndexBuf> for TableBuilder<C>
+{
     fn set_compression(&mut self, compression: CompressionType) {
         self.compression = compression;
     }
@@ -86,7 +91,7 @@ impl TableBuilderTrait<Table> for TableBuilder {
         &self,
         id: SSTableId,
         cipher: Option<K>,
-    ) -> Result<Table> {
+    ) -> Result<Table<C>> {
         if self.compression.is_none() && self.block_size == 0 {
             return Err(MorsTableError::InvalidConfig);
         }
@@ -101,10 +106,12 @@ impl TableBuilderTrait<Table> for TableBuilder {
         let create_at = mmap.file_modified()?;
 
         let (index_buf, index_start, index_len) =
-            TableBuilder::init_index(&mmap, &cipher)?;
+            TableBuilder::<C>::init_index(&mmap, &cipher)?;
 
         let (smallest, biggest) =
             self.smallest_biggest(&index_buf, &mmap, &cipher)?;
+
+        let cheap_index = CheapTableIndex::from(&index_buf);
         let table = Table(
             TableInner {
                 id,
@@ -116,6 +123,8 @@ impl TableBuilderTrait<Table> for TableBuilder {
                 index_len,
                 smallest,
                 biggest,
+                cheap_index,
+                cache: self.cache.clone(),
             }
             .into(),
         );
@@ -126,8 +135,12 @@ impl TableBuilderTrait<Table> for TableBuilder {
     fn set_dir(&mut self, dir: PathBuf) {
         self.dir = dir;
     }
+
+    fn set_cache(&mut self, cache: C) {
+        self.cache = Some(cache);
+    }
 }
-impl TableBuilder {
+impl<C: Cache<Block, TableIndexBuf>> TableBuilder<C> {
     fn init_index<K: KmsCipher>(
         mmap: &MmapFile,
         cipher: &Option<K>,
@@ -219,8 +232,8 @@ impl TableBuilder {
         Ok((smallest, biggest))
     }
 }
-pub struct Table(Arc<TableInner>);
-pub(crate) struct TableInner {
+pub struct Table<C: Cache<Block, TableIndexBuf>>(Arc<TableInner<C>>);
+pub(crate) struct TableInner<C: Cache<Block, TableIndexBuf>> {
     id: SSTableId,
     mmap: MmapFile,
     table_size: u64,
@@ -230,17 +243,27 @@ pub(crate) struct TableInner {
     index_len: usize,
     smallest: KeyTs,
     biggest: KeyTs,
+    cheap_index: CheapTableIndex,
+    cache: Option<C>,
 }
-impl TableTrait for Table {
+impl<C: Cache<Block, TableIndexBuf>> TableTrait<C, Block, TableIndexBuf>
+    for Table<C>
+{
     type ErrorType = MorsTableError;
-    type TableBuilder = TableBuilder;
+    type TableBuilder = TableBuilder<C>;
 }
-impl Table {
+// impl<C:Cache<B,TableIndexBuf>,B:Block,T:TableIndexBuf> TableTrait<C,B,T> for Table {
+//     type ErrorType = MorsTableError;
+//     type TableBuilder = TableBuilder;
+// }
+impl<C: Cache<Block, TableIndexBuf>> Table<C> {
     fn verify(&self) {
+        for i in 0..self.0.cheap_index.offsets_len {}
         // for i in 0..self.0. {
 
         // }
     }
+    fn get_block() {}
 }
 struct CheapTableIndex {
     max_version: TxnTs,

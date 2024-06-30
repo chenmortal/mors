@@ -2,14 +2,23 @@ use std::path::PathBuf;
 
 use mors_common::compress::CompressionType;
 
-use crate::{file_id::SSTableId, kms::KmsCipher};
+use crate::{cache::Cache, file_id::SSTableId, kms::KmsCipher};
 
-pub trait TableTrait: Sized {
+pub trait TableTrait<C: Cache<B, T>, B: BlockTrait, T: TableIndexBufTrait>:
+    Sized
+{
     type ErrorType;
-    type TableBuilder: TableBuilderTrait<Self>;
+    type TableBuilder: TableBuilderTrait<Self, C, B, T>;
 }
-pub trait TableBuilderTrait<T: TableTrait>: Default {
+pub trait TableBuilderTrait<
+    T: TableTrait<C, B, TB>,
+    C: Cache<B, TB>,
+    B: BlockTrait,
+    TB: TableIndexBufTrait,
+>: Default
+{
     fn set_compression(&mut self, compression: CompressionType);
+    fn set_cache(&mut self, cache: C);
     fn set_dir(&mut self, dir: PathBuf);
     fn open<K: KmsCipher>(
         &self,
@@ -19,7 +28,7 @@ pub trait TableBuilderTrait<T: TableTrait>: Default {
 }
 pub trait BlockTrait: Sized + Clone + Send + Sync + 'static {}
 pub trait TableIndexBufTrait: Sized + Clone + Send + Sync + 'static {}
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash,Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct BlockIndex(u32);
 impl From<u32> for BlockIndex {
     fn from(value: u32) -> Self {
