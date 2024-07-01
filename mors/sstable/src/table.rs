@@ -85,13 +85,13 @@ impl<C: Cache<Block, TableIndexBuf>> Default for TableBuilder<C> {
 }
 
 impl<C: Cache<Block, TableIndexBuf>, K: KmsCipher>
-    TableBuilderTrait<Table<C, K>, C, Block, TableIndexBuf, K>
+    TableBuilderTrait<Table<C, K>, C, K>
     for TableBuilder<C>
 {
     fn set_compression(&mut self, compression: CompressionType) {
         self.compression = compression;
     }
-    
+
     fn set_dir(&mut self, dir: PathBuf) {
         self.dir = dir;
     }
@@ -99,17 +99,17 @@ impl<C: Cache<Block, TableIndexBuf>, K: KmsCipher>
     fn set_cache(&mut self, cache: C) {
         self.cache = Some(cache);
     }
-    
+
     async fn open(
         &self,
         id: SSTableId,
         cipher: Option<K>,
-    ) -> std::result::Result<Option<Table<C, K>>,SSTableError> {
+    ) -> std::result::Result<Option<Table<C, K>>, SSTableError> {
         Ok(self.open_impl(id, cipher).await?)
     }
 }
 impl<C: Cache<Block, TableIndexBuf>> TableBuilder<C> {
-    async fn open_impl<K:KmsCipher>(
+    async fn open_impl<K: KmsCipher>(
         &self,
         id: SSTableId,
         cipher: Option<K>,
@@ -171,7 +171,7 @@ impl<C: Cache<Block, TableIndexBuf>> TableBuilder<C> {
         Ok(table.into())
     }
 
-    fn init_index<K:KmsCipher>(
+    fn init_index<K: KmsCipher>(
         mmap: &MmapFile,
         cipher: &Option<K>,
     ) -> Result<(TableIndexBuf, usize, usize)> {
@@ -218,7 +218,7 @@ impl<C: Cache<Block, TableIndexBuf>> TableBuilder<C> {
 
         Ok((index_buf, read_pos, index_len))
     }
-    fn smallest_biggest<K:KmsCipher>(
+    fn smallest_biggest<K: KmsCipher>(
         &self,
         index_buf: &TableIndexBuf,
         mmap: &MmapFile,
@@ -281,11 +281,29 @@ pub(crate) struct TableInner<C: Cache<Block, TableIndexBuf>, K: KmsCipher> {
     cipher: Option<K>,
     checksum_verify_mode: ChecksumVerificationMode,
 }
-impl<C: Cache<Block, TableIndexBuf>, K: KmsCipher>
-    TableTrait<C, Block, TableIndexBuf, K> for Table<C, K>
+impl<C: Cache<Block, TableIndexBuf>, K: KmsCipher> TableTrait<C, K>
+    for Table<C, K>
 {
+    type Block = Block;
+    type TableIndexBuf = TableIndexBuf;
     type ErrorType = MorsTableError;
     type TableBuilder = TableBuilder<C>;
+
+    fn size(&self) -> usize {
+        self.0.table_size as usize
+    }
+
+    fn stale_data_size(&self) -> usize {
+        self.0.cheap_index.stale_data_size as usize
+    }
+
+    fn id(&self) -> SSTableId {
+        self.0.id
+    }
+
+    fn smallest(&self) -> &KeyTs {
+        &self.0.smallest
+    }
 }
 
 impl<C: Cache<Block, TableIndexBuf>, K: KmsCipher> Table<C, K> {
