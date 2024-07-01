@@ -286,6 +286,22 @@ impl<C: Cache<Block, TableIndexBuf>, K: KmsCipher>
 {
     type ErrorType = MorsTableError;
     type TableBuilder = TableBuilder<C>;
+    
+    fn size(&self) -> usize {
+        self.0.table_size as usize
+    }
+    
+    fn stale_data_size(&self) -> usize {
+        self.0.cheap_index.stale_data_size as usize
+    }
+    
+    fn id(&self) -> SSTableId {
+        self.0.id
+    }
+    
+    fn smallest(&self) -> &KeyTs {
+        &self.0.smallest
+    }
 }
 
 impl<C: Cache<Block, TableIndexBuf>, K: KmsCipher> Table<C, K> {

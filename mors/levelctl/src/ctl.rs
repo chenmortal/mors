@@ -16,7 +16,7 @@ use mors_traits::{
     default::DEFAULT_DIR,
     file_id::SSTableId,
     kms::Kms,
-    levelctl::{Level, LevelCtl, LevelCtlBuilder},
+    levelctl::{Level, LevelCtl, LevelCtlBuilder, LEVEL0},
     sstable::{BlockTrait, TableBuilderTrait, TableIndexBufTrait, TableTrait},
 };
 
@@ -27,6 +27,7 @@ use tokio::{select, task::JoinHandle};
 use crate::{
     compact::status::CompactStatus,
     error::MorsLevelCtlError,
+    level_handler::LevelHandler,
     manifest::{Manifest, ManifestBuilder},
 };
 pub struct MorsLevelCtl<
@@ -103,7 +104,13 @@ impl<
             self.open_tables_by_manifest(manifest.clone(), kms).await?;
 
         let next_id = AtomicU32::new(1 + Into::<u32>::into(max_id));
-
+        let mut levels = Vec::with_capacity(level_tables.len());
+        let mut level = LEVEL0;
+        for tables in level_tables {
+            let handler = LevelHandler::new(level, tables);
+            levels.push(handler);
+            level += 1;
+        }
         Ok(())
     }
 }

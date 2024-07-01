@@ -1,23 +1,31 @@
 use std::{fmt::Display, path::PathBuf};
 
+use crate::{cache::Cache, file_id::SSTableId, kms::KmsCipher, ts::KeyTs};
 use mors_common::compress::CompressionType;
-use thiserror::Error;
 use std::error::Error;
-use crate::{cache::Cache, file_id::SSTableId, kms::KmsCipher};
+use thiserror::Error;
 
-pub trait TableTrait<C: Cache<B, T>, B: BlockTrait, T: TableIndexBufTrait,K:KmsCipher>:
-    Sized+Send+'static
+pub trait TableTrait<
+    C: Cache<B, T>,
+    B: BlockTrait,
+    T: TableIndexBufTrait,
+    K: KmsCipher,
+>: Sized + Send + 'static
 {
-    type ErrorType:Into<SSTableError>;
-    type TableBuilder: TableBuilderTrait<Self, C, B, T,K>;
+    type ErrorType: Into<SSTableError>;
+    type TableBuilder: TableBuilderTrait<Self, C, B, T, K>;
+    fn size(&self) -> usize;
+    fn stale_data_size(&self) -> usize;
+    fn id(&self) -> SSTableId;
+    fn smallest(&self) -> &KeyTs;
 }
 pub trait TableBuilderTrait<
-    T: TableTrait<C, B, TB,K>,
+    T: TableTrait<C, B, TB, K>,
     C: Cache<B, TB>,
     B: BlockTrait,
     TB: TableIndexBufTrait,
-    K:KmsCipher
->: Default+Clone+Send+'static
+    K: KmsCipher,
+>: Default + Clone + Send + 'static
 {
     fn set_compression(&mut self, compression: CompressionType);
     fn set_cache(&mut self, cache: C);
@@ -58,7 +66,6 @@ impl Display for SSTableError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "SSTableError: {}", self.0)
     }
-    
 }
 impl SSTableError {
     pub fn new<E: Error + 'static>(err: E) -> Self {
