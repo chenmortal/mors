@@ -3,7 +3,7 @@ use std::{
     marker::PhantomData,
     path::PathBuf,
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicU32, AtomicUsize, Ordering},
         Arc,
     },
     time::Duration,
@@ -99,7 +99,10 @@ impl<
         let compact_status = CompactStatus::new(self.max_level.to_usize());
         let manifest = self.manifest.build()?;
 
-        self.open_tables_by_manifest(manifest.clone(), kms).await?;
+        let (max_id, level_tables) =
+            self.open_tables_by_manifest(manifest.clone(), kms).await?;
+
+        let next_id = AtomicU32::new(1 + Into::<u32>::into(max_id));
 
         Ok(())
     }
