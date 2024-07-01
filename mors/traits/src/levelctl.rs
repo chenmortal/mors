@@ -10,22 +10,18 @@ use crate::{
 };
 
 pub trait LevelCtl<
-    T: TableTrait<C, B, TB, K::Cipher>,
-    C: Cache<B, TB>,
-    B: BlockTrait,
-    TB: TableIndexBufTrait,
+    T: TableTrait<C, K::Cipher>,
+    C: Cache<T::Block, T::TableIndexBuf>,
     K: Kms,
 >: Sized
 {
     type ErrorType;
-    type LevelCtlBuilder: LevelCtlBuilder<Self, T, C, B, TB, K>;
+    type LevelCtlBuilder: LevelCtlBuilder<Self, T, C, K>;
 }
 pub trait LevelCtlBuilder<
-    L: LevelCtl<T, C, B, TB, K>,
-    T: TableTrait<C, B, TB, K::Cipher>,
-    C: Cache<B, TB>,
-    B: BlockTrait,
-    TB: TableIndexBufTrait,
+    L: LevelCtl<T, C,  K>,
+    T: TableTrait<C, K::Cipher>,
+    C: Cache<T::Block, T::TableIndexBuf>,
     K: Kms,
 >: Default
 {

@@ -4,49 +4,39 @@ use mors_traits::{
     cache::Cache,
     kms::KmsCipher,
     levelctl::{Level, LEVEL0},
-    sstable::{BlockTrait, TableIndexBufTrait, TableTrait},
+    sstable::TableTrait,
 };
 use parking_lot::RwLock;
 
 pub(crate) struct LevelHandler<
-    T: TableTrait<C, B, TB, K>,
-    C: Cache<B, TB>,
-    B: BlockTrait,
-    TB: TableIndexBufTrait,
+    T: TableTrait<C, K>,
+    C: Cache<T::Block, T::TableIndexBuf>,
     K: KmsCipher,
->(Arc<LevelHandlerInner<T, C, B, TB, K>>);
+>(Arc<LevelHandlerInner<T, C, K>>);
 struct LevelHandlerInner<
-    T: TableTrait<C, B, TB, K>,
-    C: Cache<B, TB>,
-    B: BlockTrait,
-    TB: TableIndexBufTrait,
+    T: TableTrait<C, K>,
+    C: Cache<T::Block, T::TableIndexBuf>,
     K: KmsCipher,
 > {
-    table_handler: RwLock<LevelHandlerTables<T, C, B, TB, K>>,
+    table_handler: RwLock<LevelHandlerTables<T, C, K>>,
     level: Level,
 }
 struct LevelHandlerTables<
-    T: TableTrait<C, B, TB, K>,
-    C: Cache<B, TB>,
-    B: BlockTrait,
-    TB: TableIndexBufTrait,
+    T: TableTrait<C, K>,
+    C: Cache<T::Block, T::TableIndexBuf>,
     K: KmsCipher,
 > {
     tables: Vec<T>,
     total_size: usize,
     total_stale_size: usize,
     c: PhantomData<C>,
-    b: PhantomData<B>,
-    tb: PhantomData<TB>,
     k: PhantomData<K>,
 }
 impl<
-        T: TableTrait<C, B, TB, K>,
-        C: Cache<B, TB>,
-        B: BlockTrait,
-        TB: TableIndexBufTrait,
+        T: TableTrait<C, K>,
+        C: Cache<T::Block, T::TableIndexBuf>,
         K: KmsCipher,
-    > LevelHandler<T, C, B, TB, K>
+    > LevelHandler<T, C, K>
 {
     pub(crate) fn new(level: Level, mut tables: Vec<T>) -> Self {
         let mut total_size = 0;
@@ -66,8 +56,6 @@ impl<
                 total_size,
                 total_stale_size,
                 c: PhantomData,
-                b: PhantomData,
-                tb: PhantomData,
                 k: PhantomData,
             }),
             level,
