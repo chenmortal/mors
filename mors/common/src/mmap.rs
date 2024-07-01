@@ -6,7 +6,6 @@ use std::{
     fs::{File, OpenOptions},
     io,
     ops::{Deref, DerefMut},
-    os::unix::fs::OpenOptionsExt,
     path::PathBuf,
     slice,
     time::SystemTime,

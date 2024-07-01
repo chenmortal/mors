@@ -3,11 +3,7 @@ use std::{
     ops::{Add, AddAssign, Sub},
 };
 
-use crate::{
-    cache::Cache,
-    kms::{Kms, KmsCipher},
-    sstable::{BlockTrait, TableIndexBufTrait, TableTrait},
-};
+use crate::{cache::Cache, kms::Kms, sstable::TableTrait};
 
 pub trait LevelCtl<
     T: TableTrait<C, K::Cipher>,
@@ -19,7 +15,7 @@ pub trait LevelCtl<
     type LevelCtlBuilder: LevelCtlBuilder<Self, T, C, K>;
 }
 pub trait LevelCtlBuilder<
-    L: LevelCtl<T, C,  K>,
+    L: LevelCtl<T, C, K>,
     T: TableTrait<C, K::Cipher>,
     C: Cache<T::Block, T::TableIndexBuf>,
     K: Kms,

@@ -417,7 +417,7 @@ impl Node {
             return Ok(None);
         }
         let offset = (v >> 32) as usize;
-        Ok(Some(arena.get_slice::<u8>(offset as usize, len as usize)?))
+        Ok(Some(arena.get_slice::<u8>(offset, len as usize)?))
     }
     #[inline]
     fn next<'a>(&self, arena: &'a Arena, level: usize) -> Result<&'a Node> {

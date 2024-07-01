@@ -1,9 +1,8 @@
 use std::{
     collections::HashMap,
-    marker::PhantomData,
     path::PathBuf,
     sync::{
-        atomic::{AtomicU32, AtomicUsize, Ordering},
+        atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering},
         Arc,
     },
     time::Duration,
@@ -35,9 +34,10 @@ pub struct MorsLevelCtl<
     C: Cache<T::Block, T::TableIndexBuf>,
     K: Kms,
 > {
-    table: T,
-    c: PhantomData<C>,
-    k: PhantomData<K>,
+    manifest: Manifest,
+    handler: Vec<LevelHandler<T, C, K::Cipher>>,
+    next_file_id: AtomicU32,
+    level0_stalls_ms: AtomicU64,
 }
 impl<
         T: TableTrait<C, K::Cipher>,

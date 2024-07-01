@@ -59,7 +59,7 @@ where
         self.iter.next().await
     }
 }
-impl<'a, T, V> KvCacheIter<V> for CacheIterRev<T>
+impl<T, V> KvCacheIter<V> for CacheIterRev<T>
 where
     T: KvDoubleEndedCacheIter<V>,
     V: Into<ValueMeta>,
@@ -264,7 +264,10 @@ mod test {
     }
 
     impl KvSeekIter for TestIter {
-        fn seek(&mut self, k: KeyTsBorrow<'_>) -> Result<bool, Self::ErrorType> {
+        fn seek(
+            &mut self,
+            k: KeyTsBorrow<'_>,
+        ) -> Result<bool, Self::ErrorType> {
             let key = k.as_ref().get_u64();
             if key >= self.len {
                 return Ok(false);
