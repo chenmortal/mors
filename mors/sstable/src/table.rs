@@ -304,6 +304,10 @@ impl<C: CacheTrait<Block, TableIndexBuf>, K: KmsCipher> TableTrait<C, K>
     fn smallest(&self) -> &KeyTs {
         &self.0.smallest
     }
+    
+    fn biggest(&self) -> &KeyTs {
+        &self.0.biggest
+    }
 }
 
 impl<C: CacheTrait<Block, TableIndexBuf>, K: KmsCipher> Table<C, K> {

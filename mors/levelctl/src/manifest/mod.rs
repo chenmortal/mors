@@ -9,6 +9,7 @@ use mors_traits::{
     kms::CipherKeyId,
     levelctl::Level,
 };
+use tokio::sync::Mutex;
 use std::{
     collections::{HashMap, HashSet},
     fs::{remove_file, rename, File, OpenOptions},
@@ -23,7 +24,7 @@ use mors_traits::default::DEFAULT_DIR;
 use prost::Message;
 
 use crate::manifest::manifest_change::ManifestChangeSet;
-use parking_lot::Mutex;
+// use parking_lot::Mutex;
 pub mod error;
 pub(crate) mod manifest_change;
 
@@ -333,9 +334,9 @@ impl ManifestChange {
     }
 }
 impl Manifest {
-    pub(crate) fn revert(&self, dir: &PathBuf) -> Result<()> {
+    pub(crate) async fn revert(&self, dir: &PathBuf) -> Result<()> {
         let sst_id_set = SSTableId::parse_set_from_dir(dir);
-        let mut inner = self.lock();
+        let mut inner = self.lock().await;
         let info = &mut inner.info;
 
         //check all files in manifest exist;

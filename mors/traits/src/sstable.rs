@@ -16,6 +16,7 @@ pub trait TableTrait<C: CacheTrait<Self::Block, Self::TableIndexBuf>, K: KmsCiph
     fn stale_data_size(&self) -> usize;
     fn id(&self) -> SSTableId;
     fn smallest(&self) -> &KeyTs;
+    fn biggest(&self) -> &KeyTs;
 }
 pub trait TableBuilderTrait<
     T: TableTrait<C, K>,

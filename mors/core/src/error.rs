@@ -1,4 +1,4 @@
-use mors_traits::kms::{EncryptError, KmsError};
+use mors_traits::{kms::{EncryptError, KmsError}, levelctl::LevelCtlError};
 use thiserror::Error;
 
 
@@ -10,4 +10,6 @@ pub enum MorsError {
     EncryptErr(#[from] EncryptError),
     #[error("Error in KMS: {0}")]
     KmsError(#[from] KmsError),
+    #[error("LevelCtl Error: {0}")]
+    LevelCtlError(#[from] LevelCtlError),
 }

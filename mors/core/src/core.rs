@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -7,42 +8,81 @@ use crate::error::MorsError;
 use crate::Result;
 use mors_common::lock::DBLockGuard;
 use mors_common::lock::DBLockGuardBuilder;
+use mors_traits::cache::CacheTrait;
 use mors_traits::kms::{Kms, KmsBuilder};
-use mors_traits::memtable::{MemtableTrait, MemtableBuilderTrait};
-pub struct Mors<M: MemtableTrait<K>, K: Kms> {
-    pub(crate) core: Core<M, K>,
+use mors_traits::levelctl::{LevelCtlBuilderTrait, LevelCtlTrait};
+use mors_traits::memtable::{MemtableBuilderTrait, MemtableTrait};
+use mors_traits::sstable::TableTrait;
+pub struct Mors<
+    M: MemtableTrait<K>,
+    K: Kms,
+    L: LevelCtlTrait<T, C, K>,
+    T: TableTrait<C, K::Cipher>,
+    C: CacheTrait<T::Block, T::TableIndexBuf>,
+> {
+    pub(crate) core: Core<M, K, L, T, C>,
 }
 
-pub struct Core<M: MemtableTrait<K>, K: Kms> {
+pub struct Core<
+    M: MemtableTrait<K>,
+    K: Kms,
+    L: LevelCtlTrait<T, C, K>,
+    T: TableTrait<C, K::Cipher>,
+    C: CacheTrait<T::Block, T::TableIndexBuf>,
+> {
     lock_guard: DBLockGuard,
     kms: K,
     immut_memtable: VecDeque<Arc<M>>,
     memtable: Option<Arc<RwLock<M>>>,
+    levelctl: L,
+    t: PhantomData<T>,
+    c: PhantomData<C>,
 }
 
 pub struct DBCoreBuilder {}
-pub struct MorsBuilder<M: MemtableTrait<K>, K: Kms> {
+pub struct MorsBuilder<
+    M: MemtableTrait<K>,
+    K: Kms,
+    L: LevelCtlTrait<T, C, K>,
+    T: TableTrait<C, K::Cipher>,
+    C: CacheTrait<T::Block, T::TableIndexBuf>,
+> {
     read_only: bool,
     dir: PathBuf,
     kms: K::KmsBuilder,
     memtable: M::MemtableBuilder,
+    levelctl: L::LevelCtlBuilder,
 }
-impl<M: MemtableTrait<K>, K: Kms> Default for MorsBuilder<M, K> {
+impl<
+        M: MemtableTrait<K>,
+        K: Kms,
+        L: LevelCtlTrait<T, C, K>,
+        T: TableTrait<C, K::Cipher>,
+        C: CacheTrait<T::Block, T::TableIndexBuf>,
+    > Default for MorsBuilder<M, K, L, T, C>
+{
     fn default() -> Self {
         Self {
             read_only: false,
             dir: PathBuf::new(),
             kms: K::KmsBuilder::default(),
             memtable: M::MemtableBuilder::default(),
+            levelctl: L::LevelCtlBuilder::default(),
         }
     }
 }
-impl<M: MemtableTrait<K>, K: Kms> MorsBuilder<M, K>
+impl<
+        M: MemtableTrait<K>,
+        K: Kms,
+        L: LevelCtlTrait<T, C, K>,
+        T: TableTrait<C, K::Cipher>,
+        C: CacheTrait<T::Block, T::TableIndexBuf>,
+    > MorsBuilder<M, K, L, T, C>
 where
     MorsError:
         From<<K as Kms>::ErrorType> + From<<M as MemtableTrait<K>>::ErrorType>,
 {
-    pub fn build(&self) -> Result<Mors<M, K>> {
+    pub async fn build(&self) -> Result<Mors<M, K, L, T, C>> {
         let mut guard_builder = DBLockGuardBuilder::new();
 
         guard_builder.add_dir(self.dir.clone());
@@ -58,12 +98,16 @@ where
             memtable =
                 Arc::new(RwLock::new(self.memtable.build(kms.clone())?)).into();
         }
+        let levelctl = self.levelctl.build(kms.clone()).await?;
         Ok(Mors {
             core: Core {
                 lock_guard,
                 kms,
                 immut_memtable,
                 memtable,
+                levelctl,
+                t: PhantomData,
+                c: PhantomData,
             },
         })
     }

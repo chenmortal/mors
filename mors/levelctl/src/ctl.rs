@@ -15,18 +15,19 @@ use mors_traits::{
     default::DEFAULT_DIR,
     file_id::SSTableId,
     kms::Kms,
-    levelctl::{Level, LevelCtlTrait, LevelCtlBuilderTrait, LEVEL0},
+    levelctl::{
+        Level, LevelCtlBuilderTrait, LevelCtlError, LevelCtlTrait, LEVEL0,
+    },
     sstable::{TableBuilderTrait, TableTrait},
 };
 
+type Result<T> = std::result::Result<T, MorsLevelCtlError>;
 use tokio::{select, task::JoinHandle};
-
-// use futures::Future;
 
 use crate::{
     compact::status::CompactStatus,
-    error::LevelCtlError,
-    level_handler::LevelHandler,
+    error::MorsLevelCtlError,
+    handler::LevelHandler,
     manifest::{Manifest, ManifestBuilder},
 };
 pub struct LevelCtl<
@@ -38,6 +39,7 @@ pub struct LevelCtl<
     handlers: Vec<LevelHandler<T, C, K::Cipher>>,
     next_id: AtomicU32,
     level0_stalls_ms: AtomicU64,
+    compact_status: CompactStatus,
 }
 impl<
         T: TableTrait<C, K::Cipher>,
@@ -45,11 +47,11 @@ impl<
         K: Kms,
     > LevelCtlTrait<T, C, K> for LevelCtl<T, C, K>
 {
-    type ErrorType = LevelCtlError;
+    type ErrorType = MorsLevelCtlError;
 
     type LevelCtlBuilder = LevelCtlBuilder<T, C, K>;
 }
-type Result<T> = std::result::Result<T, LevelCtlError>;
+
 pub struct LevelCtlBuilder<
     T: TableTrait<C, K::Cipher>,
     C: CacheTrait<T::Block, T::TableIndexBuf>,
@@ -84,7 +86,20 @@ impl<
     > LevelCtlBuilderTrait<LevelCtl<T, C, K>, T, C, K>
     for LevelCtlBuilder<T, C, K>
 {
-    async fn build(&self, kms: K) -> Result<LevelCtl<T, C, K>> {
+    async fn build(
+        &self,
+        kms: K,
+    ) -> std::result::Result<LevelCtl<T, C, K>, LevelCtlError> {
+        Ok(self.build_impl(kms).await?)
+    }
+}
+impl<
+        T: TableTrait<C, K::Cipher>,
+        C: CacheTrait<T::Block, T::TableIndexBuf>,
+        K: Kms,
+    > LevelCtlBuilder<T, C, K>
+{
+    async fn build_impl(&self, kms: K) -> Result<LevelCtl<T, C, K>> {
         let compact_status = CompactStatus::new(self.max_level.to_usize());
         let manifest = self.manifest.build()?;
 
@@ -96,41 +111,38 @@ impl<
         let mut level = LEVEL0;
         for tables in level_tables {
             let handler = LevelHandler::new(level, tables);
+            handler.validate()?;
             handlers.push(handler);
             level += 1;
         }
+
         let ctl = LevelCtl {
             manifest,
             handlers,
             next_id,
             level0_stalls_ms: Default::default(),
+            compact_status,
         };
         Ok(ctl)
     }
-}
-impl<
-        T: TableTrait<C, K::Cipher>,
-        C: CacheTrait<T::Block, T::TableIndexBuf>,
-        K: Kms,
-    > LevelCtlBuilder<T, C, K>
-{
+
     async fn open_tables_by_manifest(
         &self,
         manifest: Manifest,
         kms: K,
     ) -> Result<(SSTableId, Vec<Vec<T>>)> {
-        manifest.revert(&self.dir)?;
+        manifest.revert(&self.dir).await?;
 
         let num_opened = Arc::new(AtomicUsize::new(0));
         // let table_len = manifest.table_len();
-        let manifest_lock = manifest.lock();
+        let manifest_lock = manifest.lock().await;
         let tables = manifest_lock.tables();
 
         let watch_close_notify =
             Self::watch_num_opened(num_opened.clone(), tables.len());
 
         let mut max_id: SSTableId = 0.into();
-        let mut throttle = Throttle::<LevelCtlError>::new(3);
+        let mut throttle = Throttle::<MorsLevelCtlError>::new(3);
 
         let mut tasks: HashMap<Level, Vec<JoinHandle<Option<T>>>> =
             HashMap::new();
@@ -153,7 +165,7 @@ impl<
             let future = async move {
                 let cipher = kms_clone.get_cipher(cipher_id)?;
                 let table = table_builder.open(table_id, cipher).await?;
-                Ok::<Option<T>, LevelCtlError>(table)
+                Ok::<Option<T>, MorsLevelCtlError>(table)
             };
 
             let task = tokio::spawn(async move {
@@ -221,4 +233,12 @@ impl<
         });
         close
     }
+}
+impl<
+        T: TableTrait<C, K::Cipher>,
+        C: CacheTrait<T::Block, T::TableIndexBuf>,
+        K: Kms,
+    > LevelCtl<T, C, K>
+{
+    fn validate(&self) {}
 }
