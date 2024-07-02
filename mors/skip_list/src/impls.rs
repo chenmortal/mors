@@ -1,7 +1,7 @@
 use std::mem::size_of;
 use std::sync::Arc;
 
-use mors_traits::skip_list::{SkipList as SkipListTrait, SkipListError};
+use mors_traits::skip_list::{SkipListTrait as SkipListTrait, SkipListError};
 
 use crate::{error::MorsSkipListError, Node, SkipList};
 

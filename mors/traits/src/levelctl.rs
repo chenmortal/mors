@@ -3,28 +3,28 @@ use std::{
     ops::{Add, AddAssign, Sub},
 };
 
-use crate::{cache::Cache, kms::Kms, sstable::TableTrait};
+use crate::{cache::CacheTrait, kms::Kms, sstable::TableTrait};
 
-pub trait LevelCtl<
+pub trait LevelCtlTrait<
     T: TableTrait<C, K::Cipher>,
-    C: Cache<T::Block, T::TableIndexBuf>,
+    C: CacheTrait<T::Block, T::TableIndexBuf>,
     K: Kms,
 >: Sized
 {
     type ErrorType;
-    type LevelCtlBuilder: LevelCtlBuilder<Self, T, C, K>;
+    type LevelCtlBuilder: LevelCtlBuilderTrait<Self, T, C, K>;
 }
-pub trait LevelCtlBuilder<
-    L: LevelCtl<T, C, K>,
+pub trait LevelCtlBuilderTrait<
+    L: LevelCtlTrait<T, C, K>,
     T: TableTrait<C, K::Cipher>,
-    C: Cache<T::Block, T::TableIndexBuf>,
+    C: CacheTrait<T::Block, T::TableIndexBuf>,
     K: Kms,
 >: Default
 {
     fn build(
         &self,
         kms: K,
-    ) -> impl std::future::Future<Output = Result<(), L::ErrorType>>;
+    ) -> impl std::future::Future<Output = Result<L, L::ErrorType>>;
 }
 
 pub const LEVEL0: Level = Level(0);

@@ -11,11 +11,11 @@ use std::{
 use log::info;
 use mors_common::closer::{CloseNotify, Throttle};
 use mors_traits::{
-    cache::Cache,
+    cache::CacheTrait,
     default::DEFAULT_DIR,
     file_id::SSTableId,
     kms::Kms,
-    levelctl::{Level, LevelCtl, LevelCtlBuilder, LEVEL0},
+    levelctl::{Level, LevelCtlTrait, LevelCtlBuilderTrait, LEVEL0},
     sstable::{TableBuilderTrait, TableTrait},
 };
 
@@ -25,34 +25,34 @@ use tokio::{select, task::JoinHandle};
 
 use crate::{
     compact::status::CompactStatus,
-    error::MorsLevelCtlError,
+    error::LevelCtlError,
     level_handler::LevelHandler,
     manifest::{Manifest, ManifestBuilder},
 };
-pub struct MorsLevelCtl<
+pub struct LevelCtl<
     T: TableTrait<C, K::Cipher>,
-    C: Cache<T::Block, T::TableIndexBuf>,
+    C: CacheTrait<T::Block, T::TableIndexBuf>,
     K: Kms,
 > {
     manifest: Manifest,
-    handler: Vec<LevelHandler<T, C, K::Cipher>>,
-    next_file_id: AtomicU32,
+    handlers: Vec<LevelHandler<T, C, K::Cipher>>,
+    next_id: AtomicU32,
     level0_stalls_ms: AtomicU64,
 }
 impl<
         T: TableTrait<C, K::Cipher>,
-        C: Cache<T::Block, T::TableIndexBuf>,
+        C: CacheTrait<T::Block, T::TableIndexBuf>,
         K: Kms,
-    > LevelCtl<T, C, K> for MorsLevelCtl<T, C, K>
+    > LevelCtlTrait<T, C, K> for LevelCtl<T, C, K>
 {
-    type ErrorType = MorsLevelCtlError;
+    type ErrorType = LevelCtlError;
 
-    type LevelCtlBuilder = MorsLevelCtlBuilder<T, C, K>;
+    type LevelCtlBuilder = LevelCtlBuilder<T, C, K>;
 }
-type Result<T> = std::result::Result<T, MorsLevelCtlError>;
-pub struct MorsLevelCtlBuilder<
+type Result<T> = std::result::Result<T, LevelCtlError>;
+pub struct LevelCtlBuilder<
     T: TableTrait<C, K::Cipher>,
-    C: Cache<T::Block, T::TableIndexBuf>,
+    C: CacheTrait<T::Block, T::TableIndexBuf>,
     K: Kms,
 > {
     manifest: ManifestBuilder,
@@ -63,9 +63,9 @@ pub struct MorsLevelCtlBuilder<
 }
 impl<
         T: TableTrait<C, K::Cipher>,
-        C: Cache<T::Block, T::TableIndexBuf>,
+        C: CacheTrait<T::Block, T::TableIndexBuf>,
         K: Kms,
-    > Default for MorsLevelCtlBuilder<T, C, K>
+    > Default for LevelCtlBuilder<T, C, K>
 {
     fn default() -> Self {
         Self {
@@ -79,12 +79,12 @@ impl<
 }
 impl<
         T: TableTrait<C, K::Cipher>,
-        C: Cache<T::Block, T::TableIndexBuf>,
+        C: CacheTrait<T::Block, T::TableIndexBuf>,
         K: Kms,
-    > LevelCtlBuilder<MorsLevelCtl<T, C, K>, T, C, K>
-    for MorsLevelCtlBuilder<T, C, K>
+    > LevelCtlBuilderTrait<LevelCtl<T, C, K>, T, C, K>
+    for LevelCtlBuilder<T, C, K>
 {
-    async fn build(&self, kms: K) -> Result<()> {
+    async fn build(&self, kms: K) -> Result<LevelCtl<T, C, K>> {
         let compact_status = CompactStatus::new(self.max_level.to_usize());
         let manifest = self.manifest.build()?;
 
@@ -92,21 +92,27 @@ impl<
             self.open_tables_by_manifest(manifest.clone(), kms).await?;
 
         let next_id = AtomicU32::new(1 + Into::<u32>::into(max_id));
-        let mut levels = Vec::with_capacity(level_tables.len());
+        let mut handlers = Vec::with_capacity(level_tables.len());
         let mut level = LEVEL0;
         for tables in level_tables {
             let handler = LevelHandler::new(level, tables);
-            levels.push(handler);
+            handlers.push(handler);
             level += 1;
         }
-        Ok(())
+        let ctl = LevelCtl {
+            manifest,
+            handlers,
+            next_id,
+            level0_stalls_ms: Default::default(),
+        };
+        Ok(ctl)
     }
 }
 impl<
         T: TableTrait<C, K::Cipher>,
-        C: Cache<T::Block, T::TableIndexBuf>,
+        C: CacheTrait<T::Block, T::TableIndexBuf>,
         K: Kms,
-    > MorsLevelCtlBuilder<T, C, K>
+    > LevelCtlBuilder<T, C, K>
 {
     async fn open_tables_by_manifest(
         &self,
@@ -124,7 +130,7 @@ impl<
             Self::watch_num_opened(num_opened.clone(), tables.len());
 
         let mut max_id: SSTableId = 0.into();
-        let mut throttle = Throttle::<MorsLevelCtlError>::new(3);
+        let mut throttle = Throttle::<LevelCtlError>::new(3);
 
         let mut tasks: HashMap<Level, Vec<JoinHandle<Option<T>>>> =
             HashMap::new();
@@ -147,7 +153,7 @@ impl<
             let future = async move {
                 let cipher = kms_clone.get_cipher(cipher_id)?;
                 let table = table_builder.open(table_id, cipher).await?;
-                Ok::<Option<T>, MorsLevelCtlError>(table)
+                Ok::<Option<T>, LevelCtlError>(table)
             };
 
             let task = tokio::spawn(async move {

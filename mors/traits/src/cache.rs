@@ -5,7 +5,7 @@ use crate::{
     sstable::{BlockIndex, BlockTrait, TableIndexBufTrait},
 };
 
-pub trait Cache<B: BlockTrait, T: TableIndexBufTrait>:
+pub trait CacheTrait<B: BlockTrait, T: TableIndexBufTrait>:
     Sized + Send + Sync + Clone+'static
 {
     type ErrorType;
@@ -32,7 +32,7 @@ pub trait Cache<B: BlockTrait, T: TableIndexBufTrait>:
         index: T,
     ) -> impl std::future::Future<Output = ()> + Send;
 }
-pub trait CacheBuilder<C: Cache<B, T>, B: BlockTrait, T: TableIndexBufTrait>:
+pub trait CacheBuilder<C: CacheTrait<B, T>, B: BlockTrait, T: TableIndexBufTrait>:
     Default
 {
     fn build(&self) -> Result<C, C::ErrorType>;

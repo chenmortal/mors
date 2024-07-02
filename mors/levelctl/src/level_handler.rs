@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use mors_traits::{
-    cache::Cache,
+    cache::CacheTrait,
     kms::KmsCipher,
     levelctl::{Level, LEVEL0},
     sstable::TableTrait,
@@ -10,12 +10,12 @@ use parking_lot::RwLock;
 
 pub(crate) struct LevelHandler<
     T: TableTrait<C, K>,
-    C: Cache<T::Block, T::TableIndexBuf>,
+    C: CacheTrait<T::Block, T::TableIndexBuf>,
     K: KmsCipher,
 >(Arc<LevelHandlerInner<T, C, K>>);
 struct LevelHandlerInner<
     T: TableTrait<C, K>,
-    C: Cache<T::Block, T::TableIndexBuf>,
+    C: CacheTrait<T::Block, T::TableIndexBuf>,
     K: KmsCipher,
 > {
     table_handler: RwLock<LevelHandlerTables<T, C, K>>,
@@ -23,7 +23,7 @@ struct LevelHandlerInner<
 }
 struct LevelHandlerTables<
     T: TableTrait<C, K>,
-    C: Cache<T::Block, T::TableIndexBuf>,
+    C: CacheTrait<T::Block, T::TableIndexBuf>,
     K: KmsCipher,
 > {
     tables: Vec<T>,
@@ -34,7 +34,7 @@ struct LevelHandlerTables<
 }
 impl<
         T: TableTrait<C, K>,
-        C: Cache<T::Block, T::TableIndexBuf>,
+        C: CacheTrait<T::Block, T::TableIndexBuf>,
         K: KmsCipher,
     > LevelHandler<T, C, K>
 {

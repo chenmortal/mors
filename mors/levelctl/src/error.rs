@@ -5,7 +5,7 @@ use crate::manifest::error::ManifestError;
 
 
 #[derive(Error, Debug)]
-pub enum MorsLevelCtlError {
+pub enum LevelCtlError {
     #[error("IO Error: {0}")]
     IOErr(#[from] std::io::Error),
     #[error("Manifest Error: {0}")]
@@ -19,6 +19,6 @@ pub enum MorsLevelCtlError {
     #[error("Join Error: {0}")]
     JoinError(#[from] tokio::task::JoinError),
 }
-unsafe impl Send for MorsLevelCtlError {
+unsafe impl Send for LevelCtlError {
     
 }

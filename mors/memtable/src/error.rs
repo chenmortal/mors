@@ -6,7 +6,7 @@ use mors_traits::skip_list::SkipListError;
 use mors_wal::error::MorsWalError;
 
 #[derive(Error, Debug)]
-pub enum MorsMemtableError {
+pub enum MemtableError {
     #[error(transparent)]
     SkipList(#[from] SkipListError),
     #[error(transparent)]

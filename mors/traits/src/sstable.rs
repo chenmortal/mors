@@ -1,11 +1,11 @@
 use std::{fmt::Display, path::PathBuf};
 
-use crate::{cache::Cache, file_id::SSTableId, kms::KmsCipher, ts::KeyTs};
+use crate::{cache::CacheTrait, file_id::SSTableId, kms::KmsCipher, ts::KeyTs};
 use mors_common::compress::CompressionType;
 use std::error::Error;
 use thiserror::Error;
 
-pub trait TableTrait<C: Cache<Self::Block, Self::TableIndexBuf>, K: KmsCipher>:
+pub trait TableTrait<C: CacheTrait<Self::Block, Self::TableIndexBuf>, K: KmsCipher>:
     Sized + Send + 'static
 {
     type ErrorType: Into<SSTableError>;
@@ -19,7 +19,7 @@ pub trait TableTrait<C: Cache<Self::Block, Self::TableIndexBuf>, K: KmsCipher>:
 }
 pub trait TableBuilderTrait<
     T: TableTrait<C, K>,
-    C: Cache<T::Block, T::TableIndexBuf>,
+    C: CacheTrait<T::Block, T::TableIndexBuf>,
     K: KmsCipher,
 >: Default + Clone + Send + 'static
 {

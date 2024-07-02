@@ -8,12 +8,12 @@ use crate::Result;
 use mors_common::lock::DBLockGuard;
 use mors_common::lock::DBLockGuardBuilder;
 use mors_traits::kms::{Kms, KmsBuilder};
-use mors_traits::memtable::{Memtable, MemtableBuilder};
-pub struct Mors<M: Memtable<K>, K: Kms> {
+use mors_traits::memtable::{MemtableTrait, MemtableBuilderTrait};
+pub struct Mors<M: MemtableTrait<K>, K: Kms> {
     pub(crate) core: Core<M, K>,
 }
 
-pub struct Core<M: Memtable<K>, K: Kms> {
+pub struct Core<M: MemtableTrait<K>, K: Kms> {
     lock_guard: DBLockGuard,
     kms: K,
     immut_memtable: VecDeque<Arc<M>>,
@@ -21,13 +21,13 @@ pub struct Core<M: Memtable<K>, K: Kms> {
 }
 
 pub struct DBCoreBuilder {}
-pub struct MorsBuilder<M: Memtable<K>, K: Kms> {
+pub struct MorsBuilder<M: MemtableTrait<K>, K: Kms> {
     read_only: bool,
     dir: PathBuf,
     kms: K::KmsBuilder,
     memtable: M::MemtableBuilder,
 }
-impl<M: Memtable<K>, K: Kms> Default for MorsBuilder<M, K> {
+impl<M: MemtableTrait<K>, K: Kms> Default for MorsBuilder<M, K> {
     fn default() -> Self {
         Self {
             read_only: false,
@@ -37,10 +37,10 @@ impl<M: Memtable<K>, K: Kms> Default for MorsBuilder<M, K> {
         }
     }
 }
-impl<M: Memtable<K>, K: Kms> MorsBuilder<M, K>
+impl<M: MemtableTrait<K>, K: Kms> MorsBuilder<M, K>
 where
     MorsError:
-        From<<K as Kms>::ErrorType> + From<<M as Memtable<K>>::ErrorType>,
+        From<<K as Kms>::ErrorType> + From<<M as MemtableTrait<K>>::ErrorType>,
 {
     pub fn build(&self) -> Result<Mors<M, K>> {
         let mut guard_builder = DBLockGuardBuilder::new();
