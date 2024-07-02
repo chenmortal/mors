@@ -8,7 +8,7 @@ use moka::sync::Cache as MokaCache;
 use moka::sync::CacheBuilder as MokaCacheBuilder;
 
 use mors_traits::{
-    cache::{BlockCacheKey, Cache, CacheBuilder},
+    cache::{BlockCacheKey, CacheTrait, CacheBuilder},
     file_id::SSTableId,
     sstable::{BlockTrait, TableIndexBufTrait},
 };
@@ -16,11 +16,11 @@ use mors_traits::{
 use crate::error::MorsCacheError;
 type Result<T> = std::result::Result<T, MorsCacheError>;
 #[derive(Clone)]
-pub struct MorsCache<B: BlockTrait, T: TableIndexBufTrait> {
+pub struct Cache<B: BlockTrait, T: TableIndexBufTrait> {
     block_cache: Option<MokaCache<BlockCacheKey, B>>,
     index_cache: MokaCache<SSTableId, T>,
 }
-impl<B: BlockTrait, T: TableIndexBufTrait> Cache<B, T> for MorsCache<B, T> {
+impl<B: BlockTrait, T: TableIndexBufTrait> CacheTrait<B, T> for Cache<B, T> {
     type ErrorType = MorsCacheError;
     type CacheBuilder = MorsCacheBuilder;
     async fn get_block(&self, key: &BlockCacheKey) -> Option<B> {
@@ -57,10 +57,10 @@ impl Default for MorsCacheBuilder {
         }
     }
 }
-impl<B: BlockTrait, T: TableIndexBufTrait> CacheBuilder<MorsCache<B, T>, B, T>
+impl<B: BlockTrait, T: TableIndexBufTrait> CacheBuilder<Cache<B, T>, B, T>
     for MorsCacheBuilder
 {
-    fn build(&self) -> Result<MorsCache<B, T>> {
+    fn build(&self) -> Result<Cache<B, T>> {
         let num_in_cache = (self.index_cache_size / self.index_size).max(1);
         let index_cache = MokaCacheBuilder::new(num_in_cache as u64)
             .initial_capacity(num_in_cache / 2)
@@ -70,12 +70,12 @@ impl<B: BlockTrait, T: TableIndexBufTrait> CacheBuilder<MorsCache<B, T>, B, T>
             let block_cache = MokaCacheBuilder::new(num_in_cache as u64)
                 .initial_capacity(num_in_cache / 2)
                 .build();
-            Ok(MorsCache {
+            Ok(Cache {
                 block_cache: Some(block_cache),
                 index_cache,
             })
         } else {
-            Ok(MorsCache {
+            Ok(Cache {
                 block_cache: None,
                 index_cache,
             })
@@ -98,7 +98,7 @@ impl MorsCacheBuilder {
     }
 }
 
-impl<B: BlockTrait, T: TableIndexBufTrait> MorsCache<B, T> {
+impl<B: BlockTrait, T: TableIndexBufTrait> Cache<B, T> {
     pub async fn get_block(&self, key: &BlockCacheKey) -> Option<B> {
         self.block_cache.as_ref()?.get(key).await
     }

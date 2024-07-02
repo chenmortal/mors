@@ -1,21 +1,21 @@
 use mors_traits::file_id::MemtableId;
 use mors_traits::kms::{Kms, KmsCipher};
 use mors_traits::kv::{Entry, Meta};
-use mors_traits::memtable::Memtable;
-use mors_traits::skip_list::SkipList;
+use mors_traits::memtable::MemtableTrait;
+use mors_traits::skip_list::SkipListTrait;
 use mors_traits::ts::KeyTs;
 
 use mors_wal::error::MorsWalError;
 use mors_wal::read::LogFileIter;
 use mors_wal::LogFile;
 
-use crate::error::MorsMemtableError;
-use crate::memtable::{MorsMemtable, MorsMemtableBuilder};
+use crate::error::MemtableError;
+use crate::memtable::{Memtable, MemtableBuilder};
 use crate::Result;
 
-impl<T: SkipList, K: Kms> MorsMemtable<T, K>
+impl<T: SkipListTrait, K: Kms> Memtable<T, K>
 where
-    MorsMemtableError: From<<T as SkipList>::ErrorType>,
+    MemtableError: From<<T as SkipListTrait>::ErrorType>,
     MorsWalError: From<<K as Kms>::ErrorType>
         + From<<<K as Kms>::Cipher as KmsCipher>::ErrorType>,
 {
@@ -37,7 +37,7 @@ where
 
         let end_offset = wal_iter.valid_end_offset();
         if end_offset < self.wal.size() && self.read_only {
-            return Err(MorsMemtableError::TruncateNeeded(
+            return Err(MemtableError::TruncateNeeded(
                 end_offset,
                 self.wal.size(),
             ));
@@ -59,14 +59,14 @@ where
         Ok(())
     }
 }
-impl<T: SkipList, K: Kms> Memtable<K> for MorsMemtable<T, K>
+impl<T: SkipListTrait, K: Kms> MemtableTrait<K> for Memtable<T, K>
 where
-    MorsMemtableError: From<<T as SkipList>::ErrorType>,
+    MemtableError: From<<T as SkipListTrait>::ErrorType>,
     MorsWalError: From<<K as Kms>::ErrorType>
         + From<<<K as Kms>::Cipher as KmsCipher>::ErrorType>,
 {
-    type ErrorType = MorsMemtableError;
-    type MemtableBuilder = MorsMemtableBuilder<T>;
+    type ErrorType = MemtableError;
+    type MemtableBuilder = MemtableBuilder<T>;
 
     fn push(&mut self, entry: &mors_traits::kv::Entry) -> Result<()> {
         self.wal.write_entry(&mut self.buf, entry)?;

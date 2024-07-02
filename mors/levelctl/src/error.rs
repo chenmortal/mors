@@ -1,9 +1,13 @@
-use mors_traits::{kms::KmsError, sstable::SSTableError};
+use mors_traits::{
+    file_id::SSTableId,
+    kms::KmsError,
+    levelctl::{Level, LevelCtlError},
+    sstable::SSTableError,
+    ts::KeyTs,
+};
 use thiserror::Error;
 
 use crate::manifest::error::ManifestError;
-
-
 #[derive(Error, Debug)]
 pub enum MorsLevelCtlError {
     #[error("IO Error: {0}")]
@@ -18,7 +22,21 @@ pub enum MorsLevelCtlError {
     SSTableError(#[from] SSTableError),
     #[error("Join Error: {0}")]
     JoinError(#[from] tokio::task::JoinError),
+    #[error("Level Handler Error: {0}")]
+    LevelHandlerError(#[from] LevelHandlerError),
 }
-unsafe impl Send for MorsLevelCtlError {
-    
+
+#[derive(Error, Debug)]
+pub(crate) enum LevelHandlerError {
+    #[error("SSTable Overlap Error:Level {0:?} Pre SSTable {1:?} biggest {2:?} > This SSTable {3:?} smallest {4:?}")]
+    TableOverlapError(Level, SSTableId, KeyTs, SSTableId, KeyTs),
+    #[error("SSTable Inner Sort Error:Level {0:?} SSTable {1:?} smallest KeyTs {2:?} >= biggest {3:?}")]
+    TableInnerSortError(Level, SSTableId, KeyTs, KeyTs),
 }
+unsafe impl Send for MorsLevelCtlError {}
+impl From<MorsLevelCtlError> for LevelCtlError {
+    fn from(e: MorsLevelCtlError) -> Self {
+        LevelCtlError::new(e)
+    }
+}
+pub(crate) type Result<T> = std::result::Result<T, MorsLevelCtlError>;

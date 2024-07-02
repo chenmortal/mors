@@ -18,8 +18,8 @@ pub type Nonce = GenericArray<u8, U12>;
 type Result<T> = std::result::Result<T, MorsEncryptError>;
 
 pub enum AesCipher {
-    Aes128(Aes128Gcm, CipherKeyId),
-    Aes256(Aes256Gcm, CipherKeyId),
+    Aes128(Box<Aes128Gcm>, CipherKeyId),
+    Aes256(Box<Aes256Gcm>, CipherKeyId),
 }
 impl KmsCipher for AesCipher {
     type ErrorType = MorsEncryptError;
@@ -91,8 +91,8 @@ impl AesCipher {
     #[inline]
     pub fn new(key: &[u8], id: CipherKeyId) -> Result<Self> {
         let cipher = match key.len() {
-            16 => Self::Aes128(Aes128Gcm::new_from_slice(key).unwrap(), id),
-            32 => Self::Aes256(Aes256Gcm::new_from_slice(key).unwrap(), id),
+            16 => Self::Aes128(Box::new(Aes128Gcm::new_from_slice(key).unwrap()), id),
+            32 => Self::Aes256(Box::new(Aes256Gcm::new_from_slice(key).unwrap()), id),
             _ => return Err(MorsEncryptError::InvalidEncryptionKey),
         };
         Ok(cipher)

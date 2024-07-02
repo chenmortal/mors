@@ -10,17 +10,17 @@ use mors_common::mmap::MmapFileBuilder;
 use mors_common::page_size;
 use mors_traits::file_id::{FileId, MemtableId};
 use mors_traits::kms::{Kms, KmsCipher};
-use mors_traits::memtable::MemtableBuilder;
-use mors_traits::skip_list::SkipList;
+use mors_traits::memtable::MemtableBuilderTrait;
+use mors_traits::skip_list::SkipListTrait;
 use mors_traits::ts::{KeyTsBorrow, TxnTs};
 use mors_wal::error::MorsWalError;
 use mors_wal::LogFile;
 
-use crate::error::MorsMemtableError;
+use crate::error::MemtableError;
 use crate::Result;
 use crate::DEFAULT_DIR;
 
-pub struct MorsMemtable<T: SkipList, K: Kms> {
+pub struct Memtable<T: SkipListTrait, K: Kms> {
     pub(crate) skip_list: T,
     pub(crate) wal: LogFile<MemtableId, K>,
     pub(crate) max_version: TxnTs,
@@ -28,7 +28,7 @@ pub struct MorsMemtable<T: SkipList, K: Kms> {
     pub(crate) memtable_size: usize,
     pub(crate) read_only: bool,
 }
-pub struct MorsMemtableBuilder<T: SkipList> {
+pub struct MemtableBuilder<T: SkipListTrait> {
     dir: PathBuf,
     read_only: bool,
     memtable_size: usize,
@@ -36,7 +36,7 @@ pub struct MorsMemtableBuilder<T: SkipList> {
     next_fid: Arc<AtomicU32>,
     t: PhantomData<T>,
 }
-impl<T: SkipList> Default for MorsMemtableBuilder<T> {
+impl<T: SkipListTrait> Default for MemtableBuilder<T> {
     fn default() -> Self {
         Self {
             dir: PathBuf::from(DEFAULT_DIR),
@@ -50,9 +50,9 @@ impl<T: SkipList> Default for MorsMemtableBuilder<T> {
 }
 // opt.maxBatchSize = (15 * opt.MemTableSize) / 100
 // opt.maxBatchCount = opt.maxBatchSize / int64(skl.MaxNodeSize)
-impl<T: SkipList> MorsMemtableBuilder<T>
+impl<T: SkipListTrait> MemtableBuilder<T>
 where
-    MorsMemtableError: From<<T as SkipList>::ErrorType>,
+    MemtableError: From<<T as SkipListTrait>::ErrorType>,
 {
     fn arena_size(&self) -> usize {
         self.memtable_size + 2 * self.max_batch_size()
@@ -64,14 +64,14 @@ where
         self.max_batch_size() / T::MAX_NODE_SIZE
     }
 }
-impl<T: SkipList, K: Kms> MemtableBuilder<MorsMemtable<T, K>, K>
-    for MorsMemtableBuilder<T>
+impl<T: SkipListTrait, K: Kms> MemtableBuilderTrait<Memtable<T, K>, K>
+    for MemtableBuilder<T>
 where
-    MorsMemtableError: From<<T as SkipList>::ErrorType>,
+    MemtableError: From<<T as SkipListTrait>::ErrorType>,
     MorsWalError: From<<K as Kms>::ErrorType>
         + From<<<K as Kms>::Cipher as KmsCipher>::ErrorType>,
 {
-    fn open(&self, kms: K, id: MemtableId) -> Result<MorsMemtable<T, K>> {
+    fn open(&self, kms: K, id: MemtableId) -> Result<Memtable<T, K>> {
         let mut mmap_builder = MmapFileBuilder::new();
         mmap_builder
             .advice(Advice::Sequential)
@@ -88,7 +88,7 @@ where
             mmap_builder,
             kms,
         )?;
-        let mut memtable = MorsMemtable {
+        let mut memtable = Memtable {
             skip_list,
             wal,
             max_version: TxnTs::default(),
@@ -100,7 +100,7 @@ where
         Ok(memtable)
     }
 
-    fn open_exist(&self, kms: K) -> Result<VecDeque<Arc<MorsMemtable<T, K>>>> {
+    fn open_exist(&self, kms: K) -> Result<VecDeque<Arc<Memtable<T, K>>>> {
         let mut ids = read_dir(&self.dir)?
             .filter_map(std::result::Result::ok)
             .filter_map(|e| MemtableId::parse(e.path()).ok())
@@ -124,12 +124,12 @@ where
         Ok(immut_memtable)
     }
 
-    fn build(&self, kms: K) -> Result<MorsMemtable<T, K>> {
+    fn build(&self, kms: K) -> Result<Memtable<T, K>> {
         let id: MemtableId =
             self.next_fid.fetch_add(1, Ordering::SeqCst).into();
         let path = id.join_dir(&self.dir);
         if path.exists() {
-            return Err(MorsMemtableError::FileExists(path));
+            return Err(MemtableError::FileExists(path));
         }
         self.open(kms, id)
     }

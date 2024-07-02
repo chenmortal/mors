@@ -1,36 +1,44 @@
+use crate::{cache::CacheTrait, kms::Kms, sstable::TableTrait};
+use std::error::Error;
 use std::{
     fmt::Display,
     ops::{Add, AddAssign, Sub},
 };
+use thiserror::Error;
 
-use crate::{
-    cache::Cache,
-    kms::{Kms, KmsCipher},
-    sstable::{BlockTrait, TableIndexBufTrait, TableTrait},
-};
-
-pub trait LevelCtl<
+pub trait LevelCtlTrait<
     T: TableTrait<C, K::Cipher>,
-    C: Cache<T::Block, T::TableIndexBuf>,
+    C: CacheTrait<T::Block, T::TableIndexBuf>,
     K: Kms,
 >: Sized
 {
-    type ErrorType;
-    type LevelCtlBuilder: LevelCtlBuilder<Self, T, C, K>;
+    type ErrorType: Into<LevelCtlError>;
+    type LevelCtlBuilder: LevelCtlBuilderTrait<Self, T, C, K>;
 }
-pub trait LevelCtlBuilder<
-    L: LevelCtl<T, C,  K>,
+pub trait LevelCtlBuilderTrait<
+    L: LevelCtlTrait<T, C, K>,
     T: TableTrait<C, K::Cipher>,
-    C: Cache<T::Block, T::TableIndexBuf>,
+    C: CacheTrait<T::Block, T::TableIndexBuf>,
     K: Kms,
 >: Default
 {
     fn build(
         &self,
         kms: K,
-    ) -> impl std::future::Future<Output = Result<(), L::ErrorType>>;
+    ) -> impl std::future::Future<Output = Result<L, LevelCtlError>>;
 }
-
+#[derive(Error, Debug)]
+pub struct LevelCtlError(Box<dyn Error>);
+impl LevelCtlError {
+    pub fn new<E: Error + 'static>(error: E) -> Self {
+        LevelCtlError(Box::new(error))
+    }
+}
+impl Display for LevelCtlError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LevelCtlError: {}", self.0)
+    }
+}
 pub const LEVEL0: Level = Level(0);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Level(u8);

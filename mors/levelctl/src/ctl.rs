@@ -1,9 +1,8 @@
 use std::{
     collections::HashMap,
-    marker::PhantomData,
     path::PathBuf,
     sync::{
-        atomic::{AtomicU32, AtomicUsize, Ordering},
+        atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering},
         Arc,
     },
     time::Duration,
@@ -12,47 +11,50 @@ use std::{
 use log::info;
 use mors_common::closer::{CloseNotify, Throttle};
 use mors_traits::{
-    cache::Cache,
+    cache::CacheTrait,
     default::DEFAULT_DIR,
     file_id::SSTableId,
     kms::Kms,
-    levelctl::{Level, LevelCtl, LevelCtlBuilder, LEVEL0},
+    levelctl::{
+        Level, LevelCtlBuilderTrait, LevelCtlError, LevelCtlTrait, LEVEL0,
+    },
     sstable::{TableBuilderTrait, TableTrait},
 };
 
+type Result<T> = std::result::Result<T, MorsLevelCtlError>;
 use tokio::{select, task::JoinHandle};
-
-// use futures::Future;
 
 use crate::{
     compact::status::CompactStatus,
     error::MorsLevelCtlError,
-    level_handler::LevelHandler,
+    handler::LevelHandler,
     manifest::{Manifest, ManifestBuilder},
 };
-pub struct MorsLevelCtl<
+pub struct LevelCtl<
     T: TableTrait<C, K::Cipher>,
-    C: Cache<T::Block, T::TableIndexBuf>,
+    C: CacheTrait<T::Block, T::TableIndexBuf>,
     K: Kms,
 > {
-    table: T,
-    c: PhantomData<C>,
-    k: PhantomData<K>,
+    manifest: Manifest,
+    handlers: Vec<LevelHandler<T, C, K::Cipher>>,
+    next_id: AtomicU32,
+    level0_stalls_ms: AtomicU64,
+    compact_status: CompactStatus,
 }
 impl<
         T: TableTrait<C, K::Cipher>,
-        C: Cache<T::Block, T::TableIndexBuf>,
+        C: CacheTrait<T::Block, T::TableIndexBuf>,
         K: Kms,
-    > LevelCtl<T, C, K> for MorsLevelCtl<T, C, K>
+    > LevelCtlTrait<T, C, K> for LevelCtl<T, C, K>
 {
     type ErrorType = MorsLevelCtlError;
 
-    type LevelCtlBuilder = MorsLevelCtlBuilder<T, C, K>;
+    type LevelCtlBuilder = LevelCtlBuilder<T, C, K>;
 }
-type Result<T> = std::result::Result<T, MorsLevelCtlError>;
-pub struct MorsLevelCtlBuilder<
+
+pub struct LevelCtlBuilder<
     T: TableTrait<C, K::Cipher>,
-    C: Cache<T::Block, T::TableIndexBuf>,
+    C: CacheTrait<T::Block, T::TableIndexBuf>,
     K: Kms,
 > {
     manifest: ManifestBuilder,
@@ -63,9 +65,9 @@ pub struct MorsLevelCtlBuilder<
 }
 impl<
         T: TableTrait<C, K::Cipher>,
-        C: Cache<T::Block, T::TableIndexBuf>,
+        C: CacheTrait<T::Block, T::TableIndexBuf>,
         K: Kms,
-    > Default for MorsLevelCtlBuilder<T, C, K>
+    > Default for LevelCtlBuilder<T, C, K>
 {
     fn default() -> Self {
         Self {
@@ -79,12 +81,25 @@ impl<
 }
 impl<
         T: TableTrait<C, K::Cipher>,
-        C: Cache<T::Block, T::TableIndexBuf>,
+        C: CacheTrait<T::Block, T::TableIndexBuf>,
         K: Kms,
-    > LevelCtlBuilder<MorsLevelCtl<T, C, K>, T, C, K>
-    for MorsLevelCtlBuilder<T, C, K>
+    > LevelCtlBuilderTrait<LevelCtl<T, C, K>, T, C, K>
+    for LevelCtlBuilder<T, C, K>
 {
-    async fn build(&self, kms: K) -> Result<()> {
+    async fn build(
+        &self,
+        kms: K,
+    ) -> std::result::Result<LevelCtl<T, C, K>, LevelCtlError> {
+        Ok(self.build_impl(kms).await?)
+    }
+}
+impl<
+        T: TableTrait<C, K::Cipher>,
+        C: CacheTrait<T::Block, T::TableIndexBuf>,
+        K: Kms,
+    > LevelCtlBuilder<T, C, K>
+{
+    async fn build_impl(&self, kms: K) -> Result<LevelCtl<T, C, K>> {
         let compact_status = CompactStatus::new(self.max_level.to_usize());
         let manifest = self.manifest.build()?;
 
@@ -92,32 +107,35 @@ impl<
             self.open_tables_by_manifest(manifest.clone(), kms).await?;
 
         let next_id = AtomicU32::new(1 + Into::<u32>::into(max_id));
-        let mut levels = Vec::with_capacity(level_tables.len());
+        let mut handlers = Vec::with_capacity(level_tables.len());
         let mut level = LEVEL0;
         for tables in level_tables {
             let handler = LevelHandler::new(level, tables);
-            levels.push(handler);
+            handler.validate()?;
+            handlers.push(handler);
             level += 1;
         }
-        Ok(())
+
+        let ctl = LevelCtl {
+            manifest,
+            handlers,
+            next_id,
+            level0_stalls_ms: Default::default(),
+            compact_status,
+        };
+        Ok(ctl)
     }
-}
-impl<
-        T: TableTrait<C, K::Cipher>,
-        C: Cache<T::Block, T::TableIndexBuf>,
-        K: Kms,
-    > MorsLevelCtlBuilder<T, C, K>
-{
+
     async fn open_tables_by_manifest(
         &self,
         manifest: Manifest,
         kms: K,
     ) -> Result<(SSTableId, Vec<Vec<T>>)> {
-        manifest.revert(&self.dir)?;
+        manifest.revert(&self.dir).await?;
 
         let num_opened = Arc::new(AtomicUsize::new(0));
         // let table_len = manifest.table_len();
-        let manifest_lock = manifest.lock();
+        let manifest_lock = manifest.lock().await;
         let tables = manifest_lock.tables();
 
         let watch_close_notify =
@@ -215,4 +233,12 @@ impl<
         });
         close
     }
+}
+impl<
+        T: TableTrait<C, K::Cipher>,
+        C: CacheTrait<T::Block, T::TableIndexBuf>,
+        K: Kms,
+    > LevelCtl<T, C, K>
+{
+    fn validate(&self) {}
 }

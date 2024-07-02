@@ -5,7 +5,7 @@ use std::fmt::Display;
 use thiserror::Error;
 
 //需满足并发安全
-pub trait SkipList: Send + Sync {
+pub trait SkipListTrait: Send + Sync {
     type ErrorType: Into<SkipListError>;
     fn new(
         max_size: usize,
