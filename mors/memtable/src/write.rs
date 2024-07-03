@@ -91,4 +91,8 @@ where
     ) -> Option<(mors_traits::ts::TxnTs, mors_traits::kv::ValueMeta)> {
         todo!()
     }
+    
+    fn max_version(&self) -> mors_traits::ts::TxnTs {
+        self.max_version
+    }
 }

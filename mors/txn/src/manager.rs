@@ -12,6 +12,8 @@ pub struct TxnManager(Arc<TxnManagerInner>);
 pub(crate) struct TxnManagerInner {
     core: Mutex<TxnManagerCore>,
     read_mark: WaterMark,
+    txn_mark: WaterMark,
+    send_write_req: Mutex<()>,
 }
 #[derive(Debug, Default)]
 pub(crate) struct TxnManagerCore {
@@ -54,8 +56,15 @@ impl TxnManagerBuilderTrait<TxnManager> for TxnManagerBuilder {
         &self,
         max_version: TxnTs,
     ) -> std::result::Result<TxnManager, TxnManagerError> {
-        let mut core = TxnManagerCore::default();
-
-        todo!()
+        let core = TxnManagerCore {
+            next: max_version + 1,
+            ..Default::default()
+        };
+        Ok(TxnManager(Arc::new(TxnManagerInner {
+            core: Mutex::new(core),
+            read_mark: WaterMark::new("PendingRead", max_version),
+            txn_mark: WaterMark::new("TxnTs", max_version),
+            send_write_req: Mutex::new(()),
+        })))
     }
 }

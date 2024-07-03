@@ -50,6 +50,10 @@ impl<
     type ErrorType = MorsLevelCtlError;
 
     type LevelCtlBuilder = LevelCtlBuilder<T, C, K>;
+    
+    fn max_version(&self) -> mors_traits::ts::TxnTs {
+        todo!()
+    }
 }
 
 pub struct LevelCtlBuilder<
