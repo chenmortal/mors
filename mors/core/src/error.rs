@@ -1,4 +1,4 @@
-use mors_traits::{kms::{EncryptError, KmsError}, levelctl::LevelCtlError};
+use mors_traits::{kms::{EncryptError, KmsError}, levelctl::LevelCtlError, txn::TxnManagerError};
 use thiserror::Error;
 
 
@@ -12,4 +12,6 @@ pub enum MorsError {
     KmsError(#[from] KmsError),
     #[error("LevelCtl Error: {0}")]
     LevelCtlError(#[from] LevelCtlError),
+    #[error("TxnManager Error: {0}")]
+    TxnManagerError(#[from] TxnManagerError),
 }

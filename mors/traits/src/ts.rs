@@ -90,7 +90,12 @@ impl From<u64> for TxnTs {
         Self(value)
     }
 }
-
+impl From<TxnTs> for u64 {
+    fn from(value: TxnTs) -> Self {
+        value.0
+    }
+    
+}
 #[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct KeyTs {
     key: Bytes,

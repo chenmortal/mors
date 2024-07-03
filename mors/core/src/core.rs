@@ -13,6 +13,8 @@ use mors_traits::kms::{Kms, KmsBuilder};
 use mors_traits::levelctl::{LevelCtlBuilderTrait, LevelCtlTrait};
 use mors_traits::memtable::{MemtableBuilderTrait, MemtableTrait};
 use mors_traits::sstable::TableTrait;
+use mors_traits::txn::TxnManagerBuilderTrait;
+use mors_traits::txn::TxnManagerTrait;
 pub struct Mors<
     M: MemtableTrait<K>,
     K: Kms,
@@ -46,12 +48,14 @@ pub struct MorsBuilder<
     L: LevelCtlTrait<T, C, K>,
     T: TableTrait<C, K::Cipher>,
     C: CacheTrait<T::Block, T::TableIndexBuf>,
+    Txn: TxnManagerTrait,
 > {
     read_only: bool,
     dir: PathBuf,
     kms: K::KmsBuilder,
     memtable: M::MemtableBuilder,
     levelctl: L::LevelCtlBuilder,
+    txn_manager: Txn::TxnManagerBuilder,
 }
 impl<
         M: MemtableTrait<K>,
@@ -59,7 +63,8 @@ impl<
         L: LevelCtlTrait<T, C, K>,
         T: TableTrait<C, K::Cipher>,
         C: CacheTrait<T::Block, T::TableIndexBuf>,
-    > Default for MorsBuilder<M, K, L, T, C>
+        Txn: TxnManagerTrait,
+    > Default for MorsBuilder<M, K, L, T, C, Txn>
 {
     fn default() -> Self {
         Self {
@@ -68,6 +73,7 @@ impl<
             kms: K::KmsBuilder::default(),
             memtable: M::MemtableBuilder::default(),
             levelctl: L::LevelCtlBuilder::default(),
+            txn_manager: Txn::TxnManagerBuilder::default(),
         }
     }
 }
@@ -77,7 +83,8 @@ impl<
         L: LevelCtlTrait<T, C, K>,
         T: TableTrait<C, K::Cipher>,
         C: CacheTrait<T::Block, T::TableIndexBuf>,
-    > MorsBuilder<M, K, L, T, C>
+        Txn: TxnManagerTrait,
+    > MorsBuilder<M, K, L, T, C, Txn>
 where
     MorsError:
         From<<K as Kms>::ErrorType> + From<<M as MemtableTrait<K>>::ErrorType>,
@@ -99,6 +106,13 @@ where
                 Arc::new(RwLock::new(self.memtable.build(kms.clone())?)).into();
         }
         let levelctl = self.levelctl.build(kms.clone()).await?;
+
+        let mut max_version = levelctl.max_version();
+        immut_memtable.iter().for_each(|m| {
+            max_version = max_version.max(m.max_version());
+        });
+        
+        self.txn_manager.build(max_version).await?;
         Ok(Mors {
             core: Core {
                 lock_guard,

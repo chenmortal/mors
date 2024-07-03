@@ -1,3 +1,4 @@
+use crate::ts::TxnTs;
 use crate::{cache::CacheTrait, kms::Kms, sstable::TableTrait};
 use std::error::Error;
 use std::{
@@ -14,6 +15,7 @@ pub trait LevelCtlTrait<
 {
     type ErrorType: Into<LevelCtlError>;
     type LevelCtlBuilder: LevelCtlBuilderTrait<Self, T, C, K>;
+    fn max_version(&self) -> TxnTs;
 }
 pub trait LevelCtlBuilderTrait<
     L: LevelCtlTrait<T, C, K>,

@@ -14,6 +14,7 @@ pub trait MemtableTrait<K: Kms>: Sized {
     fn get(&self, key_ts: &KeyTs) -> Option<(TxnTs, ValueMeta)>;
     fn push(&mut self, entry: &Entry) -> Result<(), Self::ErrorType>;
     fn size(&self) -> usize;
+    fn max_version(&self) -> TxnTs;
 }
 pub trait MemtableBuilderTrait<M: MemtableTrait<K> + Sized, K: Kms>: Default {
     fn open(&self, kms: K, id: MemtableId) -> Result<M, M::ErrorType>;
