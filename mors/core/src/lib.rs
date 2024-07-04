@@ -1,5 +1,5 @@
 use error::MorsError;
-mod core;
+pub mod core;
 mod error;
 mod test;
 

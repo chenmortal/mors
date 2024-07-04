@@ -9,7 +9,7 @@ use std::{
 };
 
 use log::info;
-use mors_common::closer::{CloseNotify, Throttle};
+use mors_common::closer::{Closer, Throttle};
 use mors_traits::{
     cache::CacheTrait,
     default::DEFAULT_DIR,
@@ -50,7 +50,7 @@ impl<
     type ErrorType = MorsLevelCtlError;
 
     type LevelCtlBuilder = LevelCtlBuilder<T, C, K>;
-    
+
     fn max_version(&self) -> mors_traits::ts::TxnTs {
         todo!()
     }
@@ -142,7 +142,7 @@ impl<
         let manifest_lock = manifest.lock().await;
         let tables = manifest_lock.tables();
 
-        let watch_close_notify =
+        let watch_closer =
             Self::watch_num_opened(num_opened.clone(), tables.len());
 
         let mut max_id: SSTableId = 0.into();
@@ -184,7 +184,9 @@ impl<
         }
         drop(manifest_lock);
         throttle.finish().await?;
-        watch_close_notify.notify();
+        
+        watch_closer.cancel();
+        watch_closer.wait().await?;
 
         let mut level_tables = Vec::new();
         for level in 0..self.max_level.to_u8() {
@@ -208,14 +210,15 @@ impl<
     fn watch_num_opened(
         num_opened: Arc<AtomicUsize>,
         table_len: usize,
-    ) -> CloseNotify {
+    ) -> Closer {
         use tokio::time::interval;
         use tokio::time::Instant;
 
         let start = Instant::now();
-        let close = CloseNotify::new();
-        let close_clone = close.clone();
-        tokio::spawn(async move {
+        let closer = Closer::new("levelctl init watch_num_opened".to_owned());
+        let closer_clone = closer.clone();
+
+        closer.set_joinhandle(tokio::spawn(async move {
             let mut tick = interval(Duration::from_secs(3));
             loop {
                 select! {
@@ -226,7 +229,7 @@ impl<
                             i.duration_since(start).as_millis(),
                         )
                     }
-                    _ = close_clone.wait() => {
+                    _ =  closer_clone.cancelled() => {
                         info!("All {} tables opened in {} ms",
                             num_opened.load(Ordering::Relaxed),
                             start.elapsed().as_millis());
@@ -234,15 +237,7 @@ impl<
                     }
                 }
             }
-        });
-        close
+        }));
+        closer
     }
-}
-impl<
-        T: TableTrait<C, K::Cipher>,
-        C: CacheTrait<T::Block, T::TableIndexBuf>,
-        K: Kms,
-    > LevelCtl<T, C, K>
-{
-    fn validate(&self) {}
 }

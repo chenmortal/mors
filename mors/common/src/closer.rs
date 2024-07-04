@@ -1,11 +1,14 @@
 use std::{error::Error, sync::Arc};
 
+use parking_lot::Mutex;
 use tokio::{
     select,
     sync::{
+        futures::Notified,
         mpsc::{Receiver, Sender},
         AcquireError, Notify, OwnedSemaphorePermit, Semaphore,
     },
+    task::JoinHandle,
 };
 #[derive(Debug, Default, Clone)]
 pub struct CloseNotify(Arc<Notify>);
@@ -72,7 +75,7 @@ impl<E: Error + From<AcquireError>> Throttle<E> {
     }
 }
 impl<E: Error> ThrottlePermit<E> {
-    pub async fn do_future<T:Send>(
+    pub async fn do_future<T: Send>(
         self,
         future: impl std::future::Future<Output = Result<T, E>>,
     ) -> Option<T> {
@@ -85,5 +88,51 @@ impl<E: Error> ThrottlePermit<E> {
                 None
             }
         }
+    }
+}
+#[derive(Clone)]
+pub struct Closer(Arc<CloserInner>);
+struct CloserInner {
+    join_handle: Mutex<Option<JoinHandle<()>>>,
+    notify: Notify,
+    task: String,
+}
+impl Default for Closer {
+    fn default() -> Self {
+        Self(Arc::new(CloserInner {
+            join_handle: Mutex::new(None),
+            notify: Notify::new(),
+            task: String::new(),
+        }))
+    }
+}
+impl Closer {
+    pub fn new(task: String) -> Self {
+        Self(Arc::new(CloserInner {
+            join_handle: Mutex::new(None),
+            notify: Notify::new(),
+            task,
+        }))
+    }
+    pub fn cancel(&self) {
+        self.0.notify.notify_one();
+    }
+
+    pub fn cancelled(&self) -> Notified<'_> {
+        self.0.notify.notified()
+    }
+
+    pub fn set_joinhandle(&self, handle: JoinHandle<()>) {
+        *self.0.join_handle.lock() = Some(handle);
+    }
+    pub async fn wait(&self) -> Result<(), tokio::task::JoinError> {
+        let handle = {
+            let mut lock = self.0.join_handle.lock();
+            lock.take()
+        };
+        if let Some(handle) = handle {
+            handle.await?;
+        }
+        Ok(())
     }
 }
