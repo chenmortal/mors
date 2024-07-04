@@ -7,6 +7,7 @@ use std::{
     },
 };
 
+use mors_common::closer::Closer;
 use mors_traits::ts::TxnTs;
 use tokio::{
     select,
@@ -22,6 +23,7 @@ pub(crate) struct WaterMarkInner {
     last_index: AtomicU64,
     sender: Sender<Mark>,
     name: &'static str,
+    closer: Closer,
 }
 pub(crate) struct Mark {
     txn: TxnTs,
@@ -42,13 +44,21 @@ impl Mark {
 impl WaterMark {
     pub(crate) fn new(name: &'static str, done_until: TxnTs) -> Self {
         let (sender, receiver) = tokio::sync::mpsc::channel::<Mark>(100);
+        let closer = Closer::new(
+            "Txn manager watermark ".to_owned() + name + " process",
+        );
         let water = Self(Arc::new(WaterMarkInner {
             done_until: AtomicU64::new(done_until.into()),
             last_index: AtomicU64::new(0),
             sender,
             name,
+            closer,
         }));
-        tokio::spawn(water.clone().process(receiver));
+
+        water
+            .0
+            .closer
+            .set_joinhandle(tokio::spawn(water.clone().process(receiver)));
         water
     }
     async fn process(self, mut receiver: Receiver<Mark>) {
@@ -132,9 +142,9 @@ impl WaterMark {
 
         loop {
             select! {
-                // _=closer.captured()=>{
-                //     return ;
-                // }
+                _=self.0.closer.cancelled()=>{
+                    return ;
+                }
                 Some(mark)=receiver.recv()=>{
                     match mark.waiter {
                         Some(notify) => {
