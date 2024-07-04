@@ -1,5 +1,5 @@
 [package]
-name = "levelctl"
+name = "mors-levelctl"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true

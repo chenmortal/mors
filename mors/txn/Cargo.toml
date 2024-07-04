@@ -1,5 +1,5 @@
 [package]
-name = "txn"
+name = "mors-txn"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
