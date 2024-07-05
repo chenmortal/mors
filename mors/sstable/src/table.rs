@@ -7,7 +7,7 @@ use log::error;
 use memmap2::Advice;
 use mors_common::compress::CompressionType;
 use mors_common::mmap::{MmapFile, MmapFileBuilder};
-use mors_traits::cache::{BlockCacheKey, CacheTrait};
+use mors_traits::cache::BlockCacheKey;
 use mors_traits::default::DEFAULT_DIR;
 use mors_traits::file_id::{FileId, SSTableId};
 use mors_traits::iter::{DoubleEndedCacheIterator, KvDoubleEndedCacheIter};
@@ -19,6 +19,7 @@ use mors_traits::ts::{KeyTs, TxnTs};
 use prost::Message;
 
 use crate::block::Block;
+use crate::cache::Cache;
 use crate::pb::proto::Checksum;
 use crate::table_index::TableIndexBuf;
 use crate::Result;
@@ -44,9 +45,9 @@ impl Default for ChecksumVerificationMode {
         Self::NoVerification
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 
-pub struct TableBuilder<C: CacheTrait<Block, TableIndexBuf>> {
+pub struct TableBuilder {
     read_only: bool,
     dir: PathBuf,
     table_size: usize,
@@ -64,9 +65,9 @@ pub struct TableBuilder<C: CacheTrait<Block, TableIndexBuf>> {
     compression: CompressionType,
 
     zstd_compression_level: i32,
-    cache: Option<C>,
+    cache: Option<Cache>,
 }
-impl<C: CacheTrait<Block, TableIndexBuf>> Default for TableBuilder<C> {
+impl Default for TableBuilder {
     fn default() -> Self {
         Self {
             table_size: 2 << 20,
@@ -84,10 +85,7 @@ impl<C: CacheTrait<Block, TableIndexBuf>> Default for TableBuilder<C> {
     }
 }
 
-impl<C: CacheTrait<Block, TableIndexBuf>, K: KmsCipher>
-    TableBuilderTrait<Table<C, K>, C, K>
-    for TableBuilder<C>
-{
+impl<K: KmsCipher> TableBuilderTrait<Table<K>, K> for TableBuilder {
     fn set_compression(&mut self, compression: CompressionType) {
         self.compression = compression;
     }
@@ -96,7 +94,7 @@ impl<C: CacheTrait<Block, TableIndexBuf>, K: KmsCipher>
         self.dir = dir;
     }
 
-    fn set_cache(&mut self, cache: C) {
+    fn set_cache(&mut self, cache: Cache) {
         self.cache = Some(cache);
     }
 
@@ -104,16 +102,16 @@ impl<C: CacheTrait<Block, TableIndexBuf>, K: KmsCipher>
         &self,
         id: SSTableId,
         cipher: Option<K>,
-    ) -> std::result::Result<Option<Table<C, K>>, SSTableError> {
+    ) -> std::result::Result<Option<Table<K>>, SSTableError> {
         Ok(self.open_impl(id, cipher).await?)
     }
 }
-impl<C: CacheTrait<Block, TableIndexBuf>> TableBuilder<C> {
+impl TableBuilder {
     async fn open_impl<K: KmsCipher>(
         &self,
         id: SSTableId,
         cipher: Option<K>,
-    ) -> Result<Option<Table<C, K>>> {
+    ) -> Result<Option<Table<K>>> {
         if self.compression.is_none() && self.block_size == 0 {
             return Err(MorsTableError::InvalidConfig);
         }
@@ -128,7 +126,7 @@ impl<C: CacheTrait<Block, TableIndexBuf>> TableBuilder<C> {
         let create_at = mmap.file_modified()?;
 
         let (index_buf, index_start, index_len) =
-            TableBuilder::<C>::init_index(&mmap, &cipher)?;
+            TableBuilder::init_index(&mmap, &cipher)?;
 
         let (smallest, biggest) =
             self.smallest_biggest(&index_buf, &mmap, &cipher)?;
@@ -263,10 +261,8 @@ impl<C: CacheTrait<Block, TableIndexBuf>> TableBuilder<C> {
     }
 }
 
-pub struct Table<C: CacheTrait<Block, TableIndexBuf>, K: KmsCipher>(
-    Arc<TableInner<C, K>>,
-);
-pub(crate) struct TableInner<C: CacheTrait<Block, TableIndexBuf>, K: KmsCipher> {
+pub struct Table<K: KmsCipher>(Arc<TableInner<K>>);
+pub(crate) struct TableInner<K: KmsCipher> {
     id: SSTableId,
     mmap: MmapFile,
     table_size: u64,
@@ -277,17 +273,16 @@ pub(crate) struct TableInner<C: CacheTrait<Block, TableIndexBuf>, K: KmsCipher> 
     smallest: KeyTs,
     biggest: KeyTs,
     cheap_index: CheapTableIndex,
-    cache: Option<C>,
+    cache: Option<Cache>,
     cipher: Option<K>,
     checksum_verify_mode: ChecksumVerificationMode,
 }
-impl<C: CacheTrait<Block, TableIndexBuf>, K: KmsCipher> TableTrait<C, K>
-    for Table<C, K>
-{
+impl<K: KmsCipher> TableTrait<K> for Table<K> {
     type Block = Block;
     type TableIndexBuf = TableIndexBuf;
     type ErrorType = MorsTableError;
-    type TableBuilder = TableBuilder<C>;
+    type Cache = Cache;
+    type TableBuilder = TableBuilder;
 
     fn size(&self) -> usize {
         self.0.table_size as usize
@@ -304,13 +299,13 @@ impl<C: CacheTrait<Block, TableIndexBuf>, K: KmsCipher> TableTrait<C, K>
     fn smallest(&self) -> &KeyTs {
         &self.0.smallest
     }
-    
+
     fn biggest(&self) -> &KeyTs {
         &self.0.biggest
     }
 }
 
-impl<C: CacheTrait<Block, TableIndexBuf>, K: KmsCipher> Table<C, K> {
+impl<K: KmsCipher> Table<K> {
     async fn verify(&self) -> Result<()> {
         for i in 0..self.0.cheap_index.offsets_len {
             let block = self.get_block(i.into(), true).await?;

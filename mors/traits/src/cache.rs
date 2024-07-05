@@ -5,36 +5,11 @@ use crate::{
     sstable::{BlockIndex, BlockTrait, TableIndexBufTrait},
 };
 
-pub trait CacheTrait<B: BlockTrait, T: TableIndexBufTrait>:
-    Sized + Send + Sync + Clone+'static
-{
+pub trait CacheTrait: Sized + Send + Sync + Clone + 'static {
     type ErrorType;
-    type CacheBuilder: CacheBuilder<Self, B, T>;
-    fn get_block(
-        &self,
-        key: &BlockCacheKey,
-    ) -> impl std::future::Future<Output = Option<B>> + Send;
-
-    fn insert_block(
-        &self,
-        key: BlockCacheKey,
-        block: B,
-    ) -> impl std::future::Future<Output = ()> + Send;
-
-    fn get_index(
-        &self,
-        key: SSTableId,
-    ) -> impl std::future::Future<Output = Option<T>> + Send;
-
-    fn insert_index(
-        &self,
-        key: SSTableId,
-        index: T,
-    ) -> impl std::future::Future<Output = ()> + Send;
+    type CacheBuilder: CacheBuilder<Self>;
 }
-pub trait CacheBuilder<C: CacheTrait<B, T>, B: BlockTrait, T: TableIndexBufTrait>:
-    Default
-{
+pub trait CacheBuilder<C: CacheTrait>: Default {
     fn build(&self) -> Result<C, C::ErrorType>;
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

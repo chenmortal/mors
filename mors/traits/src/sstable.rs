@@ -5,27 +5,24 @@ use mors_common::compress::CompressionType;
 use std::error::Error;
 use thiserror::Error;
 
-pub trait TableTrait<C: CacheTrait<Self::Block, Self::TableIndexBuf>, K: KmsCipher>:
-    Sized + Send + 'static
-{
+pub trait TableTrait<K: KmsCipher>: Sized + Send + 'static {
     type ErrorType: Into<SSTableError>;
     type Block: BlockTrait;
     type TableIndexBuf: TableIndexBufTrait;
-    type TableBuilder: TableBuilderTrait<Self, C, K>;
+    type TableBuilder: TableBuilderTrait<Self, K>;
+    type Cache: CacheTrait;
+    // type Cache: CacheTrait<Self::Block, Self::TableIndexBuf>;
     fn size(&self) -> usize;
     fn stale_data_size(&self) -> usize;
     fn id(&self) -> SSTableId;
     fn smallest(&self) -> &KeyTs;
     fn biggest(&self) -> &KeyTs;
 }
-pub trait TableBuilderTrait<
-    T: TableTrait<C, K>,
-    C: CacheTrait<T::Block, T::TableIndexBuf>,
-    K: KmsCipher,
->: Default + Clone + Send + 'static
+pub trait TableBuilderTrait<T: TableTrait<K>, K: KmsCipher>:
+    Default + Clone + Send + 'static
 {
     fn set_compression(&mut self, compression: CompressionType);
-    fn set_cache(&mut self, cache: C);
+    fn set_cache(&mut self, cache: T::Cache);
     fn set_dir(&mut self, dir: PathBuf);
     fn open(
         &self,

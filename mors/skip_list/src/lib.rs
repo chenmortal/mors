@@ -15,7 +15,7 @@ const SKL_MAX_HEIGHT: usize = 20; //<20 !=20
 
 pub mod arena;
 mod error;
-mod impls;
+pub mod impls;
 #[cfg(test)]
 mod test;
 type Result<T> = std::result::Result<T, MorsSkipListError>;

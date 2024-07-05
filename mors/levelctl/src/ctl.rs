@@ -11,7 +11,6 @@ use std::{
 use log::info;
 use mors_common::closer::{Closer, Throttle};
 use mors_traits::{
-    cache::CacheTrait,
     default::DEFAULT_DIR,
     file_id::SSTableId,
     kms::Kms,
@@ -30,49 +29,31 @@ use crate::{
     handler::LevelHandler,
     manifest::{Manifest, ManifestBuilder},
 };
-pub struct LevelCtl<
-    T: TableTrait<C, K::Cipher>,
-    C: CacheTrait<T::Block, T::TableIndexBuf>,
-    K: Kms,
-> {
+pub struct LevelCtl<T: TableTrait<K::Cipher>, K: Kms> {
     manifest: Manifest,
-    handlers: Vec<LevelHandler<T, C, K::Cipher>>,
+    handlers: Vec<LevelHandler<T, K::Cipher>>,
     next_id: AtomicU32,
     level0_stalls_ms: AtomicU64,
     compact_status: CompactStatus,
 }
-impl<
-        T: TableTrait<C, K::Cipher>,
-        C: CacheTrait<T::Block, T::TableIndexBuf>,
-        K: Kms,
-    > LevelCtlTrait<T, C, K> for LevelCtl<T, C, K>
-{
+impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlTrait<T, K> for LevelCtl<T, K> {
     type ErrorType = MorsLevelCtlError;
 
-    type LevelCtlBuilder = LevelCtlBuilder<T, C, K>;
+    type LevelCtlBuilder = LevelCtlBuilder<T, K>;
 
     fn max_version(&self) -> mors_traits::ts::TxnTs {
         todo!()
     }
 }
 
-pub struct LevelCtlBuilder<
-    T: TableTrait<C, K::Cipher>,
-    C: CacheTrait<T::Block, T::TableIndexBuf>,
-    K: Kms,
-> {
+pub struct LevelCtlBuilder<T: TableTrait<K::Cipher>, K: Kms> {
     manifest: ManifestBuilder,
     table: T::TableBuilder,
     max_level: Level,
-    cache: Option<C>,
+    cache: Option<T::Cache>,
     dir: PathBuf,
 }
-impl<
-        T: TableTrait<C, K::Cipher>,
-        C: CacheTrait<T::Block, T::TableIndexBuf>,
-        K: Kms,
-    > Default for LevelCtlBuilder<T, C, K>
-{
+impl<T: TableTrait<K::Cipher>, K: Kms> Default for LevelCtlBuilder<T, K> {
     fn default() -> Self {
         Self {
             manifest: ManifestBuilder::default(),
@@ -83,27 +64,18 @@ impl<
         }
     }
 }
-impl<
-        T: TableTrait<C, K::Cipher>,
-        C: CacheTrait<T::Block, T::TableIndexBuf>,
-        K: Kms,
-    > LevelCtlBuilderTrait<LevelCtl<T, C, K>, T, C, K>
-    for LevelCtlBuilder<T, C, K>
+impl<T: TableTrait<K::Cipher>, K: Kms>
+    LevelCtlBuilderTrait<LevelCtl<T, K>, T, K> for LevelCtlBuilder<T, K>
 {
     async fn build(
         &self,
         kms: K,
-    ) -> std::result::Result<LevelCtl<T, C, K>, LevelCtlError> {
+    ) -> std::result::Result<LevelCtl<T, K>, LevelCtlError> {
         Ok(self.build_impl(kms).await?)
     }
 }
-impl<
-        T: TableTrait<C, K::Cipher>,
-        C: CacheTrait<T::Block, T::TableIndexBuf>,
-        K: Kms,
-    > LevelCtlBuilder<T, C, K>
-{
-    async fn build_impl(&self, kms: K) -> Result<LevelCtl<T, C, K>> {
+impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T,  K> {
+    async fn build_impl(&self, kms: K) -> Result<LevelCtl<T,  K>> {
         let compact_status = CompactStatus::new(self.max_level.to_usize());
         let manifest = self.manifest.build()?;
 
@@ -184,7 +156,7 @@ impl<
         }
         drop(manifest_lock);
         throttle.finish().await?;
-        
+
         watch_closer.cancel();
         watch_closer.wait().await?;
 

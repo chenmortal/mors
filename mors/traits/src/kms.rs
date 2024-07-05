@@ -69,7 +69,7 @@ pub trait KmsCipher: Send + Sync+'static {
     fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, EncryptError>;
 }
 pub trait KmsBuilder<K: Kms>: Default {
-    fn build(&self) -> Result<K, K::ErrorType>;
+    fn build(&self) -> Result<K, KmsError>;
 }
 #[derive(Error, Debug)]
 pub struct KmsError(Box<dyn Error>);

@@ -8,29 +8,18 @@ use crate::error::MorsError;
 use crate::Result;
 use mors_common::lock::DBLockGuard;
 use mors_common::lock::DBLockGuardBuilder;
-use mors_traits::cache::CacheTrait;
 use mors_traits::kms::{Kms, KmsBuilder};
 use mors_traits::levelctl::{LevelCtlBuilderTrait, LevelCtlTrait};
 use mors_traits::memtable::{MemtableBuilderTrait, MemtableTrait};
 use mors_traits::sstable::TableTrait;
 use mors_traits::txn::TxnManagerBuilderTrait;
 use mors_traits::txn::TxnManagerTrait;
-pub struct Mors<
-    M: MemtableTrait<K>,
-    K: Kms,
-    L: LevelCtlTrait<T, C, K>,
-    T: TableTrait<C, K::Cipher>,
-    C: CacheTrait<T::Block, T::TableIndexBuf>,
-> {
-    pub(crate) core: Core<M, K, L, T, C>,
-}
 
 pub struct Core<
     M: MemtableTrait<K>,
     K: Kms,
-    L: LevelCtlTrait<T, C, K>,
-    T: TableTrait<C, K::Cipher>,
-    C: CacheTrait<T::Block, T::TableIndexBuf>,
+    L: LevelCtlTrait<T, K>,
+    T: TableTrait<K::Cipher>,
 > {
     lock_guard: DBLockGuard,
     kms: K,
@@ -38,16 +27,13 @@ pub struct Core<
     memtable: Option<Arc<RwLock<M>>>,
     levelctl: L,
     t: PhantomData<T>,
-    c: PhantomData<C>,
 }
 
-pub struct DBCoreBuilder {}
-pub struct MorsBuilder<
+pub struct CoreBuilder<
     M: MemtableTrait<K>,
     K: Kms,
-    L: LevelCtlTrait<T, C, K>,
-    T: TableTrait<C, K::Cipher>,
-    C: CacheTrait<T::Block, T::TableIndexBuf>,
+    L: LevelCtlTrait<T, K>,
+    T: TableTrait<K::Cipher>,
     Txn: TxnManagerTrait,
 > {
     read_only: bool,
@@ -60,11 +46,10 @@ pub struct MorsBuilder<
 impl<
         M: MemtableTrait<K>,
         K: Kms,
-        L: LevelCtlTrait<T, C, K>,
-        T: TableTrait<C, K::Cipher>,
-        C: CacheTrait<T::Block, T::TableIndexBuf>,
+        L: LevelCtlTrait<T, K>,
+        T: TableTrait<K::Cipher>,
         Txn: TxnManagerTrait,
-    > Default for MorsBuilder<M, K, L, T, C, Txn>
+    > Default for CoreBuilder<M, K, L, T, Txn>
 {
     fn default() -> Self {
         Self {
@@ -80,16 +65,12 @@ impl<
 impl<
         M: MemtableTrait<K>,
         K: Kms,
-        L: LevelCtlTrait<T, C, K>,
-        T: TableTrait<C, K::Cipher>,
-        C: CacheTrait<T::Block, T::TableIndexBuf>,
+        L: LevelCtlTrait<T, K>,
+        T: TableTrait<K::Cipher>,
         Txn: TxnManagerTrait,
-    > MorsBuilder<M, K, L, T, C, Txn>
-where
-    MorsError:
-        From<<K as Kms>::ErrorType> + From<<M as MemtableTrait<K>>::ErrorType>,
+    > CoreBuilder<M, K, L, T, Txn>
 {
-    pub async fn build(&self) -> Result<Mors<M, K, L, T, C>> {
+    pub async fn build(&self) -> Result<Core<M, K, L, T>> {
         let mut guard_builder = DBLockGuardBuilder::new();
 
         guard_builder.add_dir(self.dir.clone());
@@ -111,18 +92,15 @@ where
         immut_memtable.iter().for_each(|m| {
             max_version = max_version.max(m.max_version());
         });
-        
+
         self.txn_manager.build(max_version).await?;
-        Ok(Mors {
-            core: Core {
-                lock_guard,
-                kms,
-                immut_memtable,
-                memtable,
-                levelctl,
-                t: PhantomData,
-                c: PhantomData,
-            },
+        Ok(Core {
+            lock_guard,
+            kms,
+            immut_memtable,
+            memtable,
+            levelctl,
+            t: PhantomData,
         })
     }
 }

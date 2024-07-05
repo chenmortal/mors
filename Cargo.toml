@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "mors/cache",
     "mors/common",
     "mors/core",
     "mors/encrypt",
@@ -39,7 +38,6 @@ mors-skip_list = { path = "mors/skip_list", version = "0.1" }
 mors-encrypt = { path = "mors/encrypt", version = "0.1" }
 mors-wal = { path = "mors/wal", version = "0.1" }
 mors-levelctl = { path = "mors/levelctl", version = "0.1" }
-mors-cache = { path = "mors/cache", version = "0.1" }
 mors-txn = { path = "mors/txn", version = "0.1" }
 
 aes-gcm = { version = "0.10" }
