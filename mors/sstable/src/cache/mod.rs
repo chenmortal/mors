@@ -1,3 +1,4 @@
+use error::MorsCacheError;
 #[cfg(not(feature = "sync"))]
 use moka::future::Cache as MokaCache;
 #[cfg(not(feature = "sync"))]
@@ -8,35 +9,39 @@ use moka::sync::Cache as MokaCache;
 use moka::sync::CacheBuilder as MokaCacheBuilder;
 
 use mors_traits::{
-    cache::{BlockCacheKey, CacheTrait, CacheBuilder},
+    cache::{BlockCacheKey, CacheBuilder, CacheTrait},
     file_id::SSTableId,
-    sstable::{BlockTrait, TableIndexBufTrait},
 };
 
-use crate::error::MorsCacheError;
+use crate::block::Block;
+use crate::table_index::TableIndexBuf;
 type Result<T> = std::result::Result<T, MorsCacheError>;
+mod error;
+
 #[derive(Clone)]
-pub struct Cache<B: BlockTrait, T: TableIndexBufTrait> {
-    block_cache: Option<MokaCache<BlockCacheKey, B>>,
-    index_cache: MokaCache<SSTableId, T>,
+pub struct Cache {
+    block_cache: Option<MokaCache<BlockCacheKey, Block>>,
+    index_cache: MokaCache<SSTableId, TableIndexBuf>,
 }
-impl<B: BlockTrait, T: TableIndexBufTrait> CacheTrait<B, T> for Cache<B, T> {
-    type ErrorType = MorsCacheError;
-    type CacheBuilder = MorsCacheBuilder;
-    async fn get_block(&self, key: &BlockCacheKey) -> Option<B> {
+impl Cache {
+    pub(crate) async fn get_block(&self, key: &BlockCacheKey) -> Option<Block> {
         self.block_cache.as_ref()?.get(key).await
     }
-    async fn insert_block(&self, key: BlockCacheKey, block: B) {
+    pub(crate) async fn insert_block(&self, key: BlockCacheKey, block: Block) {
         if let Some(block_cache) = self.block_cache.as_ref() {
             block_cache.insert(key, block).await;
         }
     }
-    async fn get_index(&self, key: SSTableId) -> Option<T> {
+    pub(crate)  async fn get_index(&self, key: SSTableId) -> Option<TableIndexBuf> {
         self.index_cache.get(&key).await
     }
-    async fn insert_index(&self, key: SSTableId, index: T) {
+    pub(crate)  async fn insert_index(&self, key: SSTableId, index: TableIndexBuf) {
         self.index_cache.insert(key, index).await;
     }
+}
+impl CacheTrait for Cache {
+    type ErrorType = MorsCacheError;
+    type CacheBuilder = MorsCacheBuilder;
 }
 #[derive(Debug)]
 pub struct MorsCacheBuilder {
@@ -57,10 +62,8 @@ impl Default for MorsCacheBuilder {
         }
     }
 }
-impl<B: BlockTrait, T: TableIndexBufTrait> CacheBuilder<Cache<B, T>, B, T>
-    for MorsCacheBuilder
-{
-    fn build(&self) -> Result<Cache<B, T>> {
+impl CacheBuilder<Cache> for MorsCacheBuilder {
+    fn build(&self) -> Result<Cache> {
         let num_in_cache = (self.index_cache_size / self.index_size).max(1);
         let index_cache = MokaCacheBuilder::new(num_in_cache as u64)
             .initial_capacity(num_in_cache / 2)
@@ -98,19 +101,19 @@ impl MorsCacheBuilder {
     }
 }
 
-impl<B: BlockTrait, T: TableIndexBufTrait> Cache<B, T> {
-    pub async fn get_block(&self, key: &BlockCacheKey) -> Option<B> {
-        self.block_cache.as_ref()?.get(key).await
-    }
-    pub async fn insert_block(&self, key: BlockCacheKey, block: B) {
-        if let Some(block_cache) = self.block_cache.as_ref() {
-            block_cache.insert(key, block).await;
-        }
-    }
-    pub async fn get_index(&self, key: SSTableId) -> Option<T> {
-        self.index_cache.get(&key).await
-    }
-    pub async fn insert_index(&self, key: SSTableId, index: T) {
-        self.index_cache.insert(key, index).await;
-    }
-}
+// impl Cache<B, T> {
+//     pub async fn get_block(&self, key: &BlockCacheKey) -> Option<B> {
+//         self.block_cache.as_ref()?.get(key).await
+//     }
+//     pub async fn insert_block(&self, key: BlockCacheKey, block: B) {
+//         if let Some(block_cache) = self.block_cache.as_ref() {
+//             block_cache.insert(key, block).await;
+//         }
+//     }
+//     pub async fn get_index(&self, key: SSTableId) -> Option<T> {
+//         self.index_cache.get(&key).await
+//     }
+//     pub async fn insert_index(&self, key: SSTableId, index: T) {
+//         self.index_cache.insert(key, index).await;
+//     }
+// }

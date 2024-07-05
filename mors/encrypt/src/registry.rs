@@ -35,7 +35,10 @@ impl Deref for MorsKms {
 impl Kms for MorsKms {
     type ErrorType = MorsKmsError;
     type Cipher = AesCipher;
-    fn get_cipher(&self, key_id: CipherKeyId) -> std::result::Result<Option<AesCipher>,KmsError> {
+    fn get_cipher(
+        &self,
+        key_id: CipherKeyId,
+    ) -> std::result::Result<Option<AesCipher>, KmsError> {
         if let Some(dk) = self.get_data_key(key_id)? {
             let cipher = AesCipher::new(&dk.data, key_id)?;
             return Ok(cipher.into());
@@ -55,8 +58,8 @@ impl Kms for MorsKms {
     }
 
     const NONCE_SIZE: usize = 12;
-    
-    type KmsBuilder=MorsKmsBuilder;
+
+    type KmsBuilder = MorsKmsBuilder;
 }
 
 #[derive(Debug, Default)]
@@ -108,9 +111,7 @@ impl MorsKmsBuilder {
         self.dir = dir;
         self
     }
-}
-impl KmsBuilder<MorsKms> for MorsKmsBuilder {
-    fn build(&self) -> std::result::Result<MorsKms, <MorsKms as Kms>::ErrorType> {
+    fn build_impl(&self) -> Result<MorsKms> {
         let keys_len = self.encrypt_key.len();
 
         if keys_len > 0 && ![16, 32].contains(&keys_len) {
@@ -149,6 +150,11 @@ impl KmsBuilder<MorsKms> for MorsKmsBuilder {
         }
 
         Ok(MorsKms(Arc::new(RwLock::new(key_registry))))
+    }
+}
+impl KmsBuilder<MorsKms> for MorsKmsBuilder {
+    fn build(&self) -> std::result::Result<MorsKms, KmsError> {
+        Ok(self.build_impl()?)
     }
 }
 impl KmsInner {
@@ -404,9 +410,7 @@ impl MorsKms {
         }
         match inner_r.data_keys.get(&cipher_key_id) {
             Some(s) => Ok(Some(s.clone())),
-            None => {
-                Err(MorsKmsError::InvalidDataKeyID(cipher_key_id))
-            }
+            None => Err(MorsKmsError::InvalidDataKeyID(cipher_key_id)),
         }
     }
 }

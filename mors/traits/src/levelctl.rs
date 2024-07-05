@@ -7,20 +7,14 @@ use std::{
 };
 use thiserror::Error;
 
-pub trait LevelCtlTrait<
-    T: TableTrait<C, K::Cipher>,
-    C: CacheTrait<T::Block, T::TableIndexBuf>,
-    K: Kms,
->: Sized
-{
+pub trait LevelCtlTrait<T: TableTrait<K::Cipher>, K: Kms>: Sized {
     type ErrorType: Into<LevelCtlError>;
-    type LevelCtlBuilder: LevelCtlBuilderTrait<Self, T, C, K>;
+    type LevelCtlBuilder: LevelCtlBuilderTrait<Self, T, K>;
     fn max_version(&self) -> TxnTs;
 }
 pub trait LevelCtlBuilderTrait<
-    L: LevelCtlTrait<T, C, K>,
-    T: TableTrait<C, K::Cipher>,
-    C: CacheTrait<T::Block, T::TableIndexBuf>,
+    L: LevelCtlTrait<T, K>,
+    T: TableTrait<K::Cipher>,
     K: Kms,
 >: Default
 {
