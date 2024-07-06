@@ -1,6 +1,10 @@
-use mors_traits::{kms::{EncryptError, KmsError}, levelctl::LevelCtlError, txn::TxnManagerError};
+use mors_traits::{
+    kms::{EncryptError, KmsError},
+    levelctl::LevelCtlError,
+    memtable::MemtableError,
+    txn::TxnManagerError,
+};
 use thiserror::Error;
-
 
 #[derive(Error, Debug)]
 pub enum MorsError {
@@ -14,4 +18,6 @@ pub enum MorsError {
     LevelCtlError(#[from] LevelCtlError),
     #[error("TxnManager Error: {0}")]
     TxnManagerError(#[from] TxnManagerError),
+    #[error("Memtable Error: {0}")]
+    MemtableError(#[from] MemtableError),
 }
