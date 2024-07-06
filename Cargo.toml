@@ -1,15 +1,15 @@
 [workspace]
 members = [
-    "mors/common",
-    "mors/core",
-    "mors/encrypt",
-    "mors/levelctl",
-    "mors/memtable",
-    "mors/skip_list",
-    "mors/sstable",
-    "mors/traits",
-    "mors/txn",
-    "mors/wal",
+    "common",
+    "core",
+    "encrypt",
+    "levelctl",
+    "memtable",
+    "skip_list",
+    "sstable",
+    "traits",
+    "txn",
+    "wal",
 ]
 resolver = "2"
 
@@ -29,16 +29,16 @@ large_futures = "warn"
 unused_imports = "deny"
 
 [workspace.dependencies]
-mors-core = { path = "mors/core", version = "0.1" }
-mors-memtable = { path = "mors/memtable", version = "0.1" }
-mors-sstable = { path = "mors/sstable", version = "0.1" }
-mors-common = { path = "mors/common", version = "0.1" }
-mors-traits = { path = "mors/traits", version = "0.1" }
-mors-skip_list = { path = "mors/skip_list", version = "0.1" }
-mors-encrypt = { path = "mors/encrypt", version = "0.1" }
-mors-wal = { path = "mors/wal", version = "0.1" }
-mors-levelctl = { path = "mors/levelctl", version = "0.1" }
-mors-txn = { path = "mors/txn", version = "0.1" }
+mors-core = { path = "core", version = "0.1" }
+mors-memtable = { path = "memtable", version = "0.1" }
+mors-sstable = { path = "sstable", version = "0.1" }
+mors-common = { path = "common", version = "0.1" }
+mors-traits = { path = "traits", version = "0.1" }
+mors-skip_list = { path = "skip_list", version = "0.1" }
+mors-encrypt = { path = "encrypt", version = "0.1" }
+mors-wal = { path = "wal", version = "0.1" }
+mors-levelctl = { path = "levelctl", version = "0.1" }
+mors-txn = { path = "txn", version = "0.1" }
 
 aes-gcm = { version = "0.10" }
 aes-gcm-siv = { version = "0.11.1" }
