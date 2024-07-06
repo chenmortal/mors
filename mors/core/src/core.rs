@@ -4,10 +4,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use crate::error::MorsError;
 use crate::Result;
 use mors_common::lock::DBLockGuard;
 use mors_common::lock::DBLockGuardBuilder;
+use mors_traits::default::DEFAULT_DIR;
 use mors_traits::kms::{Kms, KmsBuilder};
 use mors_traits::levelctl::{LevelCtlBuilderTrait, LevelCtlTrait};
 use mors_traits::memtable::{MemtableBuilderTrait, MemtableTrait};
@@ -54,7 +54,7 @@ impl<
     fn default() -> Self {
         Self {
             read_only: false,
-            dir: PathBuf::new(),
+            dir: PathBuf::from(DEFAULT_DIR),
             kms: K::KmsBuilder::default(),
             memtable: M::MemtableBuilder::default(),
             levelctl: L::LevelCtlBuilder::default(),

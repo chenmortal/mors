@@ -9,14 +9,14 @@ use memmap2::Advice;
 use mors_common::mmap::MmapFileBuilder;
 use mors_common::page_size;
 use mors_traits::file_id::{FileId, MemtableId};
-use mors_traits::kms::{Kms, KmsCipher};
+use mors_traits::kms::Kms;
 use mors_traits::memtable::MemtableBuilderTrait;
 use mors_traits::skip_list::SkipListTrait;
 use mors_traits::ts::{KeyTsBorrow, TxnTs};
-use mors_wal::error::MorsWalError;
+
 use mors_wal::LogFile;
 
-use crate::error::MemtableError;
+use crate::error::MorsMemtableError;
 use crate::Result;
 use crate::DEFAULT_DIR;
 
@@ -51,8 +51,8 @@ impl<T: SkipListTrait> Default for MemtableBuilder<T> {
 // opt.maxBatchSize = (15 * opt.MemTableSize) / 100
 // opt.maxBatchCount = opt.maxBatchSize / int64(skl.MaxNodeSize)
 impl<T: SkipListTrait> MemtableBuilder<T>
-where
-    MemtableError: From<<T as SkipListTrait>::ErrorType>,
+// where
+//     MorsMemtableError: From<<T as SkipListTrait>::ErrorType>,
 {
     fn arena_size(&self) -> usize {
         self.memtable_size + 2 * self.max_batch_size()
@@ -64,14 +64,12 @@ where
         self.max_batch_size() / T::MAX_NODE_SIZE
     }
 }
-impl<T: SkipListTrait, K: Kms> MemtableBuilderTrait<Memtable<T, K>, K>
-    for MemtableBuilder<T>
-where
-    MemtableError: From<<T as SkipListTrait>::ErrorType>,
-    MorsWalError: From<<K as Kms>::ErrorType>
-        + From<<<K as Kms>::Cipher as KmsCipher>::ErrorType>,
-{
-    fn open(&self, kms: K, id: MemtableId) -> Result<Memtable<T, K>> {
+impl<T: SkipListTrait> MemtableBuilder<T> {
+    pub(crate) fn open_impl<K: Kms>(
+        &self,
+        kms: K,
+        id: MemtableId,
+    ) -> Result<Memtable<T, K>> {
         let mut mmap_builder = MmapFileBuilder::new();
         mmap_builder
             .advice(Advice::Sequential)
@@ -100,7 +98,10 @@ where
         Ok(memtable)
     }
 
-    fn open_exist(&self, kms: K) -> Result<VecDeque<Arc<Memtable<T, K>>>> {
+    pub fn open_exist_impl<K: Kms>(
+        &self,
+        kms: K,
+    ) -> Result<VecDeque<Arc<Memtable<T, K>>>> {
         let mut ids = read_dir(&self.dir)?
             .filter_map(std::result::Result::ok)
             .filter_map(|e| MemtableId::parse(e.path()).ok())
@@ -124,17 +125,16 @@ where
         Ok(immut_memtable)
     }
 
-    fn build(&self, kms: K) -> Result<Memtable<T, K>> {
+    pub fn build_impl<K: Kms>(&self, kms: K) -> Result<Memtable<T, K>> {
         let id: MemtableId =
             self.next_fid.fetch_add(1, Ordering::SeqCst).into();
         let path = id.join_dir(&self.dir);
         if path.exists() {
-            return Err(MemtableError::FileExists(path));
+            return Err(MorsMemtableError::FileExists(path));
         }
-        self.open(kms, id)
+        Ok(self.open(kms, id)?)
     }
-    
-    fn read_only(&self)->bool {
+    pub fn read_only(&self) -> bool {
         self.read_only
     }
 }

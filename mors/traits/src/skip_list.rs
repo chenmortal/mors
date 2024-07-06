@@ -10,14 +10,14 @@ pub trait SkipListTrait: Send + Sync {
     fn new(
         max_size: usize,
         cmp: fn(&[u8], &[u8]) -> Ordering,
-    ) -> Result<Self, Self::ErrorType>
+    ) -> Result<Self, SkipListError>
     where
         Self: Sized;
     fn size(&self) -> usize;
-    fn push(&self, key: &[u8], value: &[u8]) -> Result<(), Self::ErrorType>;
-    fn get(&self, key: &[u8]) -> Result<Option<&[u8]>, Self::ErrorType>;
+    fn push(&self, key: &[u8], value: &[u8]) -> Result<(), SkipListError>;
+    fn get(&self, key: &[u8]) -> Result<Option<&[u8]>, SkipListError>;
     fn get_or_next(&self, key: &[u8])
-        -> Result<Option<&[u8]>, Self::ErrorType>;
+        -> Result<Option<&[u8]>, SkipListError>;
     fn is_empty(&self) -> bool;
     fn height(&self) -> usize;
     const MAX_NODE_SIZE: usize;

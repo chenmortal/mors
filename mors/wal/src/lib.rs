@@ -35,9 +35,8 @@ impl<F: FileId, K: Kms> LogFile<F, K> {
     }
 }
 impl<F: FileId, K: Kms> LogFile<F, K>
-where
-    MorsWalError:
-        From<<K as Kms>::ErrorType> + From<<K::Cipher as KmsCipher>::ErrorType>,
+// where
+    // MorsWalError: From<<K::Cipher as KmsCipher>::ErrorType>,
 {
     pub fn open(
         id: F,
@@ -75,8 +74,7 @@ where
         debug_assert_eq!(buf.len(), Self::LOG_HEADER_SIZE);
         let mut buf_ref = buf.as_slice();
         let key_id: CipherKeyId = buf_ref.get_u64().into();
-        log_file.cipher =
-            log_file.kms.get_cipher(key_id)?;
+        log_file.cipher = log_file.kms.get_cipher(key_id)?;
 
         debug_assert_eq!(buf_ref.len(), 12);
         log_file.base_nonce = buf_ref.to_vec();

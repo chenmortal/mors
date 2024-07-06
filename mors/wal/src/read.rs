@@ -5,7 +5,7 @@ use std::io::{BufRead, BufReader, Read};
 use bytes::Buf;
 
 use mors_traits::file_id::FileId;
-use mors_traits::kms::{Kms, KmsCipher};
+use mors_traits::kms::Kms;
 use mors_traits::kv::{Entry, Meta, ValuePointer};
 use mors_traits::log_header::LogEntryHeader;
 use mors_traits::ts::TxnTs;
@@ -20,11 +20,7 @@ pub struct LogFileIter<'a, F: FileId, K: Kms> {
     entries_vptrs: Vec<(Entry, ValuePointer)>,
     valid_end_offset: usize,
 }
-impl<'a, F: FileId, K: Kms> LogFileIter<'a, F, K>
-where
-    MorsWalError:
-        From<<K as Kms>::ErrorType> + From<<K::Cipher as KmsCipher>::ErrorType>,
-{
+impl<'a, F: FileId, K: Kms> LogFileIter<'a, F, K> {
     pub fn new(log_file: &'a LogFile<F, K>, offset: usize) -> Self {
         let reader = BufReader::new(&log_file.mmap.as_ref()[offset..]);
 

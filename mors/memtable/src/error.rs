@@ -2,11 +2,11 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
-use mors_traits::skip_list::SkipListError;
+use mors_traits::{memtable::MemtableError, skip_list::SkipListError};
 use mors_wal::error::MorsWalError;
 
 #[derive(Error, Debug)]
-pub enum MemtableError {
+pub enum MorsMemtableError {
     #[error(transparent)]
     SkipList(#[from] SkipListError),
     #[error(transparent)]
@@ -21,4 +21,14 @@ pub enum MemtableError {
     TruncateNeeded(usize, usize),
     #[error("File {0} already exists, please delete it first")]
     FileExists(PathBuf),
+    #[error(transparent)]
+    MemtableError(#[from] MemtableError),
+}
+impl From<MorsMemtableError> for MemtableError {
+    fn from(value: MorsMemtableError) -> Self {
+        match value {
+            MorsMemtableError::MemtableError(e) => e,
+            error => MemtableError::new(error),
+        }
+    }
 }
