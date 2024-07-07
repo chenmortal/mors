@@ -21,3 +21,4 @@ pub enum MorsError {
     #[error("Memtable Error: {0}")]
     MemtableError(#[from] MemtableError),
 }
+unsafe impl Send for MorsError {}

@@ -1,13 +1,13 @@
 use std::{fmt::Display, path::PathBuf};
 
 use crate::default::{WithDir, WithReadOnly};
+use crate::ts::TxnTs;
 use crate::{cache::CacheTrait, file_id::SSTableId, kms::KmsCipher, ts::KeyTs};
 use mors_common::compress::CompressionType;
 use std::error::Error;
 use thiserror::Error;
-use crate::ts::TxnTs;
 
-pub trait TableTrait<K: KmsCipher>: Sized + Send + 'static {
+pub trait TableTrait<K: KmsCipher>: Sized + Send + Sync + 'static {
     type ErrorType: Into<SSTableError>;
     type Block: BlockTrait;
     type TableIndexBuf: TableIndexBufTrait;

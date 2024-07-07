@@ -5,7 +5,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 
+use crate::write::WriteRequest;
 use crate::Result;
+use mors_common::closer::Closer;
 use mors_common::lock::DBLockGuard;
 use mors_common::lock::DBLockGuardBuilder;
 use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
@@ -15,18 +17,38 @@ use mors_traits::memtable::{MemtableBuilderTrait, MemtableTrait};
 use mors_traits::sstable::TableTrait;
 use mors_traits::txn::TxnManagerBuilderTrait;
 use mors_traits::txn::TxnManagerTrait;
+use tokio::sync::mpsc::Sender;
 
 pub struct Core<
     M: MemtableTrait<K>,
     K: Kms,
     L: LevelCtlTrait<T, K>,
     T: TableTrait<K::Cipher>,
-> {
+>(Arc<CoreInner<M, K, L, T>>);
+impl<
+        M: MemtableTrait<K>,
+        K: Kms,
+        L: LevelCtlTrait<T, K>,
+        T: TableTrait<K::Cipher>,
+    > Clone for Core<M, K, L, T>
+{
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+pub(crate) struct CoreInner<M, K, L, T>
+where
+    M: MemtableTrait<K>,
+    K: Kms,
+    L: LevelCtlTrait<T, K>,
+    T: TableTrait<K::Cipher>,
+{
     lock_guard: DBLockGuard,
     kms: K,
-    immut_memtable: VecDeque<Arc<M>>,
+    immut_memtable: RwLock<VecDeque<Arc<M>>>,
     memtable: Option<Arc<RwLock<M>>>,
     levelctl: L,
+    write_sender: Sender<WriteRequest>,
     t: PhantomData<T>,
 }
 
@@ -124,14 +146,26 @@ impl<
         });
 
         self.txn_manager.build(max_version).await?;
-        Ok(Core {
-            lock_guard,
-            kms,
-            immut_memtable,
-            memtable,
-            levelctl,
-            t: PhantomData,
-        })
+        let immut_memtable = RwLock::new(immut_memtable);
+        let (write_sender, receiver) = Self::init_write_channel();
+        let write_task = Closer::new("write request task".to_owned());
+        // tokio::spawn()
+        let core = Core(
+            CoreInner {
+                lock_guard,
+                kms,
+                immut_memtable,
+                memtable,
+                levelctl,
+                t: PhantomData,
+                write_sender,
+            }
+            .into(),
+        );
+        write_task.set_joinhandle(tokio::spawn(
+            core.clone().do_write_task(receiver, write_task.clone()),
+        ));
+        Ok(core)
     }
     pub fn set_read_only(&mut self, read_only: bool) -> &mut Self {
         self.read_only = read_only;

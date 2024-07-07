@@ -16,7 +16,7 @@ impl<T: SkipListTrait, K: Kms> Memtable<T, K> {
             LogFile::<MemtableId, K>::LOG_HEADER_SIZE,
         );
 
-        while let Some(next) = wal_iter.next()? {
+        while let Some(next) = wal_iter.next_entry()? {
             for (entry, _vptr) in next {
                 self.max_version = self.max_version.max(entry.version());
                 self.skip_list.push(

@@ -12,9 +12,10 @@ use mors_txn::manager::TxnManager;
 pub mod core;
 mod error;
 mod test;
-
+mod write;
+mod read;
 pub type Result<T> = std::result::Result<T, MorsError>;
-// #[derive(Default)]
+
 type MorsMemtable = Memtable<MorsSkipList, MorsKms>;
 type MorsLevelCtl = LevelCtl<Table<AesCipher>, MorsKms>;
 type MorsTable = Table<AesCipher>;
@@ -62,7 +63,6 @@ impl DerefMut for MorsBuilder {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.builder
     }
-    
 }
 impl MorsBuilder {
     pub async fn build(&mut self) -> Result<Mors> {
