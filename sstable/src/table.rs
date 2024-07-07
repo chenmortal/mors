@@ -318,6 +318,9 @@ impl<K: KmsCipher> TableTrait<K> for Table<K> {
     fn biggest(&self) -> &KeyTs {
         &self.0.biggest
     }
+    fn max_version(&self) -> TxnTs {
+        self.0.cheap_index.max_version
+    }
 }
 
 impl<K: KmsCipher> Table<K> {

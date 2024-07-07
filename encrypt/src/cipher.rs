@@ -25,11 +25,14 @@ impl KmsCipher for AesCipher {
     type ErrorType = MorsEncryptError;
 
     fn cipher_key_id(&self) -> CipherKeyId {
-        todo!()
+        match self {
+            AesCipher::Aes128(_, id) => *id,
+            AesCipher::Aes256(_, id) => *id,
+        }
     }
 
     fn generate_nonce() -> Vec<u8> {
-        todo!()
+        AesCipher::generate_nonce().to_vec()
     }
 
     fn decrypt_with_slice(
@@ -55,7 +58,6 @@ impl KmsCipher for AesCipher {
         let nonce = &data[data.len() - NONCE_SIZE..];
         let ciphertext = &data[..data.len() - NONCE_SIZE];
         self.decrypt_with_slice(nonce, ciphertext)
-      
     }
 
     fn encrypt(
@@ -91,17 +93,17 @@ impl AesCipher {
     #[inline]
     pub fn new(key: &[u8], id: CipherKeyId) -> Result<Self> {
         let cipher = match key.len() {
-            16 => Self::Aes128(Box::new(Aes128Gcm::new_from_slice(key).unwrap()), id),
-            32 => Self::Aes256(Box::new(Aes256Gcm::new_from_slice(key).unwrap()), id),
+            16 => Self::Aes128(
+                Box::new(Aes128Gcm::new_from_slice(key).unwrap()),
+                id,
+            ),
+            32 => Self::Aes256(
+                Box::new(Aes256Gcm::new_from_slice(key).unwrap()),
+                id,
+            ),
             _ => return Err(MorsEncryptError::InvalidEncryptionKey),
         };
         Ok(cipher)
-    }
-    pub fn cipher_key_id(&self) -> CipherKeyId {
-        match self {
-            AesCipher::Aes128(_, id) => *id,
-            AesCipher::Aes256(_, id) => *id,
-        }
     }
     #[inline]
     pub fn encrypt(&self, nonce: &Nonce, plaintext: &[u8]) -> Result<Vec<u8>> {
@@ -149,7 +151,7 @@ impl AesCipher {
         }
     }
     #[inline]
-    pub fn generate_nonce() -> Nonce {
+    pub(crate) fn generate_nonce() -> Nonce {
         Aes128Gcm::generate_nonce(&mut OsRng)
     }
 }

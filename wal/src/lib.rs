@@ -52,7 +52,7 @@ impl<F: FileId, K: Kms> LogFile<F, K>
             kms,
             cipher: None,
             mmap,
-            path_buf,
+            path_buf:path_buf.clone(),
             size: AtomicUsize::new(0),
             base_nonce: Vec::new(),
         };
@@ -68,10 +68,12 @@ impl<F: FileId, K: Kms> LogFile<F, K>
                 .store(Self::LOG_HEADER_SIZE, Ordering::Relaxed);
         }
         log_file.size.store(log_file.mmap.len()?, Ordering::Relaxed);
+        
+        let mut buf=vec![0; Self::LOG_HEADER_SIZE];
+        if log_file.mmap.read(&mut buf)? != Self::LOG_HEADER_SIZE {
+            return Err(MorsWalError::InvalidLogHeader(path_buf));
+        };
 
-        let mut buf = Vec::with_capacity(Self::LOG_HEADER_SIZE);
-        log_file.mmap.read_exact(&mut buf)?;
-        debug_assert_eq!(buf.len(), Self::LOG_HEADER_SIZE);
         let mut buf_ref = buf.as_slice();
         let key_id: CipherKeyId = buf_ref.get_u64().into();
         log_file.cipher = log_file.kms.get_cipher(key_id)?;

@@ -1,5 +1,6 @@
 use std::{marker::PhantomData, sync::Arc};
 
+use mors_traits::ts::TxnTs;
 use mors_traits::{
     kms::KmsCipher,
     levelctl::{Level, LEVEL0},
@@ -71,5 +72,13 @@ impl<T: TableTrait<K>, K: KmsCipher> LevelHandler<T, K> {
             }
         }
         Ok(())
+    }
+    pub(crate) fn max_version(&self) -> TxnTs {
+        let inner = self.0.table_handler.read();
+        let mut max_version = TxnTs::default();
+        inner.tables.iter().for_each(|t| {
+            max_version = max_version.max(t.max_version());
+        });
+        max_version
     }
 }

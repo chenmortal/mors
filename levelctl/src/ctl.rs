@@ -22,6 +22,7 @@ use mors_traits::{
 
 type Result<T> = std::result::Result<T, MorsLevelCtlError>;
 use tokio::{select, task::JoinHandle};
+use mors_traits::ts::TxnTs;
 
 use crate::{
     compact::status::CompactStatus,
@@ -41,8 +42,12 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlTrait<T, K> for LevelCtl<T, K> {
 
     type LevelCtlBuilder = LevelCtlBuilder<T, K>;
 
-    fn max_version(&self) -> mors_traits::ts::TxnTs {
-        todo!()
+    fn max_version(&self) -> TxnTs {
+        self.handlers
+            .iter()
+            .map(|h| h.max_version())
+            .max()
+            .unwrap_or_default()
     }
 }
 
@@ -69,6 +74,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> Default for LevelCtlBuilder<T, K> {
 impl<T: TableTrait<K::Cipher>, K: Kms> WithDir for LevelCtlBuilder<T, K> {
     fn set_dir(&mut self, dir: PathBuf) -> &mut Self {
         self.dir = dir;
+        self.manifest.set_dir(self.dir.clone());
+        self.table.set_dir(self.dir.clone());
         self
     }
 

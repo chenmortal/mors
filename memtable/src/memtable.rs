@@ -1,5 +1,6 @@
+use log::info;
 use std::collections::VecDeque;
-use std::fs::read_dir;
+use std::fs::{read_dir, remove_file};
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -87,7 +88,7 @@ impl<T: SkipListTrait> MemtableBuilder<T> {
             mmap_builder,
             kms,
         )?;
-        let mut memtable = Memtable {
+        let memtable = Memtable {
             skip_list,
             wal,
             max_version: TxnTs::default(),
@@ -95,7 +96,6 @@ impl<T: SkipListTrait> MemtableBuilder<T> {
             memtable_size: self.memtable_size,
             read_only: self.read_only,
         };
-        memtable.reload()?;
         Ok(memtable)
     }
 
@@ -111,16 +111,23 @@ impl<T: SkipListTrait> MemtableBuilder<T> {
 
         let mut immut_memtable = VecDeque::with_capacity(self.num_memtables);
 
-        for id in ids.iter() {
-            let memtable = self.open(kms.clone(), *id)?;
+        let mut valid_ids = Vec::with_capacity(ids.len());
+        for id in ids {
+            let memtable = self.open(kms.clone(), id)?;
             if memtable.skip_list.is_empty() {
+                let path = id.join_dir(&self.dir);
+                info!("Empty memtable wal: {:?}, now delete it", path);
+                remove_file(&path)?;
+                info!("Deleted empty memtable wal: {:?}", path);
                 continue;
             };
             immut_memtable.push_back(Arc::new(memtable));
+            valid_ids.push(id);
         }
-        if !ids.is_empty() {
+        valid_ids.sort();
+        if !valid_ids.is_empty() {
             self.next_fid
-                .store((*ids.last().unwrap()).into(), Ordering::SeqCst);
+                .store((*valid_ids.last().unwrap()).into(), Ordering::SeqCst);
         }
         self.next_fid.fetch_add(1, Ordering::SeqCst);
         Ok(immut_memtable)

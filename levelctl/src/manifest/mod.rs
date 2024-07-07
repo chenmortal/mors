@@ -86,6 +86,9 @@ impl Default for ManifestBuilder {
     }
 }
 impl ManifestBuilder {
+    pub(crate) fn set_dir(&mut self, dir: PathBuf)  {
+        self.dir = dir;
+    }
     pub(crate) fn build(&self) -> Result<Manifest> {
         let path = self.dir.join(MANIFEST_FILE_NAME);
         match OpenOptions::new()

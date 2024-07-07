@@ -5,6 +5,7 @@ use crate::{cache::CacheTrait, file_id::SSTableId, kms::KmsCipher, ts::KeyTs};
 use mors_common::compress::CompressionType;
 use std::error::Error;
 use thiserror::Error;
+use crate::ts::TxnTs;
 
 pub trait TableTrait<K: KmsCipher>: Sized + Send + 'static {
     type ErrorType: Into<SSTableError>;
@@ -18,6 +19,7 @@ pub trait TableTrait<K: KmsCipher>: Sized + Send + 'static {
     fn id(&self) -> SSTableId;
     fn smallest(&self) -> &KeyTs;
     fn biggest(&self) -> &KeyTs;
+    fn max_version(&self) -> TxnTs;
 }
 pub trait TableBuilderTrait<T: TableTrait<K>, K: KmsCipher>:
     Default + Clone + Send + 'static + WithDir + WithReadOnly
