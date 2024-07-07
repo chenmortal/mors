@@ -8,7 +8,7 @@ use memmap2::Advice;
 use mors_common::compress::CompressionType;
 use mors_common::mmap::{MmapFile, MmapFileBuilder};
 use mors_traits::cache::BlockCacheKey;
-use mors_traits::default::DEFAULT_DIR;
+use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
 use mors_traits::file_id::{FileId, SSTableId};
 use mors_traits::iter::{DoubleEndedCacheIterator, KvDoubleEndedCacheIter};
 use mors_traits::kms::KmsCipher;
@@ -84,14 +84,29 @@ impl Default for TableBuilder {
         }
     }
 }
+impl WithDir for TableBuilder {
+    fn set_dir(&mut self, dir: PathBuf) -> &mut Self {
+        self.dir = dir;
+        self
+    }
 
+    fn dir(&self) -> &PathBuf {
+        &self.dir
+    }
+}
+impl WithReadOnly for TableBuilder {
+    fn set_read_only(&mut self, read_only: bool) -> &mut Self {
+        self.read_only = read_only;
+        self
+    }
+
+    fn read_only(&self) -> bool {
+        self.read_only
+    }
+}
 impl<K: KmsCipher> TableBuilderTrait<Table<K>, K> for TableBuilder {
     fn set_compression(&mut self, compression: CompressionType) {
         self.compression = compression;
-    }
-
-    fn set_dir(&mut self, dir: PathBuf) {
-        self.dir = dir;
     }
 
     fn set_cache(&mut self, cache: Cache) {

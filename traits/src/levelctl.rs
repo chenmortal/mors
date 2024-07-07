@@ -1,3 +1,4 @@
+use crate::default::{WithDir, WithReadOnly};
 use crate::ts::TxnTs;
 use crate::{cache::CacheTrait, kms::Kms, sstable::TableTrait};
 use std::error::Error;
@@ -16,7 +17,7 @@ pub trait LevelCtlBuilderTrait<
     L: LevelCtlTrait<T, K>,
     T: TableTrait<K::Cipher>,
     K: Kms,
->: Default
+>: Default + WithDir + WithReadOnly
 {
     fn build(
         &self,

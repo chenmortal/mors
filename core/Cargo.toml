@@ -7,6 +7,7 @@ readme.workspace = true
 
 [lints]
 workspace = true
+
 [dependencies]
 mors-common = { workspace = true }
 mors-traits={workspace=true}
@@ -20,3 +21,8 @@ mors-wal = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-util = { workspace = true, features = ["full"] }
+
+
+[[example]]
+name = "simple"
+path = "examples/simple.rs"

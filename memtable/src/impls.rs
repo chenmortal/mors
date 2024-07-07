@@ -29,9 +29,6 @@ impl<T: SkipListTrait, K: Kms> MemtableBuilderTrait<Memtable<T, K>, K>
         Ok(self.build_impl(kms)?)
     }
 
-    fn read_only(&self) -> bool {
-        self.read_only()
-    }
 }
 impl<T: SkipListTrait, K: Kms> MemtableTrait<K> for Memtable<T, K> {
     type ErrorType = MorsMemtableError;

@@ -8,6 +8,7 @@ use std::sync::Arc;
 use memmap2::Advice;
 use mors_common::mmap::MmapFileBuilder;
 use mors_common::page_size;
+use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
 use mors_traits::file_id::{FileId, MemtableId};
 use mors_traits::kms::Kms;
 use mors_traits::memtable::MemtableBuilderTrait;
@@ -18,7 +19,6 @@ use mors_wal::LogFile;
 
 use crate::error::MorsMemtableError;
 use crate::Result;
-use crate::DEFAULT_DIR;
 
 pub struct Memtable<T: SkipListTrait, K: Kms> {
     pub(crate) skip_list: T,
@@ -134,7 +134,24 @@ impl<T: SkipListTrait> MemtableBuilder<T> {
         }
         Ok(self.open(kms, id)?)
     }
-    pub fn read_only(&self) -> bool {
+}
+impl<T: SkipListTrait> WithDir for MemtableBuilder<T> {
+    fn set_dir(&mut self, dir: PathBuf) -> &mut Self {
+        self.dir = dir;
+        self
+    }
+
+    fn dir(&self) -> &PathBuf {
+        &self.dir
+    }
+}
+impl<T: SkipListTrait> WithReadOnly for MemtableBuilder<T> {
+    fn set_read_only(&mut self, read_only: bool) -> &mut Self {
+        self.read_only = read_only;
+        self
+    }
+
+    fn read_only(&self) -> bool {
         self.read_only
     }
 }

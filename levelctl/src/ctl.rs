@@ -11,7 +11,7 @@ use std::{
 use log::info;
 use mors_common::closer::{Closer, Throttle};
 use mors_traits::{
-    default::DEFAULT_DIR,
+    default::{WithDir, WithReadOnly, DEFAULT_DIR},
     file_id::SSTableId,
     kms::Kms,
     levelctl::{
@@ -52,6 +52,7 @@ pub struct LevelCtlBuilder<T: TableTrait<K::Cipher>, K: Kms> {
     max_level: Level,
     cache: Option<T::Cache>,
     dir: PathBuf,
+    read_only: bool,
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> Default for LevelCtlBuilder<T, K> {
     fn default() -> Self {
@@ -61,7 +62,28 @@ impl<T: TableTrait<K::Cipher>, K: Kms> Default for LevelCtlBuilder<T, K> {
             max_level: 6_u8.into(),
             dir: PathBuf::from(DEFAULT_DIR),
             cache: None,
+            read_only: false,
         }
+    }
+}
+impl<T: TableTrait<K::Cipher>, K: Kms> WithDir for LevelCtlBuilder<T, K> {
+    fn set_dir(&mut self, dir: PathBuf) -> &mut Self {
+        self.dir = dir;
+        self
+    }
+
+    fn dir(&self) -> &PathBuf {
+        &self.dir
+    }
+}
+impl<T: TableTrait<K::Cipher>, K: Kms> WithReadOnly for LevelCtlBuilder<T, K> {
+    fn set_read_only(&mut self, read_only: bool) -> &mut Self {
+        self.read_only = read_only;
+        self
+    }
+
+    fn read_only(&self) -> bool {
+        self.read_only
     }
 }
 impl<T: TableTrait<K::Cipher>, K: Kms>
@@ -74,8 +96,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms>
         Ok(self.build_impl(kms).await?)
     }
 }
-impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T,  K> {
-    async fn build_impl(&self, kms: K) -> Result<LevelCtl<T,  K>> {
+impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
+    async fn build_impl(&self, kms: K) -> Result<LevelCtl<T, K>> {
         let compact_status = CompactStatus::new(self.max_level.to_usize());
         let manifest = self.manifest.build()?;
 

@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::fs::create_dir;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -7,7 +8,7 @@ use std::sync::RwLock;
 use crate::Result;
 use mors_common::lock::DBLockGuard;
 use mors_common::lock::DBLockGuardBuilder;
-use mors_traits::default::DEFAULT_DIR;
+use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
 use mors_traits::kms::{Kms, KmsBuilder};
 use mors_traits::levelctl::{LevelCtlBuilderTrait, LevelCtlTrait};
 use mors_traits::memtable::{MemtableBuilderTrait, MemtableTrait};
@@ -70,7 +71,36 @@ impl<
         Txn: TxnManagerTrait,
     > CoreBuilder<M, K, L, T, Txn>
 {
-    pub async fn build(&self) -> Result<Core<M, K, L, T>> {
+    fn init_dir(&mut self) {
+        let default_dir = PathBuf::from(DEFAULT_DIR);
+        if !self.dir.exists() {
+            create_dir(&self.dir).unwrap_or_else(|_| {
+                panic!("Failed to create dir: {:?}", self.dir)
+            });
+        }
+        if self.dir != default_dir {
+            if self.kms.dir() == &default_dir {
+                self.kms.set_dir(self.dir.clone());
+            }
+            if self.memtable.dir() == &default_dir {
+                self.memtable.set_dir(self.dir.clone());
+            }
+            if self.levelctl.dir() == &default_dir {
+                self.levelctl.set_dir(self.dir.clone());
+            }
+        }
+    }
+}
+impl<
+        M: MemtableTrait<K>,
+        K: Kms,
+        L: LevelCtlTrait<T, K>,
+        T: TableTrait<K::Cipher>,
+        Txn: TxnManagerTrait,
+    > CoreBuilder<M, K, L, T, Txn>
+{
+    pub async fn build(&mut self) -> Result<Core<M, K, L, T>> {
+        self.init_dir();
         let mut guard_builder = DBLockGuardBuilder::new();
 
         guard_builder.add_dir(self.dir.clone());
@@ -102,5 +132,13 @@ impl<
             levelctl,
             t: PhantomData,
         })
+    }
+    pub fn set_read_only(&mut self, read_only: bool) -> &mut Self {
+        self.read_only = read_only;
+        self
+    }
+    pub fn set_dir(&mut self, dir: PathBuf) -> &mut Self {
+        self.dir = dir;
+        self
     }
 }

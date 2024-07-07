@@ -9,6 +9,8 @@ use std::error::Error;
 use std::fmt::Display;
 use std::sync::Arc;
 use thiserror::Error;
+use crate::default::{WithDir, WithReadOnly};
+
 pub trait MemtableTrait<K: Kms>: Sized {
     type ErrorType: Into<MemtableError>;
     type MemtableBuilder: MemtableBuilderTrait<Self, K>;
@@ -18,15 +20,13 @@ pub trait MemtableTrait<K: Kms>: Sized {
     fn max_version(&self) -> TxnTs;
 }
 pub trait MemtableBuilderTrait<M: MemtableTrait<K> + Sized, K: Kms>:
-    Default
+    Default+ WithDir + WithReadOnly
 {
     fn open(&self, kms: K, id: MemtableId) -> Result<M, MemtableError>;
 
     fn open_exist(&self, kms: K) -> Result<VecDeque<Arc<M>>, MemtableError>;
 
     fn build(&self, kms: K) -> Result<M, MemtableError>;
-
-    fn read_only(&self) -> bool;
 }
 #[derive(Error, Debug)]
 pub struct MemtableError(Box<dyn Error>);

@@ -12,7 +12,7 @@ use mors_traits::kms::{CipherKeyId, Kms, KmsBuilder, KmsCipher, KmsError};
 use prost::bytes::{Buf, BufMut};
 use prost::Message;
 
-use mors_traits::default::DEFAULT_DIR;
+use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
 use mors_traits::ts::PhyTs;
 
 use crate::cipher::{AesCipher, Nonce};
@@ -103,14 +103,6 @@ impl MorsKmsBuilder {
         self.data_key_rotation_duration = duration;
         self
     }
-    pub fn with_read_only(mut self, read_only: bool) -> Self {
-        self.read_only = read_only;
-        self
-    }
-    pub fn with_dir(mut self, dir: PathBuf) -> Self {
-        self.dir = dir;
-        self
-    }
     fn build_impl(&self) -> Result<MorsKms> {
         let keys_len = self.encrypt_key.len();
 
@@ -156,6 +148,27 @@ impl KmsBuilder<MorsKms> for MorsKmsBuilder {
     fn build(&self) -> std::result::Result<MorsKms, KmsError> {
         Ok(self.build_impl()?)
     }
+}
+impl WithDir for MorsKmsBuilder{
+    fn set_dir(&mut self, dir: PathBuf) -> &mut Self {
+        self.dir = dir;
+        self
+    }
+
+    fn dir(&self) -> &PathBuf {
+        &self.dir
+    }
+}
+impl WithReadOnly for MorsKmsBuilder {
+    fn set_read_only(&mut self, read_only: bool) -> &mut Self {
+        self.read_only = read_only;
+        self
+    }
+
+    fn read_only(&self) -> bool {
+        self.read_only
+    }
+    
 }
 impl KmsInner {
     //     Structure of Key Registry.

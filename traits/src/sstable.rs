@@ -1,5 +1,6 @@
 use std::{fmt::Display, path::PathBuf};
 
+use crate::default::{WithDir, WithReadOnly};
 use crate::{cache::CacheTrait, file_id::SSTableId, kms::KmsCipher, ts::KeyTs};
 use mors_common::compress::CompressionType;
 use std::error::Error;
@@ -19,11 +20,10 @@ pub trait TableTrait<K: KmsCipher>: Sized + Send + 'static {
     fn biggest(&self) -> &KeyTs;
 }
 pub trait TableBuilderTrait<T: TableTrait<K>, K: KmsCipher>:
-    Default + Clone + Send + 'static
+    Default + Clone + Send + 'static + WithDir + WithReadOnly
 {
     fn set_compression(&mut self, compression: CompressionType);
     fn set_cache(&mut self, cache: T::Cache);
-    fn set_dir(&mut self, dir: PathBuf);
     fn open(
         &self,
         id: SSTableId,

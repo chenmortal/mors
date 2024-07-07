@@ -1,5 +1,5 @@
 use core::{Core, CoreBuilder};
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 use error::MorsError;
 use mors_encrypt::{cipher::AesCipher, registry::MorsKms};
@@ -58,8 +58,14 @@ impl Deref for MorsBuilder {
         &self.builder
     }
 }
+impl DerefMut for MorsBuilder {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.builder
+    }
+    
+}
 impl MorsBuilder {
-    pub async fn build(&self) -> Result<Mors> {
+    pub async fn build(&mut self) -> Result<Mors> {
         let core = self.builder.build().await?;
         Ok(Mors { core })
     }

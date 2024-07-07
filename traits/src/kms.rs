@@ -1,3 +1,4 @@
+use crate::default::{WithDir, WithReadOnly};
 use std::error::Error;
 use std::{
     fmt::Display,
@@ -46,7 +47,7 @@ pub trait Kms: Clone + Send + Sync + 'static {
     fn latest_cipher(&self) -> Result<Option<Self::Cipher>, KmsError>;
     const NONCE_SIZE: usize;
 }
-pub trait KmsCipher: Send + Sync+'static {
+pub trait KmsCipher: Send + Sync + 'static {
     type ErrorType: Into<EncryptError>;
 
     fn cipher_key_id(&self) -> CipherKeyId;
@@ -68,7 +69,7 @@ pub trait KmsCipher: Send + Sync+'static {
     fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, EncryptError>;
     fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, EncryptError>;
 }
-pub trait KmsBuilder<K: Kms>: Default {
+pub trait KmsBuilder<K: Kms>: Default + WithDir + WithReadOnly {
     fn build(&self) -> Result<K, KmsError>;
 }
 #[derive(Error, Debug)]
