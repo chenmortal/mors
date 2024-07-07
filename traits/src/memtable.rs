@@ -1,3 +1,4 @@
+use crate::default::{WithDir, WithReadOnly};
 use crate::file_id::MemtableId;
 use crate::{
     kms::Kms,
@@ -9,9 +10,8 @@ use std::error::Error;
 use std::fmt::Display;
 use std::sync::Arc;
 use thiserror::Error;
-use crate::default::{WithDir, WithReadOnly};
 
-pub trait MemtableTrait<K: Kms>: Sized {
+pub trait MemtableTrait<K: Kms>: Sized + Send + Sync + 'static {
     type ErrorType: Into<MemtableError>;
     type MemtableBuilder: MemtableBuilderTrait<Self, K>;
     fn get(&self, key_ts: &KeyTs) -> Option<(TxnTs, ValueMeta)>;
@@ -20,7 +20,7 @@ pub trait MemtableTrait<K: Kms>: Sized {
     fn max_version(&self) -> TxnTs;
 }
 pub trait MemtableBuilderTrait<M: MemtableTrait<K> + Sized, K: Kms>:
-    Default+ WithDir + WithReadOnly
+    Default + WithDir + WithReadOnly
 {
     fn open(&self, kms: K, id: MemtableId) -> Result<M, MemtableError>;
 

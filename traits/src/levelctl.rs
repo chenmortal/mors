@@ -1,6 +1,6 @@
 use crate::default::{WithDir, WithReadOnly};
 use crate::ts::TxnTs;
-use crate::{cache::CacheTrait, kms::Kms, sstable::TableTrait};
+use crate::{kms::Kms, sstable::TableTrait};
 use std::error::Error;
 use std::{
     fmt::Display,
@@ -8,7 +8,9 @@ use std::{
 };
 use thiserror::Error;
 
-pub trait LevelCtlTrait<T: TableTrait<K::Cipher>, K: Kms>: Sized {
+pub trait LevelCtlTrait<T: TableTrait<K::Cipher>, K: Kms>:
+    Sized + Send + Sync + 'static
+{
     type ErrorType: Into<LevelCtlError>;
     type LevelCtlBuilder: LevelCtlBuilderTrait<Self, T, K>;
     fn max_version(&self) -> TxnTs;

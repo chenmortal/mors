@@ -5,7 +5,7 @@ use std::fmt::Display;
 use thiserror::Error;
 
 //需满足并发安全
-pub trait SkipListTrait: Send + Sync {
+pub trait SkipListTrait: Send + Sync + 'static {
     type ErrorType: Into<SkipListError>;
     fn new(
         max_size: usize,
@@ -16,8 +16,7 @@ pub trait SkipListTrait: Send + Sync {
     fn size(&self) -> usize;
     fn push(&self, key: &[u8], value: &[u8]) -> Result<(), SkipListError>;
     fn get(&self, key: &[u8]) -> Result<Option<&[u8]>, SkipListError>;
-    fn get_or_next(&self, key: &[u8])
-        -> Result<Option<&[u8]>, SkipListError>;
+    fn get_or_next(&self, key: &[u8]) -> Result<Option<&[u8]>, SkipListError>;
     fn is_empty(&self) -> bool;
     fn height(&self) -> usize;
     const MAX_NODE_SIZE: usize;

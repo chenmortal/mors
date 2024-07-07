@@ -95,7 +95,7 @@ impl<'a, F: FileId, K: Kms> LogFileIter<'a, F, K> {
         Ok((entry, v_ptr))
     }
     //
-    pub fn next(&mut self) -> Result<Option<&Vec<(Entry, ValuePointer)>>> {
+    pub fn next_entry(&mut self) -> Result<Option<&Vec<(Entry, ValuePointer)>>> {
         let mut last_commit = TxnTs::default();
         self.entries_vptrs.clear();
         loop {
