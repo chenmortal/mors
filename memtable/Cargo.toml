@@ -1,0 +1,18 @@
+[package]
+name = "mors-memtable"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+version.workspace = true
+
+[dependencies]
+mors-common = { workspace = true }
+mors-traits = { workspace = true }
+mors-wal = { workspace = true }
+memmap2 = { workspace = true }
+thiserror = { workspace = true }
+log = "0.4.21"
+
+[lints]
+workspace = true
