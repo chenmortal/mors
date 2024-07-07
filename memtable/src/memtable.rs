@@ -74,6 +74,7 @@ impl<T: SkipListTrait> MemtableBuilder<T> {
         mmap_builder
             .advice(Advice::Sequential)
             .read(true)
+            .create(!self.read_only)
             .write(!self.read_only);
 
         let mem_path = id.join_dir(self.dir.clone());
