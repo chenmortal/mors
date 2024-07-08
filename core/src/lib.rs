@@ -13,6 +13,7 @@ pub mod core;
 mod error;
 mod test;
 mod write;
+mod flush;
 mod read;
 pub type Result<T> = std::result::Result<T, MorsError>;
 

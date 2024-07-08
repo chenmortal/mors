@@ -28,7 +28,6 @@ impl<T: SkipListTrait, K: Kms> MemtableBuilderTrait<Memtable<T, K>, K>
     fn build(&self, kms: K) -> Result<Memtable<T, K>> {
         Ok(self.build_impl(kms)?)
     }
-
 }
 impl<T: SkipListTrait, K: Kms> MemtableTrait<K> for Memtable<T, K> {
     type ErrorType = MorsMemtableError;
@@ -39,7 +38,7 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<K> for Memtable<T, K> {
     }
 
     fn size(&self) -> usize {
-        todo!()
+        self.skip_list.size()
     }
 
     fn get(
@@ -51,5 +50,9 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<K> for Memtable<T, K> {
 
     fn max_version(&self) -> mors_traits::ts::TxnTs {
         self.max_version
+    }
+
+    fn is_full(&self) -> bool {
+        self.size() >= self.memtable_size
     }
 }
