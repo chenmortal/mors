@@ -36,6 +36,20 @@ impl<
         Self(self.0.clone())
     }
 }
+impl<
+        M: MemtableTrait<K>,
+        K: Kms,
+        L: LevelCtlTrait<T, K>,
+        T: TableTrait<K::Cipher>,
+    > Core<M, K, L, T>
+{
+    pub(crate) fn memtable(&self) -> Option<&Arc<RwLock<M>>> {
+        self.0.memtable.as_ref()
+    }
+    pub(crate) fn build_memtable(&self) -> Result<M> {
+        Ok(self.0.memtable_builder.build(self.0.kms.clone())?)
+    }
+}
 pub(crate) struct CoreInner<M, K, L, T>
 where
     M: MemtableTrait<K>,
@@ -47,6 +61,7 @@ where
     kms: K,
     immut_memtable: RwLock<VecDeque<Arc<M>>>,
     memtable: Option<Arc<RwLock<M>>>,
+    memtable_builder: M::MemtableBuilder,
     levelctl: L,
     write_sender: Sender<WriteRequest>,
     t: PhantomData<T>,
@@ -61,6 +76,7 @@ pub struct CoreBuilder<
 > {
     read_only: bool,
     dir: PathBuf,
+    num_memtables: usize,
     kms: K::KmsBuilder,
     memtable: M::MemtableBuilder,
     levelctl: L::LevelCtlBuilder,
@@ -77,6 +93,7 @@ impl<
     fn default() -> Self {
         Self {
             read_only: false,
+            num_memtables: 5,
             dir: PathBuf::from(DEFAULT_DIR),
             kms: K::KmsBuilder::default(),
             memtable: M::MemtableBuilder::default(),
@@ -111,6 +128,9 @@ impl<
                 self.levelctl.set_dir(self.dir.clone());
             }
         }
+    }
+    pub(crate) fn num_memtables(&self)->usize{
+        self.num_memtables
     }
 }
 impl<
@@ -159,6 +179,7 @@ impl<
                 levelctl,
                 t: PhantomData,
                 write_sender,
+                memtable_builder: self.memtable.clone(),
             }
             .into(),
         );

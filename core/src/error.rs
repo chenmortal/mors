@@ -20,5 +20,7 @@ pub enum MorsError {
     TxnManagerError(#[from] TxnManagerError),
     #[error("Memtable Error: {0}")]
     MemtableError(#[from] MemtableError),
+    #[error("Poisoned RwLock: {0}")]
+    RwLockPoisoned(String),
 }
 unsafe impl Send for MorsError {}

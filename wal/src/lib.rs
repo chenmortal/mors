@@ -135,7 +135,7 @@ impl<F: FileId, K: Kms> LogFile<F, K>
             None => None,
         })
     }
-    pub fn size(&self) -> usize {
+    pub fn max_size(&self) -> usize {
         self.size.load(Ordering::Relaxed)
     }
     pub(crate) fn set_size(&self, size: usize) {

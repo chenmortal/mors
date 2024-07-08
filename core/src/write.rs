@@ -8,9 +8,10 @@ use std::{
 
 use crate::{
     core::{Core, CoreBuilder},
+    error::MorsError,
     Result,
 };
-use log::error;
+use log::{debug, error};
 use mors_common::closer::Closer;
 use mors_traits::{
     kms::Kms,
@@ -95,7 +96,7 @@ where
                     request_len.store(write_requests.len(), Ordering::Relaxed);
                 },
                 _=closer.cancelled()=>{
-                    while let Some(w) = receiver.recv().await {
+                    while let Ok(w) = receiver.try_recv() {
                         write_requests.push(w);
                     }
                     notify_recv.notified().await;
@@ -129,7 +130,7 @@ where
                         break 'b;
                     }
                     _=closer.cancelled()=>{
-                        while let Some(w) = receiver.recv().await {
+                        while let Ok(w) = receiver.try_recv() {
                             write_requests.push(w);
                         }
                         notify_recv.notified().await;
@@ -155,6 +156,41 @@ where
         &self,
         mut requests: Vec<WriteRequest>,
     ) -> Result<()> {
+        if requests.is_empty() {
+            return Ok(());
+        }
+        debug!("Writing to memtable :{}", requests.len());
+        let mut count = 0;
+        for request in requests.iter_mut() {
+            if request.entries_vptrs.is_empty() {
+                continue;
+            }
+            count += request.entries_vptrs.len();
+            self.ensure_room_for_write().await?;
+        }
+        debug!("Writing to memtable done:{}", count);
+        Ok(())
+    }
+    async fn ensure_room_for_write(&self) -> Result<()> {
+        let memtable = self.memtable().unwrap();
+        let memtable_r = memtable
+            .read()
+            .map_err(|e| MorsError::RwLockPoisoned(e.to_string()))?;
+        if !memtable_r.is_full() {
+            return Ok(());
+        }
+
+        debug!("Memtable is full, making room for writes");
+        let new_memtable = self.build_memtable()?;
+        drop(memtable_r);
+
+        let mut memtable_w = memtable
+            .write()
+            .map_err(|e| MorsError::RwLockPoisoned(e.to_string()))?;
+        let old_memtable = replace(&mut *memtable_w, new_memtable);
+        drop(memtable_w);
+        let old_memtable = Arc::new(old_memtable);
+
         Ok(())
     }
 }

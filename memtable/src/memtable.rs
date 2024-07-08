@@ -49,6 +49,18 @@ impl<T: SkipListTrait> Default for MemtableBuilder<T> {
         }
     }
 }
+impl<T: SkipListTrait> Clone for MemtableBuilder<T> {
+    fn clone(&self) -> Self {
+        Self {
+            dir: self.dir.clone(),
+            read_only: self.read_only,
+            memtable_size: self.memtable_size,
+            num_memtables: self.num_memtables,
+            next_fid: self.next_fid.clone(),
+            t: self.t,
+        }
+    }
+}
 // opt.maxBatchSize = (15 * opt.MemTableSize) / 100
 // opt.maxBatchCount = opt.maxBatchSize / int64(skl.MaxNodeSize)
 impl<T: SkipListTrait> MemtableBuilder<T>
