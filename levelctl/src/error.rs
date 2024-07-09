@@ -27,7 +27,7 @@ pub enum MorsLevelCtlError {
 }
 
 #[derive(Error, Debug)]
-pub(crate) enum LevelHandlerError {
+pub enum LevelHandlerError {
     #[error("SSTable Overlap Error:Level {0:?} Pre SSTable {1:?} biggest {2:?} > This SSTable {3:?} smallest {4:?}")]
     TableOverlapError(Level, SSTableId, KeyTs, SSTableId, KeyTs),
     #[error("SSTable Inner Sort Error:Level {0:?} SSTable {1:?} smallest KeyTs {2:?} >= biggest {3:?}")]
@@ -39,4 +39,3 @@ impl From<MorsLevelCtlError> for LevelCtlError {
         LevelCtlError::new(e)
     }
 }
-pub(crate) type Result<T> = std::result::Result<T, MorsLevelCtlError>;

@@ -44,7 +44,8 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<K> for Memtable<T, K> {
     fn get(
         &self,
         key_ts: &KeyTs,
-    ) -> Option<(mors_traits::ts::TxnTs, mors_traits::kv::ValueMeta)> {
+    ) -> Result<Option<(mors_traits::ts::TxnTs, mors_traits::kv::ValueMeta)>>
+    {
         todo!()
     }
 

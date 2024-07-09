@@ -2,7 +2,10 @@ use bytes::Bytes;
 use integer_encoding::VarInt;
 use lazy_static::lazy_static;
 
-use crate::{file_id::FileId,  ts::{KeyTs, PhyTs, TxnTs}};
+use crate::{
+    file_id::FileId,
+    ts::{KeyTs, PhyTs, TxnTs},
+};
 
 pub trait Key {}
 #[derive(Debug, Default, Clone)]
@@ -13,7 +16,6 @@ pub struct Entry {
     header_len: usize,
     value_threshold: usize,
 }
-
 
 impl Entry {
     pub fn new(key: Bytes, value: Bytes) -> Self {
@@ -83,22 +85,25 @@ impl Entry {
     }
 }
 
-
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ValuePointer {
     fid: u32,
-    len: u32,
+    size: u32,
     offset: u64,
 }
 impl ValuePointer {
-    pub fn new<I:FileId>(file_id: I, len: u32, offset: u64) -> Self {
-        Self { fid:file_id.into(), len, offset }
+    pub fn new<I: FileId>(file_id: I, size: u32, offset: u64) -> Self {
+        Self {
+            fid: file_id.into(),
+            size,
+            offset,
+        }
     }
     pub fn fid(&self) -> u32 {
         self.fid
     }
-    pub fn len(&self) -> u32 {
-        self.len
+    pub fn size(&self) -> u32 {
+        self.size
     }
     pub fn offset(&self) -> u64 {
         self.offset
@@ -112,7 +117,7 @@ pub struct ValueMeta {
     meta: Meta,
 }
 lazy_static! {
-    static ref VALUEMETA_MIN_encodeD_SIZE: usize =
+    static ref VALUEMETA_MIN_ENCODED_SIZE: usize =
         ValueMeta::default().encoded_size();
 }
 impl ValueMeta {
@@ -130,7 +135,7 @@ impl ValueMeta {
     }
 
     pub fn decode(data: &[u8]) -> Option<Self> {
-        if data.len() < VALUEMETA_MIN_encodeD_SIZE.to_owned() {
+        if data.len() < VALUEMETA_MIN_ENCODED_SIZE.to_owned() {
             return None;
         }
         if let Some((expires_at, size)) = u64::decode_var(&data[2..]) {

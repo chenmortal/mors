@@ -1,4 +1,4 @@
-use std::{fmt::Display, path::PathBuf};
+use std::fmt::Display;
 
 use crate::default::{WithDir, WithReadOnly};
 use crate::ts::TxnTs;

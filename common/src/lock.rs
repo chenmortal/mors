@@ -10,13 +10,14 @@ use rustix::fs::flock;
 use rustix::fs::FlockOperation::{
     NonBlockingLockExclusive, NonBlockingLockShared, Unlock,
 };
+#[allow(dead_code)]
 pub struct DBLockGuard(Vec<DirLockGuard>);
 pub struct DirLockGuard {
     dir_fd: File,
     pid_path: PathBuf,
     read_only: bool,
 }
-#[derive(Debug,Default)]
+#[derive(Debug, Default)]
 pub struct DBLockGuardBuilder {
     dirs: HashSet<PathBuf>,
     bypass_lock_guard: bool,

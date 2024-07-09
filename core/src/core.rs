@@ -68,6 +68,7 @@ where
     memtable_builder: M::MemtableBuilder,
     levelctl: L,
     write_sender: Sender<WriteRequest>,
+    flush_sender: Sender<Arc<M>>,
     t: PhantomData<T>,
 }
 
@@ -175,7 +176,6 @@ impl<
         let (flush_sender, flush_receiver) =
             Self::init_flush_channel(self.num_memtables);
 
-        // tokio::spawn()
         let inner = Arc::new(CoreInner {
             lock_guard,
             kms,
@@ -185,6 +185,7 @@ impl<
             t: PhantomData,
             write_sender,
             memtable_builder: self.memtable.clone(),
+            flush_sender,
         });
         let write_task = Closer::new("write request task".to_owned());
         write_task.set_joinhandle(tokio::spawn(CoreInner::do_write_task(

@@ -37,7 +37,10 @@ pub struct SkipList {
     cmp: fn(&[u8], &[u8]) -> std::cmp::Ordering,
 }
 impl SkipList {
-    pub fn new(max_size: usize, cmp: fn(&[u8], &[u8]) -> std::cmp::Ordering) -> Result<Self>
+    pub fn new(
+        max_size: usize,
+        cmp: fn(&[u8], &[u8]) -> std::cmp::Ordering,
+    ) -> Result<Self>
     where
         Self: Sized,
     {
@@ -91,20 +94,25 @@ impl SkipList {
             loop {
                 if prev[h].is_null() {
                     assert!(h > 1);
-                    let (p, n) = self.find_splice_for_level(key, self.head.as_ptr(), h);
+                    let (p, n) =
+                        self.find_splice_for_level(key, self.head.as_ptr(), h);
                     prev[h] = p;
                     next[h] = n;
                     assert_ne!(prev[h], next[h]);
                 }
 
-                let next_offset = self.arena.offset(next[h]).unwrap_or_default();
+                let next_offset =
+                    self.arena.offset(next[h]).unwrap_or_default();
                 node.tower[h].store(next_offset, Ordering::SeqCst);
-                if unsafe { prev[h].as_ref() }.unwrap().tower[h].compare_exchange_weak(
-                    next_offset,
-                    self.arena.offset(node).unwrap(),
-                    Ordering::SeqCst,
-                    Ordering::Relaxed,
-                ).is_ok() {
+                if unsafe { prev[h].as_ref() }.unwrap().tower[h]
+                    .compare_exchange_weak(
+                        next_offset,
+                        self.arena.offset(node).unwrap(),
+                        Ordering::SeqCst,
+                        Ordering::Relaxed,
+                    )
+                    .is_ok()
+                {
                     break;
                 }
                 let (p, n) = self.find_splice_for_level(key, prev[h], h);
@@ -153,7 +161,7 @@ impl SkipList {
 }
 impl SkipList {
     ///find the splice for the level
-    fn find_splice_for_level<'a>(
+    fn find_splice_for_level(
         &self,
         key: &[u8],
         mut before_ptr: *const Node,
@@ -166,8 +174,12 @@ impl SkipList {
                     if let Ok(next_key_slice) = next.get_key(&self.arena) {
                         let next_ptr = next as *const _;
                         match (self.cmp)(key, next_key_slice) {
-                            std::cmp::Ordering::Less => return (before_ptr, next_ptr),
-                            std::cmp::Ordering::Equal => return (next_ptr, next_ptr),
+                            std::cmp::Ordering::Less => {
+                                return (before_ptr, next_ptr)
+                            }
+                            std::cmp::Ordering::Equal => {
+                                return (next_ptr, next_ptr)
+                            }
                             std::cmp::Ordering::Greater => {
                                 before_ptr = next_ptr;
                                 continue;
@@ -254,7 +266,8 @@ impl SkipList {
         loop {
             match node.next(&self.arena, level) {
                 Ok(next) => {
-                    let next_key = next.get_key(&self.arena).unwrap_or_default();
+                    let next_key =
+                        next.get_key(&self.arena).unwrap_or_default();
                     match (self.cmp)(key, next_key) {
                         std::cmp::Ordering::Less => {
                             if level > 0 {
@@ -288,28 +301,20 @@ impl SkipList {
         let head_ptr = node as *const _;
         let mut level = self.height.load(Ordering::Acquire) - 1;
         loop {
-            match node.next(&self.arena, level) {
-                Ok(next) => {
-                    let next_key = next.get_key(&self.arena).unwrap();
-                    match (self.cmp)(key, next_key) {
-                        std::cmp::Ordering::Greater => {
-                            //node.key <next.key < key
-                            node = next;
-                            continue;
-                        }
-                        _ => {}
-                    }
+            if let Ok(next) = node.next(&self.arena, level) {
+                let next_key = next.get_key(&self.arena).unwrap();
+                if (self.cmp)(key, next_key) == std::cmp::Ordering::Greater {
+                    //node.key <next.key < key
+                    node = next;
+                    continue;
                 }
-                Err(_) => {}
             }
             if level > 0 {
                 level -= 1;
+            } else if head_ptr == node as *const _ {
+                return None;
             } else {
-                if head_ptr == node as *const _ {
-                    return None;
-                } else {
-                    return node.into();
-                }
+                return node.into();
             }
         }
     }
@@ -407,7 +412,8 @@ impl Node {
     }
 
     fn get_key<'a>(&self, arena: &'a Arena) -> Result<&'a [u8]> {
-        Ok(arena.get_slice::<u8>(self.key_offset as usize, self.key_len as usize)?)
+        Ok(arena
+            .get_slice::<u8>(self.key_offset as usize, self.key_len as usize)?)
     }
     fn get_value<'a>(&self, arena: &'a Arena) -> Result<Option<&'a [u8]>> {
         // let (offset, len) = self.value_slice();

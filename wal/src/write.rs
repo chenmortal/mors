@@ -5,15 +5,13 @@ use std::{
 };
 
 use bytes::BufMut;
-use mors_traits::{file_id::FileId, kms::{Kms, KmsCipher}, kv::Entry, log_header::LogEntryHeader};
+use mors_traits::{
+    file_id::FileId, kms::Kms, kv::Entry, log_header::LogEntryHeader,
+};
 
-use crate::{error::MorsWalError, LogFile};
+use crate::LogFile;
 use crate::Result;
-impl<F: FileId,K:Kms> LogFile<F,K> 
-// where
-//     MorsWalError:
-//         From<<K as Kms>::ErrorType> + From<<K::Cipher as KmsCipher>::ErrorType>,
-{
+impl<F: FileId, K: Kms> LogFile<F, K> {
     pub fn truncate(&mut self, end_offset: usize) -> io::Result<()> {
         let file_size = self.mmap.file_len()? as usize;
         if end_offset == file_size {
@@ -23,9 +21,13 @@ impl<F: FileId,K:Kms> LogFile<F,K>
         self.mmap.set_len(end_offset)?;
         Ok(())
     }
-    pub fn write_entry(&mut self, buf: &mut Vec<u8>, entry: &Entry)->Result<()> {
+    pub fn write_entry(
+        &mut self,
+        buf: &mut Vec<u8>,
+        entry: &Entry,
+    ) -> Result<()> {
         buf.clear();
-       
+
         let offset = self.mmap.write_at();
         let size = self.encode_entry(buf, entry, offset)?;
         self.mmap.pwrite(&buf[..size], offset)?;

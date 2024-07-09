@@ -125,7 +125,8 @@ impl<T: SkipListTrait> MemtableBuilder<T> {
 
         let mut valid_ids = Vec::with_capacity(ids.len());
         for id in ids {
-            let memtable = self.open(kms.clone(), id)?;
+            let mut memtable = self.open(kms.clone(), id)?;
+            memtable.reload()?;
             if memtable.skip_list.is_empty() {
                 let path = id.join_dir(&self.dir);
                 info!("Empty memtable wal: {:?}, now delete it", path);

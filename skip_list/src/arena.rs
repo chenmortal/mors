@@ -177,6 +177,9 @@ impl Arena {
     pub fn len(&self) -> usize {
         self.ptr_offset.load(std::sync::atomic::Ordering::Relaxed)
     }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 
     #[inline(always)]
     pub fn max_size(&self) -> usize {
