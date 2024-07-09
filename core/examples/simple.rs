@@ -6,7 +6,7 @@ use log::LevelFilter;
 
 use core::Result;
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() {
     if let Err(e) = main_impl().await {
         eprintln!("Error: {:?}", e.to_string());
