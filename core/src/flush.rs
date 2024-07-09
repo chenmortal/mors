@@ -1,5 +1,7 @@
 
 
+use std::sync::Arc;
+
 use mors_traits::{
     kms::Kms, levelctl::LevelCtlTrait, memtable::MemtableTrait,
     sstable::TableTrait, txn::TxnManagerTrait,

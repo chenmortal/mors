@@ -24,7 +24,9 @@ pub struct Core<
     K: Kms,
     L: LevelCtlTrait<T, K>,
     T: TableTrait<K::Cipher>,
->(Arc<CoreInner<M, K, L, T>>);
+> {
+    inner: Arc<CoreInner<M, K, L, T>>,
+}
 impl<
         M: MemtableTrait<K>,
         K: Kms,
@@ -33,7 +35,9 @@ impl<
     > Clone for Core<M, K, L, T>
 {
     fn clone(&self) -> Self {
-        Self(self.0.clone())
+        Self {
+            inner: self.inner.clone(),
+        }
     }
 }
 impl<
@@ -41,13 +45,13 @@ impl<
         K: Kms,
         L: LevelCtlTrait<T, K>,
         T: TableTrait<K::Cipher>,
-    > Core<M, K, L, T>
+    > CoreInner<M, K, L, T>
 {
     pub(crate) fn memtable(&self) -> Option<&Arc<RwLock<M>>> {
-        self.0.memtable.as_ref()
+        self.memtable.as_ref()
     }
     pub(crate) fn build_memtable(&self) -> Result<M> {
-        Ok(self.0.memtable_builder.build(self.0.kms.clone())?)
+        Ok(self.memtable_builder.build(self.kms.clone())?)
     }
 }
 pub(crate) struct CoreInner<M, K, L, T>
@@ -129,7 +133,7 @@ impl<
             }
         }
     }
-    pub(crate) fn num_memtables(&self)->usize{
+    pub(crate) fn num_memtables(&self) -> usize {
         self.num_memtables
     }
 }
@@ -168,24 +172,27 @@ impl<
         self.txn_manager.build(max_version).await?;
         let immut_memtable = RwLock::new(immut_memtable);
         let (write_sender, receiver) = Self::init_write_channel();
-        let write_task = Closer::new("write request task".to_owned());
+        let (flush_sender, flush_receiver) =
+            Self::init_flush_channel(self.num_memtables);
+
         // tokio::spawn()
-        let core = Core(
-            CoreInner {
-                lock_guard,
-                kms,
-                immut_memtable,
-                memtable,
-                levelctl,
-                t: PhantomData,
-                write_sender,
-                memtable_builder: self.memtable.clone(),
-            }
-            .into(),
-        );
-        write_task.set_joinhandle(tokio::spawn(
-            core.clone().do_write_task(receiver, write_task.clone()),
-        ));
+        let inner = Arc::new(CoreInner {
+            lock_guard,
+            kms,
+            immut_memtable,
+            memtable,
+            levelctl,
+            t: PhantomData,
+            write_sender,
+            memtable_builder: self.memtable.clone(),
+        });
+        let write_task = Closer::new("write request task".to_owned());
+        write_task.set_joinhandle(tokio::spawn(CoreInner::do_write_task(
+            inner.clone(),
+            receiver,
+            write_task.clone(),
+        )));
+        let core = Core { inner };
         Ok(core)
     }
     pub fn set_read_only(&mut self, read_only: bool) -> &mut Self {

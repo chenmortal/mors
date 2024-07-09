@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    core::{Core, CoreBuilder},
+    core::{CoreBuilder, CoreInner},
     error::MorsError,
     Result,
 };
@@ -71,7 +71,7 @@ where
         mpsc::channel::<WriteRequest>(CHANNEL_CAPACITY)
     }
 }
-impl<M, K, L, T> Core<M, K, L, T>
+impl<M, K, L, T> CoreInner<M, K, L, T>
 where
     M: MemtableTrait<K>,
     K: Kms,
@@ -79,7 +79,7 @@ where
     T: TableTrait<K::Cipher>,
 {
     pub(crate) async fn do_write_task(
-        self,
+        this: Arc<Self>,
         mut receiver: Receiver<WriteRequest>,
         closer: Closer,
     ) {
@@ -100,14 +100,15 @@ where
                         write_requests.push(w);
                     }
                     notify_recv.notified().await;
-                    self.clone().start_write_request(write_requests, notify_send.clone()).await;
+                    Self::start_write_request(this.clone(),write_requests, notify_send.clone()).await;
                     break 'a;
                 },
             }
             'b: loop {
                 if write_requests.len() >= 3 * CHANNEL_CAPACITY {
                     notify_recv.notified().await;
-                    tokio::spawn(self.clone().start_write_request(
+                    tokio::spawn(Self::start_write_request(
+                        this.clone(),
                         write_requests,
                         notify_send.clone(),
                     ));
@@ -121,7 +122,8 @@ where
                         request_len.store(write_requests.len(), Ordering::Relaxed);
                     },
                     _=notify_recv.notified()=>{
-                        tokio::spawn(self.clone().start_write_request(
+                        tokio::spawn(Self::start_write_request(
+                            this.clone(),
                             write_requests,
                             notify_send.clone(),
                         ));
@@ -134,7 +136,7 @@ where
                             write_requests.push(w);
                         }
                         notify_recv.notified().await;
-                        self.clone().start_write_request(write_requests, notify_send.clone()).await;
+                        Self::start_write_request(this.clone(),write_requests, notify_send.clone()).await;
                         break 'a;
                     },
                 }
@@ -143,11 +145,11 @@ where
         notify_recv.notified().await;
     }
     async fn start_write_request(
-        self,
+        this: Arc<Self>,
         requests: Vec<WriteRequest>,
         notify_send: Arc<Notify>,
     ) {
-        if let Err(e) = self.handle_write_request(requests).await {
+        if let Err(e) = this.handle_write_request(requests).await {
             error!("write request error:{}", e);
         };
         notify_send.notify_one();
