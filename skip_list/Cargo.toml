@@ -12,5 +12,6 @@ mors-common = { workspace = true }
 mors-traits = { workspace = true }
 thiserror = { workspace = true }
 rand = { workspace = true }
+log = { workspace = true }
 [lints]
 workspace = true

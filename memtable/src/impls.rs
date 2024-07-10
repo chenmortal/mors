@@ -56,4 +56,8 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<K> for Memtable<T, K> {
     fn is_full(&self) -> bool {
         self.size() >= self.memtable_size
     }
+    
+    fn id(&self) -> MemtableId {
+        self.wal.id()
+    }
 }

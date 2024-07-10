@@ -53,7 +53,11 @@ impl From<MemtableId> for u32 {
 impl FileId for MemtableId {
     const SUFFIX: &'static str = ".mem";
 }
-
+impl Display for MemtableId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:06}.mem", self.0)
+    }   
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash,Default)]
 pub struct SSTableId(u32);
 impl From<u32> for SSTableId {
