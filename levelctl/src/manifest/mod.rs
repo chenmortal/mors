@@ -9,7 +9,6 @@ use mors_traits::{
     kms::CipherKeyId,
     levelctl::Level,
 };
-use tokio::sync::Mutex;
 use std::{
     collections::{HashMap, HashSet},
     fs::{remove_file, rename, File, OpenOptions},
@@ -18,14 +17,15 @@ use std::{
     path::PathBuf,
     sync::Arc,
 };
+use tokio::sync::Mutex;
 
 use bytes::{Buf, BufMut};
 use mors_traits::default::DEFAULT_DIR;
 use prost::Message;
 
 use crate::manifest::manifest_change::ManifestChangeSet;
-// use parking_lot::Mutex;
 pub mod error;
+#[allow(clippy::module_inception)]
 pub(crate) mod manifest_change;
 
 const MANIFEST_FILE_NAME: &str = "MANIFEST";
@@ -86,7 +86,7 @@ impl Default for ManifestBuilder {
     }
 }
 impl ManifestBuilder {
-    pub(crate) fn set_dir(&mut self, dir: PathBuf)  {
+    pub(crate) fn set_dir(&mut self, dir: PathBuf) {
         self.dir = dir;
     }
     pub(crate) fn build(&self) -> Result<Manifest> {
@@ -363,7 +363,7 @@ impl Manifest {
     }
 }
 impl ManifestInner {
-    pub(crate) fn tables(&self)->&HashMap<SSTableId, TableManifest>{
+    pub(crate) fn tables(&self) -> &HashMap<SSTableId, TableManifest> {
         &self.info.tables
     }
 }

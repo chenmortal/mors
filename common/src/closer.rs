@@ -32,7 +32,7 @@ pub struct Throttle<E: Error + From<AcquireError>> {
     sender: Sender<E>,
 }
 pub struct ThrottlePermit<E: Error> {
-    semaphore_permit: OwnedSemaphorePermit,
+    _semaphore_permit: OwnedSemaphorePermit,
     sender: Sender<E>,
 }
 impl<E: Error + From<AcquireError>> Throttle<E> {
@@ -50,10 +50,10 @@ impl<E: Error + From<AcquireError>> Throttle<E> {
         loop {
             select! {
                 permit =self.semaphore.clone().acquire_owned()=>{
-                    let semaphore_permit=permit?;
+                    let _semaphore_permit=permit?;
                     let sender = self.sender.clone();
                     return Ok(ThrottlePermit {
-                        semaphore_permit,
+                        _semaphore_permit,
                         sender,
                     });
                 },
@@ -95,14 +95,14 @@ pub struct Closer(Arc<CloserInner>);
 struct CloserInner {
     join_handle: Mutex<Option<JoinHandle<()>>>,
     notify: Notify,
-    task: String,
+    _task: String,
 }
 impl Default for Closer {
     fn default() -> Self {
         Self(Arc::new(CloserInner {
             join_handle: Mutex::new(None),
             notify: Notify::new(),
-            task: String::new(),
+            _task: String::new(),
         }))
     }
 }
@@ -111,7 +111,7 @@ impl Closer {
         Self(Arc::new(CloserInner {
             join_handle: Mutex::new(None),
             notify: Notify::new(),
-            task,
+            _task: task,
         }))
     }
     pub fn cancel(&self) {

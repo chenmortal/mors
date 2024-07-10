@@ -14,10 +14,14 @@ use thiserror::Error;
 pub trait MemtableTrait<K: Kms>: Sized + Send + Sync + 'static {
     type ErrorType: Into<MemtableError>;
     type MemtableBuilder: MemtableBuilderTrait<Self, K>;
-    fn get(&self, key_ts: &KeyTs) -> Option<(TxnTs, ValueMeta)>;
+    fn get(
+        &self,
+        key_ts: &KeyTs,
+    ) -> Result<Option<(TxnTs, ValueMeta)>, MemtableError>;
     fn push(&mut self, entry: &Entry) -> Result<(), MemtableError>;
     fn size(&self) -> usize;
     fn is_full(&self) -> bool;
+    fn id(&self) -> MemtableId;
     fn max_version(&self) -> TxnTs;
 }
 pub trait MemtableBuilderTrait<M: MemtableTrait<K> + Sized, K: Kms>:

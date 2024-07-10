@@ -1,9 +1,6 @@
 use bytes::BufMut;
 
-use crate::{
-    file_id::SSTableId,
-    sstable::{BlockIndex, BlockTrait, TableIndexBufTrait},
-};
+use crate::{file_id::SSTableId, sstable::BlockIndex};
 
 pub trait CacheTrait: Sized + Send + Sync + Clone + 'static {
     type ErrorType;

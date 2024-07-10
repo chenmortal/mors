@@ -4,6 +4,7 @@ use crate::ts::KeyTsBorrow;
 // use crate::kv::{KeyTsBorrow, ValueMeta};
 
 // here use async fn look at https://blog.rust-lang.org/inside-rust/2022/11/17/async-fn-in-trait-nightly.html
+
 pub struct CacheIterRev<T> {
     iter: T,
 }
@@ -126,6 +127,11 @@ where
 {
     fn key(&self) -> Option<KeyTsBorrow<'_>>;
     fn value(&self) -> Option<V>;
+}
+pub trait KvCacheIterator<V>: CacheIterator + KvCacheIter<V>
+where
+    V: Into<ValueMeta>,
+{
 }
 pub trait KvDoubleEndedCacheIter<V>
 where

@@ -50,8 +50,14 @@ impl<
     pub(crate) fn memtable(&self) -> Option<&Arc<RwLock<M>>> {
         self.memtable.as_ref()
     }
+    pub(crate) fn immut_memtable(&self) -> &RwLock<VecDeque<Arc<M>>> {
+        &self.immut_memtable
+    }
     pub(crate) fn build_memtable(&self) -> Result<M> {
         Ok(self.memtable_builder.build(self.kms.clone())?)
+    }
+    pub(crate) fn kms(&self) -> &K {
+        &self.kms
     }
 }
 pub(crate) struct CoreInner<M, K, L, T>
@@ -68,6 +74,7 @@ where
     memtable_builder: M::MemtableBuilder,
     levelctl: L,
     write_sender: Sender<WriteRequest>,
+    flush_sender: Sender<Arc<M>>,
     t: PhantomData<T>,
 }
 
@@ -175,7 +182,6 @@ impl<
         let (flush_sender, flush_receiver) =
             Self::init_flush_channel(self.num_memtables);
 
-        // tokio::spawn()
         let inner = Arc::new(CoreInner {
             lock_guard,
             kms,
@@ -185,6 +191,7 @@ impl<
             t: PhantomData,
             write_sender,
             memtable_builder: self.memtable.clone(),
+            flush_sender,
         });
         let write_task = Closer::new("write request task".to_owned());
         write_task.set_joinhandle(tokio::spawn(CoreInner::do_write_task(
