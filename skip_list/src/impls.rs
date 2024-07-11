@@ -1,16 +1,21 @@
 use std::mem::size_of;
 use std::sync::Arc;
 
-use mors_traits::skip_list::{SkipListError, SkipListTrait};
+use mors_traits::{
+    iter::KvCacheIterator,
+    kv::ValueMeta,
+    skip_list::{SkipListError, SkipListTrait},
+};
 
-use crate::{error::MorsSkipListError, Node, SkipList};
+use crate::{
+    error::MorsSkipListError,
+    iter::SkipListIter,
+    skip_list::{Node, SkipList, SkipListInner},
+};
 
 type Result<T> = std::result::Result<T, SkipListError>;
-pub struct MorsSkipList {
-    inner: Arc<SkipList>,
-}
 
-impl SkipListTrait for MorsSkipList {
+impl SkipListTrait for SkipList {
     type ErrorType = MorsSkipListError;
 
     fn new(
@@ -21,12 +26,12 @@ impl SkipListTrait for MorsSkipList {
         Self: Sized,
     {
         Ok(Self {
-            inner: Arc::new(SkipList::new(max_size, cmp)?),
+            inner: Arc::new(SkipListInner::new(max_size, cmp)?),
         })
     }
 
     fn size(&self) -> usize {
-        self.inner.arena.len()
+        self.inner.arena().len()
     }
 
     fn push(&self, key: &[u8], value: &[u8]) -> Result<()> {
@@ -47,7 +52,14 @@ impl SkipListTrait for MorsSkipList {
     fn height(&self) -> usize {
         self.inner.height()
     }
+
     const MAX_NODE_SIZE: usize = size_of::<Node>();
+
+    fn iter(
+        &self,
+    ) -> impl KvCacheIterator<ValueMeta, ErrorType = Self::ErrorType> {
+        SkipListIter::new(&self.inner)
+    }
 }
 impl From<MorsSkipListError> for SkipListError {
     fn from(val: MorsSkipListError) -> Self {
