@@ -19,6 +19,7 @@ xxhash-rust = { workspace = true }
 flatbuffers = { workspace = true }
 log = { workspace = true }
 moka = { workspace = true, features = ["sync", "future"] }
+tokio = { workspace = true }
 [build-dependencies]
 prost-build = { workspace = true }
 flatc-rust = { workspace = true }

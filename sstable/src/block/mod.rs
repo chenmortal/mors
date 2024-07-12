@@ -1,12 +1,18 @@
+mod block_iter;
+pub mod write;
 use std::sync::Arc;
 
+use block_iter::CacheBlockIter;
 use bytes::Buf;
 use mors_common::util::BufExt;
-use mors_traits::{file_id::SSTableId, sstable::{BlockIndex, BlockTrait}};
+use mors_traits::{
+    file_id::SSTableId,
+    sstable::{BlockIndex, BlockTrait},
+};
 use prost::Message;
 
-use crate::{block_iter::CacheBlockIter, error::MorsTableError, pb::proto::Checksum, Result};
-#[derive(Default,Clone)]
+use crate::{error::MorsTableError, pb::proto::Checksum, Result};
+#[derive(Default, Clone)]
 pub struct Block(Arc<BlockInner>);
 #[derive(Default)]
 struct BlockInner {
@@ -89,10 +95,8 @@ impl Block {
     pub(crate) fn checksum_len(&self) -> usize {
         self.0.checksum_len
     }
-    pub(crate)  fn iter(&self)->CacheBlockIter{
+    pub(crate) fn iter(&self) -> CacheBlockIter {
         self.clone().into()
     }
 }
-impl BlockTrait for Block {
-    
-}
+impl BlockTrait for Block {}
