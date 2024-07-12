@@ -125,6 +125,12 @@ impl<K: KmsCipher> TableBuilderTrait<Table<K>, K> for TableBuilder {
     }
 }
 impl TableBuilder {
+    pub(crate) fn block_size(&self) -> usize {
+        self.block_size
+    }
+    pub(crate) fn checksum_algo(&self) -> checksum::Algorithm {
+        self.checksum_algo
+    }
     async fn open_impl<K: KmsCipher>(
         &self,
         id: SSTableId,
@@ -287,7 +293,6 @@ impl TableBuilder {
         id: SSTableId,
         cipher: Option<K>,
     ) {
-
     }
 }
 
