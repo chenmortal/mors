@@ -10,6 +10,7 @@ use crate::Result;
 use mors_common::closer::Closer;
 use mors_common::lock::DBLockGuard;
 use mors_common::lock::DBLockGuardBuilder;
+use mors_common::rayon::init_global_rayon_pool;
 use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
 use mors_traits::kms::{Kms, KmsBuilder};
 use mors_traits::levelctl::{LevelCtlBuilderTrait, LevelCtlTrait};
@@ -154,6 +155,8 @@ impl<
 {
     pub async fn build(&mut self) -> Result<Core<M, K, L, T>> {
         self.init_dir();
+        init_global_rayon_pool();
+
         let mut guard_builder = DBLockGuardBuilder::new();
 
         guard_builder.add_dir(self.dir.clone());
@@ -193,6 +196,7 @@ impl<
             memtable_builder: self.memtable.clone(),
             flush_sender,
         });
+
         let write_task = Closer::new("write request task".to_owned());
         write_task.set_joinhandle(tokio::spawn(CoreInner::do_write_task(
             inner.clone(),

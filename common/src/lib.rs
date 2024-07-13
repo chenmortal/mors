@@ -10,7 +10,7 @@ pub mod compress;
 pub mod closer;
 pub mod util;
 pub mod bloom;
-
+pub mod rayon;
 // lazy_static! {
 //     pub static ref DEFAULT_PAGE_SIZE: usize = unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize };
 // }

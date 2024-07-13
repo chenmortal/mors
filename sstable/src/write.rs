@@ -5,6 +5,7 @@ use std::sync::Arc;
 use flatbuffers::FlatBufferBuilder;
 use mors_common::bloom::Bloom;
 use mors_common::compress::CompressionType;
+use mors_common::rayon::{self, AsyncRayonHandle};
 use mors_traits::file_id::SSTableId;
 use mors_traits::iter::KvCacheIterator;
 use mors_traits::kms::KmsCipher;
@@ -12,7 +13,6 @@ use mors_traits::kv::{Meta, ValuePointer};
 use mors_traits::ts::TxnTs;
 use mors_traits::{kv::ValueMeta, ts::KeyTsBorrow};
 use prost::Message;
-use tokio::task::{spawn_blocking, JoinHandle};
 
 use crate::fb::table_generated::{
     BlockOffset, BlockOffsetArgs, TableIndex, TableIndexArgs,
@@ -28,7 +28,7 @@ pub(crate) struct TableWriter<K: KmsCipher> {
     uncompressed_size: AtomicU32,
     comressed_size: Arc<AtomicUsize>,
     cipher: Option<Arc<K>>,
-    compress_task: Vec<JoinHandle<Result<BlockWriter>>>,
+    compress_task: Vec<AsyncRayonHandle<Result<BlockWriter>>>,
     key_hashes: Vec<u32>,
     max_version: TxnTs,
     on_disk_size: u32,
@@ -102,7 +102,7 @@ impl<K: KmsCipher> TableWriter<K> {
         let compression = self.compression();
         let cipher = self.cipher.clone();
         let compressed_size = self.comressed_size.clone();
-        let handle = spawn_blocking(move || -> Result<BlockWriter> {
+        let handle = rayon::spawn(move || -> Result<BlockWriter> {
             if let CompressionType::None = compression {
                 finished_block
                     .set_data(compression.compress(finished_block.data())?);
@@ -120,7 +120,7 @@ impl<K: KmsCipher> TableWriter<K> {
         self.finish_block();
         let mut block_list = Vec::with_capacity(self.compress_task.len());
         for task in self.compress_task.drain(..) {
-            block_list.push(task.await??);
+            block_list.push(task.await?);
         }
         let bloom = self.tablebuilder.create_bloom(&self.key_hashes);
         let (index, data_size) =
