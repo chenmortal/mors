@@ -57,7 +57,7 @@ impl Kms for MorsKms {
         Ok(None)
     }
 
-    const NONCE_SIZE: usize = 12;
+    
 
     type KmsBuilder = MorsKmsBuilder;
 }

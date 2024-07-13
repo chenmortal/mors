@@ -1,4 +1,4 @@
-use mors_traits::{kms::Kms, ts::KeyTsBorrow};
+use mors_traits::{kms::KmsCipher, ts::KeyTsBorrow};
 use bytes::BufMut;
 use mors_common::util::Encode;
 use mors_traits::kv::ValueMeta;
@@ -28,6 +28,9 @@ impl BlockWriter {
     pub(crate) fn data(&self) -> &[u8] {
         &self.data
     }
+    pub(crate) fn set_data(&mut self, data: Vec<u8>) {
+        self.data = data;
+    }
     pub(crate) fn base_keyts(&self) -> &[u8] {
         &self.base_keyts
     }
@@ -41,7 +44,7 @@ impl BlockWriter {
         }
         i
     }
-    pub(crate) fn should_finish_block<K:Kms>(
+    pub(crate) fn should_finish_block<K:KmsCipher>(
         &self,
         key: &KeyTsBorrow,
         value: &ValueMeta,
@@ -63,7 +66,7 @@ impl BlockWriter {
         assert!(self.data.len()+estimate_size < u32::MAX as usize);
         estimate_size > block_size
     }
-     fn push_entry(&mut self,key_ts: &KeyTsBorrow,value: &ValueMeta){
+    pub(crate)  fn push_entry(&mut self,key_ts: &KeyTsBorrow,value: &ValueMeta){
         let diff_key=if self.base_keyts.is_empty() {
             self.base_keyts=key_ts.to_vec();
             key_ts

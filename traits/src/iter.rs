@@ -1,10 +1,13 @@
+use thiserror::Error;
+use std::error::Error;
+use std::fmt::Display;
 use crate::kv::ValueMeta;
 use crate::ts::KeyTsBorrow;
 
 // use crate::kv::{KeyTsBorrow, ValueMeta};
 
 // here use async fn look at https://blog.rust-lang.org/inside-rust/2022/11/17/async-fn-in-trait-nightly.html
-
+type Result<T> = std::result::Result<T, IterError>;
 pub struct CacheIterRev<T> {
     iter: T,
 }
@@ -30,8 +33,7 @@ impl<T> AsyncCacheIterator for CacheIterRev<T>
 where
     T: AsyncDoubleEndedCacheIterator,
 {
-    type ErrorType = T::ErrorType;
-    async fn next(&mut self) -> Result<(), Self::ErrorType> {
+    async fn next(&mut self) -> Result<()> {
         self.iter.next_back().await
     }
 }
@@ -39,8 +41,7 @@ impl<T> CacheIterator for CacheIterRev<T>
 where
     T: DoubleEndedCacheIterator,
 {
-    type ErrorType = T::ErrorType;
-    fn next(&mut self) -> Result<bool, Self::ErrorType> {
+    fn next(&mut self) -> Result<bool> {
         self.iter.next_back()
     }
 }
@@ -48,7 +49,7 @@ impl<T> DoubleEndedCacheIterator for CacheIterRev<T>
 where
     T: DoubleEndedCacheIterator,
 {
-    fn next_back(&mut self) -> Result<bool, Self::ErrorType> {
+    fn next_back(&mut self) -> Result<bool> {
         self.iter.next()
     }
 }
@@ -56,7 +57,7 @@ impl<T> AsyncDoubleEndedCacheIterator for CacheIterRev<T>
 where
     T: AsyncDoubleEndedCacheIterator,
 {
-    async fn next_back(&mut self) -> Result<(), Self::ErrorType> {
+    async fn next_back(&mut self) -> Result<()> {
         self.iter.next().await
     }
 }
@@ -69,7 +70,7 @@ where
         self.iter.key_back()
     }
 
-    fn value(&self) -> Option<V> {
+    fn value(&self) -> Option<ValueMeta> {
         self.iter.value_back()
     }
 }
@@ -82,7 +83,7 @@ where
         self.iter.key()
     }
 
-    fn value_back(&self) -> Option<V> {
+    fn value_back(&self) -> Option<ValueMeta> {
         self.iter.value()
     }
 }
@@ -94,8 +95,7 @@ pub trait DoubleEndedCacheIter: CacheIter {
     fn item_back(&self) -> Option<&<Self as CacheIter>::Item>;
 }
 pub trait AsyncCacheIterator: CacheIter {
-    type ErrorType;
-    async fn next(&mut self) -> Result<(), Self::ErrorType>;
+    async fn next(&mut self) -> Result<()>;
     async fn rev(self) -> CacheIterRev<Self>
     where
         Self: Sized + AsyncDoubleEndedCacheIterator,
@@ -104,8 +104,7 @@ pub trait AsyncCacheIterator: CacheIter {
     }
 }
 pub trait CacheIterator {
-    type ErrorType;
-    fn next(&mut self) -> Result<bool, Self::ErrorType>;
+    fn next(&mut self) -> Result<bool>;
     fn rev(self) -> CacheIterRev<Self>
     where
         Self: Sized + DoubleEndedCacheIterator,
@@ -114,19 +113,19 @@ pub trait CacheIterator {
     }
 }
 pub trait DoubleEndedCacheIterator: CacheIterator {
-    fn next_back(&mut self) -> Result<bool, Self::ErrorType>;
+    fn next_back(&mut self) -> Result<bool>;
 }
 pub trait AsyncDoubleEndedCacheIterator:
     AsyncCacheIterator + DoubleEndedCacheIter
 {
-    async fn next_back(&mut self) -> Result<(), Self::ErrorType>;
+    async fn next_back(&mut self) -> Result<()>;
 }
 pub trait KvCacheIter<V>
 where
     V: Into<ValueMeta>,
 {
     fn key(&self) -> Option<KeyTsBorrow<'_>>;
-    fn value(&self) -> Option<V>;
+    fn value(&self) -> Option<ValueMeta>;
 }
 pub trait KvCacheIterator<V>: CacheIterator + KvCacheIter<V>
 where
@@ -138,11 +137,23 @@ where
     V: Into<ValueMeta>,
 {
     fn key_back(&self) -> Option<KeyTsBorrow<'_>>;
-    fn value_back(&self) -> Option<V>;
+    fn value_back(&self) -> Option<ValueMeta>;
 }
 // if true then KvCacheIter.key() >= k
 pub trait KvSeekIter: CacheIterator {
-    fn seek(&mut self, k: KeyTsBorrow<'_>) -> Result<bool, Self::ErrorType>;
+    fn seek(&mut self, k: KeyTsBorrow<'_>) -> Result<bool>;
+}
+#[derive(Error, Debug)]
+pub struct IterError(Box<dyn Error>);
+impl Display for IterError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "IterError: {}", self.0)
+    }
+}
+impl IterError {
+    pub fn new<E: Error + 'static>(err: E) -> Self {
+        IterError(Box::new(err))
+    }
 }
 mod test {
     use bytes::Buf;
@@ -188,8 +199,7 @@ mod test {
     }
 
     impl CacheIterator for TestIter {
-        type ErrorType = TestIterError;
-        fn next(&mut self) -> Result<bool, Self::ErrorType> {
+        fn next(&mut self) -> Result<bool> {
             if let Some(d) = self.data.as_mut() {
                 let now = (*d).as_ref().get_u64();
                 if now + 1 == self.len {
@@ -211,7 +221,7 @@ mod test {
     }
 
     impl DoubleEndedCacheIterator for TestIter {
-        fn next_back(&mut self) -> Result<bool, Self::ErrorType> {
+        fn next_back(&mut self) -> Result<bool> {
             if let Some(d) = self.back_data.as_mut() {
                 let now = (*d).as_ref().get_u64();
                 if now == 0 {
@@ -273,7 +283,7 @@ mod test {
         fn seek(
             &mut self,
             k: KeyTsBorrow<'_>,
-        ) -> Result<bool, Self::ErrorType> {
+        ) -> Result<bool> {
             let key = k.as_ref().get_u64();
             if key >= self.len {
                 return Ok(false);

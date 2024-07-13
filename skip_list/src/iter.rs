@@ -1,13 +1,10 @@
 use log::error;
 use mors_traits::{
-    iter::{CacheIter, CacheIterator, KvCacheIter, KvCacheIterator},
+    iter::{CacheIter, CacheIterator, IterError, KvCacheIter, KvCacheIterator},
     kv::ValueMeta,
 };
 
-use crate::{
-    error::MorsSkipListError,
-    skip_list::{Node, SkipListInner},
-};
+use crate::skip_list::{Node, SkipListInner};
 
 pub struct SkipListIter<'a> {
     inner: &'a SkipListInner,
@@ -37,9 +34,7 @@ impl<'a> CacheIter for SkipListIter<'a> {
 }
 
 impl<'a> CacheIterator for SkipListIter<'a> {
-    type ErrorType = MorsSkipListError;
-
-    fn next(&mut self) -> Result<bool, Self::ErrorType> {
+    fn next(&mut self) -> Result<bool, IterError> {
         if let Some(now) = self.node {
             if let Ok(new) = now.next(self.inner.arena(), 0) {
                 if let Some(back) = self.node_back {

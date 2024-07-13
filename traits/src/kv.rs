@@ -1,4 +1,4 @@
-use bytes::Bytes;
+use bytes::{Buf, BufMut, Bytes};
 use integer_encoding::VarInt;
 use lazy_static::lazy_static;
 
@@ -107,6 +107,26 @@ impl ValuePointer {
     }
     pub fn offset(&self) -> u64 {
         self.offset
+    }
+    pub fn encode(&self) -> Vec<u8> {
+        let mut v=Vec::with_capacity(16);
+        v.put_u32(self.fid);
+        v.put_u32(self.size);
+        v.put_u64(self.offset);
+        v
+    }
+    pub fn decode(mut data: &[u8]) -> Option<Self> {
+        if data.len() < 16 {
+            return None;
+        }
+        let fid=data.get_u32();
+        let size=data.get_u32();
+        let offset=data.get_u64();
+        Some(Self{
+            fid,
+            size,
+            offset
+        })
     }
 }
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone)]

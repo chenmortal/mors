@@ -45,7 +45,6 @@ pub trait Kms: Clone + Send + Sync + 'static {
         key_id: CipherKeyId,
     ) -> Result<Option<Self::Cipher>, KmsError>;
     fn latest_cipher(&self) -> Result<Option<Self::Cipher>, KmsError>;
-    const NONCE_SIZE: usize;
 }
 pub trait KmsCipher: Send + Sync + 'static {
     type ErrorType: Into<EncryptError>;
@@ -53,7 +52,7 @@ pub trait KmsCipher: Send + Sync + 'static {
     fn cipher_key_id(&self) -> CipherKeyId;
 
     fn generate_nonce() -> Vec<u8>;
-
+    const NONCE_SIZE: usize;
     fn decrypt_with_slice(
         &self,
         nonce: &[u8],

@@ -111,9 +111,9 @@ impl<F: FileId, K: Kms> LogFile<F, K>
     }
     #[inline]
     fn generate_nonce(&self, offset: usize) -> Vec<u8> {
-        let mut v = Vec::with_capacity(K::NONCE_SIZE);
+        let mut v = Vec::with_capacity(K::Cipher::NONCE_SIZE);
         let offset = offset.to_ne_bytes();
-        v.extend_from_slice(&self.base_nonce[..K::NONCE_SIZE - offset.len()]);
+        v.extend_from_slice(&self.base_nonce[..K::Cipher::NONCE_SIZE - offset.len()]);
         v.extend_from_slice(&offset);
         v
     }

@@ -2,14 +2,14 @@ use bytes::{Buf, BufMut};
 use mors_traits::{
     iter::{
         CacheIter, CacheIterator, DoubleEndedCacheIter,
-        DoubleEndedCacheIterator, KvCacheIter, KvDoubleEndedCacheIter,
-        KvSeekIter,
+        DoubleEndedCacheIterator, IterError, KvCacheIter,
+        KvDoubleEndedCacheIter, KvSeekIter,
     },
     kv::ValueMeta,
     ts::KeyTsBorrow,
 };
 
-use crate::{block::Block, error::MorsTableError};
+use crate::block::Block;
 #[derive(Default)]
 pub(crate) struct BlockEntryHeader {
     overlap: u16,
@@ -89,8 +89,7 @@ impl DoubleEndedCacheIter for CacheBlockIter {
     }
 }
 impl CacheIterator for CacheBlockIter {
-    type ErrorType = MorsTableError;
-    fn next(&mut self) -> Result<bool, Self::ErrorType> {
+    fn next(&mut self) -> Result<bool, IterError> {
         match self.entry_index {
             Some(id) => {
                 match self.back_entry_index {
@@ -131,7 +130,7 @@ impl CacheIterator for CacheBlockIter {
     }
 }
 impl DoubleEndedCacheIterator for CacheBlockIter {
-    fn next_back(&mut self) -> Result<bool, Self::ErrorType> {
+    fn next_back(&mut self) -> Result<bool, IterError> {
         match self.back_entry_index {
             Some(back_id) => {
                 match self.entry_index {
@@ -267,7 +266,7 @@ impl KvSeekIter for CacheBlockIter {
     fn seek(
         &mut self,
         k: mors_traits::ts::KeyTsBorrow<'_>,
-    ) -> Result<bool, Self::ErrorType> {
+    ) -> Result<bool, IterError> {
         if self.entry_index.is_none() && !self.next()? {
             return Ok(false);
         }

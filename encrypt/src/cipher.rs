@@ -34,7 +34,7 @@ impl KmsCipher for AesCipher {
     fn generate_nonce() -> Vec<u8> {
         AesCipher::generate_nonce().to_vec()
     }
-
+    const NONCE_SIZE: usize = 12;
     fn decrypt_with_slice(
         &self,
         nonce: &[u8],
