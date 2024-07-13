@@ -1,5 +1,5 @@
 use mors_common::compress::CompressError;
-use mors_traits::{kms::EncryptError, sstable::SSTableError};
+use mors_traits::{iter::IterError, kms::EncryptError, sstable::SSTableError};
 use prost::DecodeError;
 use thiserror::Error;
 #[derive(Error, Debug)]
@@ -24,6 +24,10 @@ pub enum MorsTableError {
     EncryptError(#[from] EncryptError),
     #[error("Compression error: {0}")]
     CompressionError(#[from] CompressError),
+    #[error("Iter error: {0}")]
+    IterError(#[from] IterError),
+    #[error("Tokio JoinError : {0}")]
+    JoinError(#[from] tokio::task::JoinError),
 }
 
 impl From<MorsTableError> for SSTableError {
@@ -31,3 +35,4 @@ impl From<MorsTableError> for SSTableError {
         SSTableError::new(err)
     }
 }
+unsafe impl Send for MorsTableError {}

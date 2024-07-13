@@ -57,7 +57,7 @@ impl SkipListTrait for SkipList {
 
     fn iter(
         &self,
-    ) -> impl KvCacheIterator<ValueMeta, ErrorType = Self::ErrorType> {
+    ) -> impl KvCacheIterator<ValueMeta> {
         SkipListIter::new(&self.inner)
     }
 }

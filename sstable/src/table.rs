@@ -5,16 +5,14 @@ use std::time::SystemTime;
 use bytes::Buf;
 use log::error;
 use memmap2::Advice;
+use mors_common::bloom::Bloom;
 use mors_common::compress::CompressionType;
 use mors_common::mmap::{MmapFile, MmapFileBuilder};
 use mors_traits::cache::BlockCacheKey;
 use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
 use mors_traits::file_id::{FileId, SSTableId};
-use mors_traits::iter::{
-    DoubleEndedCacheIterator, KvCacheIterator, KvDoubleEndedCacheIter,
-};
+use mors_traits::iter::{DoubleEndedCacheIterator, KvDoubleEndedCacheIter};
 use mors_traits::kms::KmsCipher;
-use mors_traits::kv::ValueMeta;
 use mors_traits::sstable::{
     BlockIndex, SSTableError, TableBuilderTrait, TableTrait,
 };
@@ -130,6 +128,15 @@ impl TableBuilder {
     }
     pub(crate) fn checksum_algo(&self) -> checksum::Algorithm {
         self.checksum_algo
+    }
+    pub(crate) fn compression(&self) -> CompressionType {
+        self.compression
+    }
+    pub(crate) fn create_bloom(&self, key_hashes: &[u32]) -> Option<Bloom> {
+        if self.bloom_false_positive > 0.0 {
+            return Some(Bloom::new(key_hashes, self.bloom_false_positive));
+        }
+        None
     }
     async fn open_impl<K: KmsCipher>(
         &self,
@@ -282,17 +289,6 @@ impl TableBuilder {
         debug_assert!(cache_block_iter.next_back()?);
         let biggest: KeyTs = cache_block_iter.key_back().unwrap().into();
         Ok((smallest, biggest))
-    }
-    async fn build_l0_impl<
-        K: KmsCipher,
-        I: KvCacheIterator<V>,
-        V: Into<ValueMeta>,
-    >(
-        &self,
-        mut iter: I,
-        id: SSTableId,
-        cipher: Option<K>,
-    ) {
     }
 }
 

@@ -6,7 +6,8 @@ use mors_encrypt::{cipher::AesCipher, registry::MorsKms};
 use mors_levelctl::ctl::LevelCtl;
 use mors_memtable::memtable::Memtable;
 
-use mors_skip_list::impls::MorsSkipList;
+
+use mors_skip_list::skip_list::SkipList;
 use mors_sstable::table::Table;
 use mors_txn::manager::TxnManager;
 pub mod core;
@@ -17,7 +18,7 @@ mod flush;
 mod read;
 pub type Result<T> = std::result::Result<T, MorsError>;
 
-type MorsMemtable = Memtable<MorsSkipList, MorsKms>;
+type MorsMemtable = Memtable<SkipList, MorsKms>;
 type MorsLevelCtl = LevelCtl<Table<AesCipher>, MorsKms>;
 type MorsTable = Table<AesCipher>;
 type MorsLevelCtlType = LevelCtl<MorsTable, MorsKms>;
@@ -37,7 +38,7 @@ pub struct MorsBuilder {
 }
 impl Deref for Mors {
     type Target = Core<
-        Memtable<MorsSkipList, MorsKms>,
+        Memtable<SkipList, MorsKms>,
         MorsKms,
         LevelCtl<Table<AesCipher>, MorsKms>,
         Table<AesCipher>,
@@ -49,7 +50,7 @@ impl Deref for Mors {
 }
 impl Deref for MorsBuilder {
     type Target = CoreBuilder<
-        Memtable<MorsSkipList, MorsKms>,
+        Memtable<SkipList, MorsKms>,
         MorsKms,
         LevelCtl<Table<AesCipher>, MorsKms>,
         Table<AesCipher>,

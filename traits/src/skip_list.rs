@@ -4,7 +4,7 @@ use std::fmt::Display;
 
 use thiserror::Error;
 
-use crate::iter::{CacheIterator, KvCacheIter, KvCacheIterator};
+use crate::iter::KvCacheIterator;
 use crate::kv::ValueMeta;
 
 //需满足并发安全
@@ -22,9 +22,7 @@ pub trait SkipListTrait: Send + Sync + 'static {
     fn get_or_next(&self, key: &[u8]) -> Result<Option<&[u8]>, SkipListError>;
     fn is_empty(&self) -> bool;
     fn height(&self) -> usize;
-    fn iter(
-        &self,
-    ) -> impl KvCacheIterator<ValueMeta, ErrorType = Self::ErrorType>;
+    fn iter(&self) -> impl KvCacheIterator<ValueMeta>;
     const MAX_NODE_SIZE: usize;
 }
 

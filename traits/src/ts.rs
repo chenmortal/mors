@@ -197,14 +197,14 @@ impl From<&[u8]> for KeyTs {
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
 pub struct KeyTsBorrow<'a>(&'a [u8]);
 impl<'a> KeyTsBorrow<'a> {
-    pub(crate) fn key(&self) -> &[u8] {
+    pub fn key(&self) -> &[u8] {
         if self.len() >= 8 {
             &self[..self.len() - 8]
         } else {
             &self[..]
         }
     }
-    pub(crate) fn txn_ts(&self) -> TxnTs {
+    pub fn txn_ts(&self) -> TxnTs {
         if self.len() >= 8 {
             let mut p = &self[self.len() - 8..];
             p.get_u64().into()
