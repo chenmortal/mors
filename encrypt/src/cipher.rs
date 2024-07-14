@@ -70,6 +70,19 @@ impl KmsCipher for AesCipher {
         Ok(ciphertext)
     }
 }
+impl Clone for AesCipher {
+    fn clone(&self) -> Self {
+        match self {
+            AesCipher::Aes128(cipher, id) => {
+                AesCipher::Aes128(cipher.clone(), *id)
+            }
+            AesCipher::Aes256(cipher, id) => {
+                AesCipher::Aes256(cipher.clone(), *id)
+            }
+        }
+    }
+    
+}
 impl Debug for AesCipher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         #[cfg(feature = "aes-gcm")]

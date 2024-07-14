@@ -1,18 +1,24 @@
+use std::io::Write;
 use std::mem::replace;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use flatbuffers::FlatBufferBuilder;
+use memmap2::Advice;
 use mors_common::bloom::Bloom;
 use mors_common::compress::CompressionType;
+use mors_common::mmap::MmapFileBuilder;
 use mors_common::rayon::{self, AsyncRayonHandle};
-use mors_traits::file_id::SSTableId;
+use mors_traits::default::WithDir;
+use mors_traits::file_id::{FileId, SSTableId};
 use mors_traits::iter::KvCacheIterator;
 use mors_traits::kms::KmsCipher;
 use mors_traits::kv::{Meta, ValuePointer};
 use mors_traits::ts::TxnTs;
 use mors_traits::{kv::ValueMeta, ts::KeyTsBorrow};
 use prost::Message;
+use tokio::task::spawn_blocking;
 
 use crate::fb::table_generated::{
     BlockOffset, BlockOffsetArgs, TableIndex, TableIndexArgs,
@@ -20,7 +26,7 @@ use crate::fb::table_generated::{
 use crate::pb::proto::{checksum, Checksum};
 use crate::Result;
 use crate::{block::write::BlockWriter, table::TableBuilder};
-pub(crate) struct TableWriter<K: KmsCipher> {
+struct TableWriter<K: KmsCipher> {
     tablebuilder: TableBuilder,
     block_writer: BlockWriter,
     stale_data_size: u32,
@@ -35,7 +41,7 @@ pub(crate) struct TableWriter<K: KmsCipher> {
 }
 
 impl<K: KmsCipher> TableWriter<K> {
-    pub(crate) fn new(builder: TableBuilder, cipher: Option<K>) -> Self {
+    fn new(builder: TableBuilder, cipher: Option<K>) -> Self {
         let block_writer = BlockWriter::new(builder.block_size());
         Self {
             tablebuilder: builder,
@@ -51,7 +57,7 @@ impl<K: KmsCipher> TableWriter<K> {
             on_disk_size: 0,
         }
     }
-    pub(crate) fn push(
+    fn push(
         &mut self,
         key: &KeyTsBorrow,
         value: &ValueMeta,
@@ -127,7 +133,11 @@ impl<K: KmsCipher> TableWriter<K> {
             self.build_index(&block_list, bloom.as_ref())?;
         let checksum =
             Checksum::new(self.checksum_algo(), &index).encode_to_vec();
-        let size = data_size as usize + index.len() + 4 + checksum.len() + 4;
+        let size = data_size as u64
+            + index.len() as u64
+            + 4
+            + checksum.len() as u64
+            + 4;
         let data = TableBuildData {
             block_list,
             index,
@@ -188,16 +198,16 @@ impl<K: KmsCipher> TableWriter<K> {
     }
 }
 impl TableBuilder {
-    fn build_l0_impl<
+    pub(crate) async fn build_l0_impl<
         K: KmsCipher,
         I: KvCacheIterator<V>,
         V: Into<ValueMeta>,
     >(
         &self,
         mut iter: I,
-        id: SSTableId,
+        next_id: Arc<AtomicU32>,
         cipher: Option<K>,
-    ) -> Result<()> {
+    ) -> Result<Option<SSTableId>> {
         let mut writer = TableWriter::new(self.clone(), cipher);
         while iter.next()? {
             if let (Some(k), Some(v)) = (iter.key(), iter.value()) {
@@ -210,12 +220,41 @@ impl TableBuilder {
                 writer.push(&k, &v, vptr_size);
             }
         }
-        Ok(())
+        if writer.is_empty() {
+            return Ok(None);
+        }
+        let id: SSTableId = next_id.fetch_add(1, Ordering::SeqCst).into();
+        let path = id.join_dir(self.dir());
+        let build_data = writer.done().await?;
+
+        fn write_data(path: PathBuf, data: TableBuildData) -> Result<()> {
+            let mut builder = MmapFileBuilder::new();
+            builder.advice(Advice::Sequential);
+            builder.create_new(true).append(true);
+            let mut mmap = builder.build(path, data.size)?;
+            data.write(&mut mmap)?;
+            mmap.flush()?;
+            Ok(())
+        }
+        spawn_blocking(move || write_data(path, build_data)).await??;
+        Ok(Some(id))
     }
 }
 struct TableBuildData {
     block_list: Vec<BlockWriter>,
     index: Vec<u8>,
     checksum: Vec<u8>,
-    size: usize,
+    size: u64,
+}
+impl TableBuildData {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
+        for block in self.block_list.iter() {
+            writer.write_all(block.data())?;
+        }
+        writer.write_all(&self.index)?;
+        writer.write_all(&(self.index.len() as u32).to_be_bytes())?;
+        writer.write_all(&self.checksum)?;
+        writer.write_all(&(self.checksum.len() as u32).to_be_bytes())?;
+        Ok(())
+    }
 }

@@ -35,4 +35,5 @@ impl From<MorsTableError> for SSTableError {
         SSTableError::new(err)
     }
 }
+
 unsafe impl Send for MorsTableError {}
