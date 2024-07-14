@@ -95,13 +95,13 @@ pub trait DoubleEndedCacheIter: CacheIter {
     fn item_back(&self) -> Option<&<Self as CacheIter>::Item>;
 }
 pub trait AsyncCacheIterator: CacheIter {
-    async fn next(&mut self) -> Result<()>;
-    async fn rev(self) -> CacheIterRev<Self>
+    fn next(&mut self) -> impl std::future::Future<Output = Result<()>>;
+    fn rev(self) -> impl std::future::Future<Output = CacheIterRev<Self>>
     where
         Self: Sized + AsyncDoubleEndedCacheIterator,
-    {
+    {async {
         CacheIterRev { iter: self }
-    }
+    } }
 }
 pub trait CacheIterator {
     fn next(&mut self) -> Result<bool>;
@@ -118,7 +118,7 @@ pub trait DoubleEndedCacheIterator: CacheIterator {
 pub trait AsyncDoubleEndedCacheIterator:
     AsyncCacheIterator + DoubleEndedCacheIter
 {
-    async fn next_back(&mut self) -> Result<()>;
+    fn next_back(&mut self) -> impl std::future::Future<Output = Result<()>>;
 }
 pub trait KvCacheIter<V>
 where

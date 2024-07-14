@@ -230,7 +230,7 @@ impl TableBuilder {
         fn write_data(path: PathBuf, data: TableBuildData) -> Result<()> {
             let mut builder = MmapFileBuilder::new();
             builder.advice(Advice::Sequential);
-            builder.create_new(true).append(true);
+            builder.create_new(true).append(true).read(true);
             let mut mmap = builder.build(path, data.size)?;
             data.write(&mut mmap)?;
             mmap.flush()?;

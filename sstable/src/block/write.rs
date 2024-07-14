@@ -4,7 +4,7 @@ use mors_common::util::Encode;
 use mors_traits::kv::ValueMeta;
 use prost::Message;
 
-use crate::{block::block_iter::BlockEntryHeader, pb::proto::{checksum::Algorithm, Checksum}};
+use crate::{block::read::BlockEntryHeader, pb::proto::{checksum::Algorithm, Checksum}};
 // const MAX_BUFFER_BLOCK_SIZE: usize = 256 << 20; //256MB
 /// When a block is encrypted, it's length increases. We add 256 bytes of padding to
 /// handle cases when block size increases. This is an approximate number.

@@ -170,10 +170,10 @@ impl ValueMeta {
         None
     }
 
-    pub(crate) fn set_value(&mut self, value: Bytes) {
+    pub fn set_value(&mut self, value: Bytes) {
         self.value = value;
     }
-    pub(crate) fn is_deleted_or_expired(&self) -> bool {
+    pub fn is_deleted_or_expired(&self) -> bool {
         if self.meta.contains(Meta::DELETE) {
             return true;
         };

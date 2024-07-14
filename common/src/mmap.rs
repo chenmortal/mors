@@ -237,6 +237,11 @@ impl DerefMut for MmapFileBuilder {
         &mut self.open_option
     }
 }
+impl Default for MmapFileBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl MmapFileBuilder {
     pub fn new() -> Self {
         Self {

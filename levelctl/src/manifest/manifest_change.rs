@@ -7,7 +7,7 @@ pub struct ManifestChangeSet {
     pub changes: ::prost::alloc::vec::Vec<ManifestChange>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct ManifestChange {
     /// Table ID.
     #[prost(uint32, tag = "1")]
