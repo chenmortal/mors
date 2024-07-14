@@ -1,4 +1,4 @@
-use std::mem::{self, size_of};
+use std::mem::size_of;
 
 use bytes::{Buf, BufMut};
 

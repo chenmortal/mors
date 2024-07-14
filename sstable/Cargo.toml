@@ -6,7 +6,8 @@ license.workspace = true
 readme.workspace = true
 version.workspace = true
 
-
+[features]
+sync = []
 [dependencies]
 mors-common = { workspace = true }
 mors-traits = { workspace = true }
@@ -20,8 +21,18 @@ flatbuffers = { workspace = true }
 log = { workspace = true }
 moka = { workspace = true, features = ["sync", "future"] }
 tokio = { workspace = true }
+
 [build-dependencies]
 prost-build = { workspace = true }
 flatc-rust = { workspace = true }
+
+[dev-dependencies]
+rand = { workspace = true }
+sha2 = { workspace = true }
+mors-encrypt = { workspace = true }
 [lints]
 workspace = true
+
+[[example]]
+name = "simple"
+path = "examples/simple.rs"

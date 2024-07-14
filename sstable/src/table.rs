@@ -121,6 +121,24 @@ impl<K: KmsCipher> TableBuilderTrait<Table<K>, K> for TableBuilder {
     ) -> std::result::Result<Option<Table<K>>, SSTableError> {
         Ok(self.open_impl(id, cipher).await?)
     }
+
+    async fn build_l0<
+        I: mors_traits::iter::KvCacheIterator<V>,
+        V: Into<mors_traits::kv::ValueMeta>,
+    >(
+        &self,
+        iter: I,
+        next_id: Arc<std::sync::atomic::AtomicU32>,
+        cipher: Option<K>,
+    ) -> std::result::Result<Option<Table<K>>, SSTableError> {
+        if let Some(id) =
+            self.build_l0_impl(iter, next_id, cipher.clone()).await?
+        {
+            self.open(id, cipher).await
+        } else {
+            Ok(None)
+        }
+    }
 }
 impl TableBuilder {
     pub(crate) fn block_size(&self) -> usize {
@@ -138,7 +156,7 @@ impl TableBuilder {
         }
         None
     }
-    async fn open_impl<K: KmsCipher>(
+    pub(crate) async fn open_impl<K: KmsCipher>(
         &self,
         id: SSTableId,
         cipher: Option<K>,
@@ -266,8 +284,9 @@ impl TableBuilder {
             .last()
             .ok_or(MorsTableError::TableIndexOffsetEmpty)?;
 
-        let data = &mmap.as_ref()[last_block_offset.offset() as usize
-            ..last_block_offset.size() as usize];
+        let last = last_block_offset.offset() as usize;
+        let data =
+            &mmap.as_ref()[last..last + last_block_offset.size() as usize];
 
         let plaintext = cipher
             .as_ref()

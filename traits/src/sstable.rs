@@ -1,6 +1,10 @@
 use std::fmt::Display;
+use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
 
 use crate::default::{WithDir, WithReadOnly};
+use crate::iter::KvCacheIterator;
+use crate::kv::ValueMeta;
 use crate::ts::TxnTs;
 use crate::{cache::CacheTrait, file_id::SSTableId, kms::KmsCipher, ts::KeyTs};
 use mors_common::compress::CompressionType;
@@ -31,6 +35,12 @@ pub trait TableBuilderTrait<T: TableTrait<K>, K: KmsCipher>:
         id: SSTableId,
         cipher: Option<K>,
     ) -> impl std::future::Future<Output = Result<Option<T>, SSTableError>> + Send;
+    fn build_l0<I: KvCacheIterator<V>, V: Into<ValueMeta>>(
+        &self,
+        iter: I,
+        next_id: Arc<AtomicU32>,
+        cipher: Option<K>,
+    ) -> impl std::future::Future<Output = Result<Option<T>, SSTableError>>;
 }
 pub trait BlockTrait: Sized + Clone + Send + Sync + 'static {}
 pub trait TableIndexBufTrait: Sized + Clone + Send + Sync + 'static {}

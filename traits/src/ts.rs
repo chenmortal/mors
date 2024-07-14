@@ -144,11 +144,7 @@ impl From<KeyTsBorrow<'_>> for KeyTs {
 }
 impl PartialOrd for KeyTs {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match self.key.partial_cmp(&other.key) {
-            Some(Ordering::Equal) => {}
-            ord => return ord,
-        }
-        other.txn_ts.partial_cmp(&self.txn_ts)
+        Some(self.cmp(other))
     }
 }
 impl PartialEq<KeyTsBorrow<'_>> for KeyTs {
@@ -224,25 +220,21 @@ impl Deref for KeyTsBorrow<'_> {
         self.0
     }
 }
-
-impl PartialOrd for KeyTsBorrow<'_> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        let self_split = self.len() - 8;
-        let other_split = other.len() - 8;
-        match self[..self_split].partial_cmp(&other[..other_split]) {
-            Some(Ordering::Equal) => {}
-            ord => {
-                return ord;
-            }
-        }
-        other[other_split..].partial_cmp(&self[self_split..])
-    }
-}
 impl Ord for KeyTsBorrow<'_> {
     fn cmp(&self, other: &Self) -> Ordering {
-        KeyTsBorrow::cmp(self, other)
+        match self.key().cmp(other.key()) {
+            Ordering::Equal => {}
+            ord => {return ord;},
+        }
+        other.txn_ts().cmp(&self.txn_ts())
     }
 }
+impl PartialOrd for KeyTsBorrow<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl PartialEq<KeyTs> for KeyTsBorrow<'_> {
     fn eq(&self, other: &KeyTs) -> bool {
         self.key() == other.key() && self.txn_ts() == other.txn_ts()
