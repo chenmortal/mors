@@ -1,4 +1,4 @@
-use std::fs::create_dir;
+use std::fs::create_dir_all;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
@@ -24,11 +24,11 @@ async fn main() {
     if path.exists() {
         std::fs::remove_dir_all(&path).unwrap();
     }
-    create_dir(path.clone()).unwrap();
+    create_dir_all(path.clone()).unwrap();
     builder.set_dir(path);
     let rng = RngIter::new(get_rng(), 10000);
     let next_id = Arc::new(AtomicU32::new(0));
-    let table = builder
+    let _table = builder
         .build_l0(rng, next_id, None::<AesCipher>)
         .await
         .unwrap();

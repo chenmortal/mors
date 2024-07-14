@@ -284,8 +284,9 @@ impl TableBuilder {
             .last()
             .ok_or(MorsTableError::TableIndexOffsetEmpty)?;
 
-        let data = &mmap.as_ref()[last_block_offset.offset() as usize
-            ..last_block_offset.size() as usize];
+        let last = last_block_offset.offset() as usize;
+        let data =
+            &mmap.as_ref()[last..last + last_block_offset.size() as usize];
 
         let plaintext = cipher
             .as_ref()

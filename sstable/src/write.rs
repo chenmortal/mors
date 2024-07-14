@@ -234,6 +234,8 @@ impl TableBuilder {
             let mut mmap = builder.build(path, data.size)?;
             data.write(&mut mmap)?;
             mmap.flush()?;
+            mmap.set_len(data.size as usize)?;
+            mmap.sync_all()?;
             Ok(())
         }
         spawn_blocking(move || write_data(path, build_data)).await??;
