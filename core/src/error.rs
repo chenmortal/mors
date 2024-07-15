@@ -1,8 +1,5 @@
 use mors_traits::{
-    kms::{EncryptError, KmsError},
-    levelctl::LevelCtlError,
-    memtable::MemtableError,
-    txn::TxnManagerError,
+    kms::{EncryptError, KmsError}, levelctl::LevelCtlError, memtable::MemtableError, sstable::SSTableError, txn::TxnManagerError
 };
 use thiserror::Error;
 
@@ -20,6 +17,8 @@ pub enum MorsError {
     TxnManagerError(#[from] TxnManagerError),
     #[error("Memtable Error: {0}")]
     MemtableError(#[from] MemtableError),
+    #[error("SSTable Error: {0}")]
+    SSTableError(#[from] SSTableError),
     #[error("Poisoned RwLock: {0}")]
     RwLockPoisoned(String),
 }

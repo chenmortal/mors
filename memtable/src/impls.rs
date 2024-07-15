@@ -14,7 +14,7 @@ use crate::{
 };
 
 type Result<T> = std::result::Result<T, MemtableError>;
-impl<T: SkipListTrait, K: Kms> MemtableBuilderTrait<Memtable<T, K>, K>
+impl<T: SkipListTrait, K: Kms> MemtableBuilderTrait<Memtable<T, K>, T, K>
     for MemtableBuilder<T>
 {
     fn open(&self, kms: K, id: MemtableId) -> Result<Memtable<T, K>> {
@@ -29,7 +29,7 @@ impl<T: SkipListTrait, K: Kms> MemtableBuilderTrait<Memtable<T, K>, K>
         Ok(self.build_impl(kms)?)
     }
 }
-impl<T: SkipListTrait, K: Kms> MemtableTrait<K> for Memtable<T, K> {
+impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
     type ErrorType = MorsMemtableError;
     type MemtableBuilder = MemtableBuilder<T>;
 
@@ -56,8 +56,12 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<K> for Memtable<T, K> {
     fn is_full(&self) -> bool {
         self.size() >= self.memtable_size
     }
-    
+
     fn id(&self) -> MemtableId {
         self.wal.id()
+    }
+
+    fn skip_list(&self) -> T {
+        self.skip_list.clone()
     }
 }

@@ -20,8 +20,10 @@ use sha2::Sha256;
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn main() {
     let mut builder = TableBuilder::default();
-    let path = PathBuf::from("./data/sstable");
+    let path = PathBuf::from("/tmp/sstable");
+    dbg!(path.exists());
     if path.exists() {
+        println!("remove dir {:?}", path);
         std::fs::remove_dir_all(&path).unwrap();
     }
     create_dir_all(path.clone()).unwrap();

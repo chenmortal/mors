@@ -48,6 +48,7 @@ impl Deref for Manifest {
 pub(crate) struct ManifestInner {
     file: File,
     deletions_rewrite_threshold: usize,
+    builder: ManifestBuilder,
     info: ManifestInfo,
 }
 #[derive(Debug, Default)]
@@ -64,10 +65,10 @@ pub(crate) struct LevelManifest {
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct TableManifest {
     level: Level,
-    key_id: CipherKeyId,
+    key_id: Option<CipherKeyId>,
     compress: CompressionType,
 }
-
+#[derive(Debug, Clone)]
 pub(crate) struct ManifestBuilder {
     dir: PathBuf,
     read_only: bool,
@@ -109,6 +110,7 @@ impl ManifestBuilder {
                         info,
                         deletions_rewrite_threshold:
                             DELETIONS_REWRITE_THRESHOLD,
+                        builder: self.clone(),
                     })
                     .into(),
                 );
@@ -128,6 +130,7 @@ impl ManifestBuilder {
                             info,
                             deletions_rewrite_threshold:
                                 DELETIONS_REWRITE_THRESHOLD,
+                            builder: self.clone(),
                         })
                         .into(),
                     );
@@ -275,11 +278,16 @@ impl ManifestInfo {
                 if self.tables.contains_key(&change.table_id()) {
                     return Err(ManifestError::CreateError(change.table_id()));
                 };
+                let key_id = if change.key_id == Default::default() {
+                    None
+                } else {
+                    Some(change.key_id.into())
+                };
                 self.tables.insert(
                     change.table_id(),
                     TableManifest {
                         level: change.level.into(),
-                        key_id: change.key_id.into(),
+                        key_id,
                         compress: change.compression.into(),
                     },
                 );
@@ -310,14 +318,14 @@ impl ManifestChange {
     pub fn new_create(
         table_id: SSTableId,
         level: Level,
-        cipher_key_id: CipherKeyId,
+        cipher_key_id: Option<CipherKeyId>,
         compression: CompressionType,
     ) -> Self {
         Self {
             id: table_id.into(),
             op: Operation::Create as i32,
             level: level.into(),
-            key_id: cipher_key_id.into(),
+            key_id: cipher_key_id.unwrap_or_default().into(),
             encryption_algo: EncryptionAlgo::Aes as i32,
             compression: compression.into(),
         }
@@ -361,6 +369,36 @@ impl Manifest {
         }
         Ok(())
     }
+    pub(crate) async fn push_changes(
+        &self,
+        changes: Vec<ManifestChange>,
+    ) -> Result<()> {
+        let mut inner = self.lock().await;
+        let deletions_rewrite_threshold = inner.deletions_rewrite_threshold;
+        let change_set = ManifestChangeSet { changes };
+        inner.info.apply_change_set(&change_set)?;
+
+        let deletions = inner.info.deletions;
+        let creations = inner.info.creations;
+        if deletions > deletions_rewrite_threshold
+            && deletions > DELETIONS_RATIO * (creations - deletions)
+        {
+            let (file, table_creations) =
+                inner.builder.help_rewrite(&inner.info)?;
+            inner.file = file;
+            inner.info.creations = table_creations;
+            inner.info.deletions = 0;
+        } else {
+            let encode = change_set.encode_to_vec();
+            let mut buf = Vec::with_capacity(8 + encode.len());
+            buf.put_u32(encode.len() as u32);
+            buf.put_u32(crc32fast::hash(&encode));
+            buf.put_slice(&encode);
+            inner.file.write_all(&buf)?;
+        };
+        inner.file.sync_all()?;
+        Ok(())
+    }
 }
 impl ManifestInner {
     pub(crate) fn tables(&self) -> &HashMap<SSTableId, TableManifest> {
@@ -371,7 +409,7 @@ impl TableManifest {
     pub(crate) fn compress(&self) -> CompressionType {
         self.compress
     }
-    pub(crate) fn key_id(&self) -> CipherKeyId {
+    pub(crate) fn key_id(&self) -> Option<CipherKeyId> {
         self.key_id
     }
     pub(crate) fn level(&self) -> Level {

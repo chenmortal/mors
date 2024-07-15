@@ -1,7 +1,11 @@
 use crate::default::{WithDir, WithReadOnly};
+use crate::iter::KvCacheIterator;
+use crate::kv::ValueMeta;
 use crate::ts::TxnTs;
 use crate::{kms::Kms, sstable::TableTrait};
 use std::error::Error;
+use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
 use std::{
     fmt::Display,
     ops::{Add, AddAssign, Sub},
@@ -14,6 +18,12 @@ pub trait LevelCtlTrait<T: TableTrait<K::Cipher>, K: Kms>:
     type ErrorType: Into<LevelCtlError>;
     type LevelCtlBuilder: LevelCtlBuilderTrait<Self, T, K>;
     fn max_version(&self) -> TxnTs;
+    fn table_builder(&self) -> &T::TableBuilder;
+    fn next_id(&self) -> Arc<AtomicU32>;
+    fn push_level0(
+        &self,
+        table: T,
+    ) -> impl std::future::Future<Output = Result<(), LevelCtlError>> + Send;
 }
 pub trait LevelCtlBuilderTrait<
     L: LevelCtlTrait<T, K>,
@@ -38,6 +48,7 @@ impl Display for LevelCtlError {
         write!(f, "LevelCtlError: {}", self.0)
     }
 }
+unsafe impl Send for LevelCtlError {}
 pub const LEVEL0: Level = Level(0);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Level(u8);

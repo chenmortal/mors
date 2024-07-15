@@ -22,6 +22,7 @@ use crate::{arena, error::MorsSkipListError};
 const SKL_MAX_HEIGHT: usize = 20; //<20 !=20
 unsafe impl Send for SkipListInner {}
 unsafe impl Sync for SkipListInner {}
+#[derive(Clone)]
 pub struct SkipList {
     pub(crate) inner: Arc<SkipListInner>,
 }

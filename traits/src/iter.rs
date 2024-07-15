@@ -1,8 +1,8 @@
-use thiserror::Error;
-use std::error::Error;
-use std::fmt::Display;
 use crate::kv::ValueMeta;
 use crate::ts::KeyTsBorrow;
+use std::error::Error;
+use std::fmt::Display;
+use thiserror::Error;
 
 // use crate::kv::{KeyTsBorrow, ValueMeta};
 
@@ -99,9 +99,9 @@ pub trait AsyncCacheIterator: CacheIter {
     fn rev(self) -> impl std::future::Future<Output = CacheIterRev<Self>>
     where
         Self: Sized + AsyncDoubleEndedCacheIterator,
-    {async {
-        CacheIterRev { iter: self }
-    } }
+    {
+        async { CacheIterRev { iter: self } }
+    }
 }
 pub trait CacheIterator {
     fn next(&mut self) -> Result<bool>;
@@ -127,7 +127,7 @@ where
     fn key(&self) -> Option<KeyTsBorrow<'_>>;
     fn value(&self) -> Option<ValueMeta>;
 }
-pub trait KvCacheIterator<V>: CacheIterator + KvCacheIter<V>
+pub trait KvCacheIterator<V>: CacheIterator + KvCacheIter<V> + Send
 where
     V: Into<ValueMeta>,
 {
@@ -280,10 +280,7 @@ mod test {
     }
 
     impl KvSeekIter for TestIter {
-        fn seek(
-            &mut self,
-            k: KeyTsBorrow<'_>,
-        ) -> Result<bool> {
+        fn seek(&mut self, k: KeyTsBorrow<'_>) -> Result<bool> {
             let key = k.as_ref().get_u64();
             if key >= self.len {
                 return Ok(false);

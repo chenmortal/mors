@@ -112,7 +112,7 @@ impl MorsKmsBuilder {
         let mut key_registry = KmsInner {
             data_keys: Default::default(),
             last_created: PhyTs::default(),
-            next_key_id: 0.into(),
+            next_key_id: 1.into(),
             file: None,
             cipher: if keys_len > 0 {
                 AesCipher::new(&self.encrypt_key, 0.into()).ok()

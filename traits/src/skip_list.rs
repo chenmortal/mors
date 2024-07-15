@@ -8,7 +8,7 @@ use crate::iter::KvCacheIterator;
 use crate::kv::ValueMeta;
 
 //需满足并发安全
-pub trait SkipListTrait: Send + Sync + 'static {
+pub trait SkipListTrait: Send + Sync + Clone + 'static {
     type ErrorType: Into<SkipListError>;
     fn new(
         max_size: usize,

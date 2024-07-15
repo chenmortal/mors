@@ -3,8 +3,12 @@ use std::sync::Arc;
 use log::{error, info};
 use mors_common::closer::Closer;
 use mors_traits::{
-    kms::Kms, levelctl::LevelCtlTrait, memtable::MemtableTrait,
-    sstable::TableTrait, txn::TxnManagerTrait,
+    kms::Kms,
+    levelctl::LevelCtlTrait,
+    memtable::MemtableTrait,
+    skip_list::SkipListTrait,
+    sstable::{TableBuilderTrait, TableTrait},
+    txn::TxnManagerTrait,
 };
 use tokio::{
     select,
@@ -13,12 +17,13 @@ use tokio::{
 
 use crate::core::{CoreBuilder, CoreInner};
 use crate::Result;
-impl<M, K, L, T, Txn> CoreBuilder<M, K, L, T, Txn>
+impl<M, K, L, T, S, Txn> CoreBuilder<M, K, L, T, S, Txn>
 where
-    M: MemtableTrait<K>,
+    M: MemtableTrait<S, K>,
     K: Kms,
     L: LevelCtlTrait<T, K>,
     T: TableTrait<K::Cipher>,
+    S: SkipListTrait,
     Txn: TxnManagerTrait,
 {
     pub(crate) fn init_flush_channel(
@@ -27,12 +32,13 @@ where
         mpsc::channel::<Arc<M>>(num_memtables)
     }
 }
-impl<M, K, L, T> CoreInner<M, K, L, T>
+impl<M, K, L, T, S> CoreInner<M, K, L, T, S>
 where
-    M: MemtableTrait<K>,
+    M: MemtableTrait<S, K>,
     K: Kms,
     L: LevelCtlTrait<T, K>,
     T: TableTrait<K::Cipher>,
+    S: SkipListTrait,
 {
     pub(crate) async fn do_flush_task(
         this: Arc<Self>,
@@ -73,8 +79,16 @@ where
     }
     pub(crate) async fn handle_flush(&self, memtable: Arc<M>) -> Result<()> {
         let cipher = self.kms().latest_cipher()?;
-        
-        // this.flush_channel.send(memtable).await?;
+        let next_id = self.levelctl().next_id();
+        let skip_list = memtable.skip_list();
+        if let Some(t) = self
+            .levelctl()
+            .table_builder()
+            .build_l0(skip_list.iter(), next_id, cipher)
+            .await?
+        {
+            self.levelctl().push_level0(t).await?;
+        };
         Ok(())
     }
 }

@@ -11,7 +11,9 @@ use mors_common::compress::CompressionType;
 use std::error::Error;
 use thiserror::Error;
 
-pub trait TableTrait<K: KmsCipher>: Sized + Send + Sync + 'static {
+pub trait TableTrait<K: KmsCipher>:
+    Sized + Send + Sync + Clone + 'static
+{
     type ErrorType: Into<SSTableError>;
     type Block: BlockTrait;
     type TableIndexBuf: TableIndexBufTrait;
@@ -24,9 +26,11 @@ pub trait TableTrait<K: KmsCipher>: Sized + Send + Sync + 'static {
     fn smallest(&self) -> &KeyTs;
     fn biggest(&self) -> &KeyTs;
     fn max_version(&self) -> TxnTs;
+    fn cipher(&self) -> Option<&K>;
+    fn compression(&self) -> CompressionType;
 }
 pub trait TableBuilderTrait<T: TableTrait<K>, K: KmsCipher>:
-    Default + Clone + Send + 'static + WithDir + WithReadOnly
+    Default + Clone + Send + Sync + 'static + WithDir + WithReadOnly
 {
     fn set_compression(&mut self, compression: CompressionType);
     fn set_cache(&mut self, cache: T::Cache);
@@ -40,7 +44,7 @@ pub trait TableBuilderTrait<T: TableTrait<K>, K: KmsCipher>:
         iter: I,
         next_id: Arc<AtomicU32>,
         cipher: Option<K>,
-    ) -> impl std::future::Future<Output = Result<Option<T>, SSTableError>>;
+    ) -> impl std::future::Future<Output = Result<Option<T>, SSTableError>> + Send;
 }
 pub trait BlockTrait: Sized + Clone + Send + Sync + 'static {}
 pub trait TableIndexBufTrait: Sized + Clone + Send + Sync + 'static {}
@@ -78,3 +82,4 @@ impl SSTableError {
         SSTableError(Box::new(err))
     }
 }
+unsafe impl Send for SSTableError {}
