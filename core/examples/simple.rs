@@ -2,7 +2,6 @@ use core::MorsBuilder;
 use std::{fs::create_dir, path::PathBuf};
 
 use log::LevelFilter;
-// use std::error::Error;
 
 use core::Result;
 

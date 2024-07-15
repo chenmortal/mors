@@ -1,7 +1,10 @@
 use crate::default::{WithDir, WithReadOnly};
+use crate::file_id::SSTableId;
 use crate::ts::TxnTs;
 use crate::{kms::Kms, sstable::TableTrait};
 use std::error::Error;
+use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
 use std::{
     fmt::Display,
     ops::{Add, AddAssign, Sub},
@@ -14,6 +17,9 @@ pub trait LevelCtlTrait<T: TableTrait<K::Cipher>, K: Kms>:
     type ErrorType: Into<LevelCtlError>;
     type LevelCtlBuilder: LevelCtlBuilderTrait<Self, T, K>;
     fn max_version(&self) -> TxnTs;
+    fn table_builder(&self) -> &T::TableBuilder;
+    fn next_id(&self) -> Arc<AtomicU32>;
+    fn push_level0(&self, table: T) -> Result<(), LevelCtlError>;
 }
 pub trait LevelCtlBuilderTrait<
     L: LevelCtlTrait<T, K>,

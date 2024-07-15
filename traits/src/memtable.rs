@@ -1,5 +1,6 @@
 use crate::default::{WithDir, WithReadOnly};
 use crate::file_id::MemtableId;
+use crate::skip_list::SkipListTrait;
 use crate::{
     kms::Kms,
     kv::{Entry, ValueMeta},
@@ -11,9 +12,11 @@ use std::fmt::Display;
 use std::sync::Arc;
 use thiserror::Error;
 
-pub trait MemtableTrait<K: Kms>: Sized + Send + Sync + 'static {
+pub trait MemtableTrait<T: SkipListTrait, K: Kms>:
+    Sized + Send + Sync + 'static
+{
     type ErrorType: Into<MemtableError>;
-    type MemtableBuilder: MemtableBuilderTrait<Self, K>;
+    type MemtableBuilder: MemtableBuilderTrait<Self, T, K>;
     fn get(
         &self,
         key_ts: &KeyTs,
@@ -23,9 +26,13 @@ pub trait MemtableTrait<K: Kms>: Sized + Send + Sync + 'static {
     fn is_full(&self) -> bool;
     fn id(&self) -> MemtableId;
     fn max_version(&self) -> TxnTs;
+    fn skip_list(&self) -> T;
 }
-pub trait MemtableBuilderTrait<M: MemtableTrait<K> + Sized, K: Kms>:
-    Default + WithDir + WithReadOnly + Clone + Send + Sync
+pub trait MemtableBuilderTrait<
+    M: MemtableTrait<T, K> + Sized,
+    T: SkipListTrait,
+    K: Kms,
+>: Default + WithDir + WithReadOnly + Clone + Send + Sync
 {
     fn open(&self, kms: K, id: MemtableId) -> Result<M, MemtableError>;
 

@@ -15,25 +15,28 @@ use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
 use mors_traits::kms::{Kms, KmsBuilder};
 use mors_traits::levelctl::{LevelCtlBuilderTrait, LevelCtlTrait};
 use mors_traits::memtable::{MemtableBuilderTrait, MemtableTrait};
+use mors_traits::skip_list::SkipListTrait;
 use mors_traits::sstable::TableTrait;
 use mors_traits::txn::TxnManagerBuilderTrait;
 use mors_traits::txn::TxnManagerTrait;
 use tokio::sync::mpsc::Sender;
 
 pub struct Core<
-    M: MemtableTrait<K>,
+    M: MemtableTrait<S, K>,
     K: Kms,
     L: LevelCtlTrait<T, K>,
     T: TableTrait<K::Cipher>,
+    S: SkipListTrait,
 > {
-    inner: Arc<CoreInner<M, K, L, T>>,
+    inner: Arc<CoreInner<M, K, L, T, S>>,
 }
 impl<
-        M: MemtableTrait<K>,
+        M: MemtableTrait<S, K>,
         K: Kms,
         L: LevelCtlTrait<T, K>,
         T: TableTrait<K::Cipher>,
-    > Clone for Core<M, K, L, T>
+        S: SkipListTrait,
+    > Clone for Core<M, K, L, T, S>
 {
     fn clone(&self) -> Self {
         Self {
@@ -42,11 +45,12 @@ impl<
     }
 }
 impl<
-        M: MemtableTrait<K>,
+        M: MemtableTrait<S, K>,
         K: Kms,
         L: LevelCtlTrait<T, K>,
         T: TableTrait<K::Cipher>,
-    > CoreInner<M, K, L, T>
+        S: SkipListTrait,
+    > CoreInner<M, K, L, T, S>
 {
     pub(crate) fn memtable(&self) -> Option<&Arc<RwLock<M>>> {
         self.memtable.as_ref()
@@ -60,13 +64,17 @@ impl<
     pub(crate) fn kms(&self) -> &K {
         &self.kms
     }
+    pub(crate) fn levelctl(&self) -> &L {
+        &self.levelctl
+    }
 }
-pub(crate) struct CoreInner<M, K, L, T>
+pub(crate) struct CoreInner<M, K, L, T, S>
 where
-    M: MemtableTrait<K>,
+    M: MemtableTrait<S, K>,
     K: Kms,
     L: LevelCtlTrait<T, K>,
     T: TableTrait<K::Cipher>,
+    S: SkipListTrait,
 {
     lock_guard: DBLockGuard,
     kms: K,
@@ -80,10 +88,11 @@ where
 }
 
 pub struct CoreBuilder<
-    M: MemtableTrait<K>,
+    M: MemtableTrait<S, K>,
     K: Kms,
     L: LevelCtlTrait<T, K>,
     T: TableTrait<K::Cipher>,
+    S: SkipListTrait,
     Txn: TxnManagerTrait,
 > {
     read_only: bool,
@@ -95,12 +104,13 @@ pub struct CoreBuilder<
     txn_manager: Txn::TxnManagerBuilder,
 }
 impl<
-        M: MemtableTrait<K>,
+        M: MemtableTrait<S, K>,
         K: Kms,
         L: LevelCtlTrait<T, K>,
         T: TableTrait<K::Cipher>,
+        S: SkipListTrait,
         Txn: TxnManagerTrait,
-    > Default for CoreBuilder<M, K, L, T, Txn>
+    > Default for CoreBuilder<M, K, L, T, S, Txn>
 {
     fn default() -> Self {
         Self {
@@ -115,12 +125,13 @@ impl<
     }
 }
 impl<
-        M: MemtableTrait<K>,
+        M: MemtableTrait<S, K>,
         K: Kms,
         L: LevelCtlTrait<T, K>,
         T: TableTrait<K::Cipher>,
+        S: SkipListTrait,
         Txn: TxnManagerTrait,
-    > CoreBuilder<M, K, L, T, Txn>
+    > CoreBuilder<M, K, L, T, S, Txn>
 {
     fn init_dir(&mut self) {
         let default_dir = PathBuf::from(DEFAULT_DIR);
@@ -146,14 +157,15 @@ impl<
     }
 }
 impl<
-        M: MemtableTrait<K>,
+        M: MemtableTrait<S, K>,
         K: Kms,
         L: LevelCtlTrait<T, K>,
         T: TableTrait<K::Cipher>,
+        S: SkipListTrait,
         Txn: TxnManagerTrait,
-    > CoreBuilder<M, K, L, T, Txn>
+    > CoreBuilder<M, K, L, T, S, Txn>
 {
-    pub async fn build(&mut self) -> Result<Core<M, K, L, T>> {
+    pub async fn build(&mut self) -> Result<Core<M, K, L, T, S>> {
         self.init_dir();
         init_global_rayon_pool();
 

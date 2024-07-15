@@ -21,8 +21,8 @@ use mors_traits::{
 };
 
 type Result<T> = std::result::Result<T, MorsLevelCtlError>;
-use tokio::{select, task::JoinHandle};
 use mors_traits::ts::TxnTs;
+use tokio::{select, task::JoinHandle};
 
 use crate::{
     compact::status::CompactStatus,
@@ -32,8 +32,9 @@ use crate::{
 };
 pub struct LevelCtl<T: TableTrait<K::Cipher>, K: Kms> {
     manifest: Manifest,
+    table_builder: T::TableBuilder,
     handlers: Vec<LevelHandler<T, K::Cipher>>,
-    next_id: AtomicU32,
+    next_id: Arc<AtomicU32>,
     level0_stalls_ms: AtomicU64,
     compact_status: CompactStatus,
 }
@@ -48,6 +49,22 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlTrait<T, K> for LevelCtl<T, K> {
             .map(|h| h.max_version())
             .max()
             .unwrap_or_default()
+    }
+
+    fn table_builder(&self) -> &<T as TableTrait<K::Cipher>>::TableBuilder {
+        &self.table_builder
+    }
+    fn next_id(&self) -> Arc<AtomicU32> {
+        self.next_id.clone()
+    }
+
+    fn push_level0(&self, table: T) -> std::result::Result<(), LevelCtlError> {
+        todo!()
+    }
+}
+impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
+    async fn push_level0_impl(&self, table: T)->Result<()>{
+       Ok(())
     }
 }
 
@@ -111,7 +128,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
         let (max_id, level_tables) =
             self.open_tables_by_manifest(manifest.clone(), kms).await?;
 
-        let next_id = AtomicU32::new(1 + Into::<u32>::into(max_id));
+        let next_id = Arc::new(AtomicU32::new(1 + Into::<u32>::into(max_id)));
         let mut handlers = Vec::with_capacity(level_tables.len());
         let mut level = LEVEL0;
         for tables in level_tables {
@@ -127,6 +144,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
             next_id,
             level0_stalls_ms: Default::default(),
             compact_status,
+            table_builder: self.table.clone(),
         };
         Ok(ctl)
     }

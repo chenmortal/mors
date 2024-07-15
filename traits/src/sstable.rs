@@ -26,7 +26,7 @@ pub trait TableTrait<K: KmsCipher>: Sized + Send + Sync + 'static {
     fn max_version(&self) -> TxnTs;
 }
 pub trait TableBuilderTrait<T: TableTrait<K>, K: KmsCipher>:
-    Default + Clone + Send + 'static + WithDir + WithReadOnly
+    Default + Clone + Send + Sync + 'static + WithDir + WithReadOnly
 {
     fn set_compression(&mut self, compression: CompressionType);
     fn set_cache(&mut self, cache: T::Cache);

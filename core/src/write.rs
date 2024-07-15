@@ -18,6 +18,7 @@ use mors_traits::{
     kv::{Entry, ValuePointer},
     levelctl::LevelCtlTrait,
     memtable::MemtableTrait,
+    skip_list::SkipListTrait,
     sstable::TableTrait,
     txn::TxnManagerTrait,
 };
@@ -58,12 +59,13 @@ impl Drop for WriteRequest {
         }
     }
 }
-impl<M, K, L, T, Txn> CoreBuilder<M, K, L, T, Txn>
+impl<M, K, L, T, S, Txn> CoreBuilder<M, K, L, T, S, Txn>
 where
-    M: MemtableTrait<K>,
+    M: MemtableTrait<S, K>,
     K: Kms,
     L: LevelCtlTrait<T, K>,
     T: TableTrait<K::Cipher>,
+    S: SkipListTrait,
     Txn: TxnManagerTrait,
 {
     pub(crate) fn init_write_channel(
@@ -71,12 +73,13 @@ where
         mpsc::channel::<WriteRequest>(CHANNEL_CAPACITY)
     }
 }
-impl<M, K, L, T> CoreInner<M, K, L, T>
+impl<M, K, L, T, S> CoreInner<M, K, L, T, S>
 where
-    M: MemtableTrait<K>,
+    M: MemtableTrait<S, K>,
     K: Kms,
     L: LevelCtlTrait<T, K>,
     T: TableTrait<K::Cipher>,
+    S: SkipListTrait,
 {
     pub(crate) async fn do_write_task(
         this: Arc<Self>,
