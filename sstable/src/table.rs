@@ -196,6 +196,7 @@ impl TableBuilder {
                 cache: self.cache.clone(),
                 cipher,
                 checksum_verify_mode: self.checksum_verify_mode,
+                compression: self.compression,
             }
             .into(),
         );
@@ -310,7 +311,7 @@ impl TableBuilder {
         Ok((smallest, biggest))
     }
 }
-
+#[derive(Clone)]
 pub struct Table<K: KmsCipher>(Arc<TableInner<K>>);
 pub(crate) struct TableInner<K: KmsCipher> {
     id: SSTableId,
@@ -326,6 +327,7 @@ pub(crate) struct TableInner<K: KmsCipher> {
     cache: Option<Cache>,
     cipher: Option<K>,
     checksum_verify_mode: ChecksumVerificationMode,
+    compression: CompressionType,
 }
 impl<K: KmsCipher> TableTrait<K> for Table<K> {
     type Block = Block;
@@ -355,6 +357,14 @@ impl<K: KmsCipher> TableTrait<K> for Table<K> {
     }
     fn max_version(&self) -> TxnTs {
         self.0.cheap_index.max_version
+    }
+
+    fn cipher(&self) -> Option<&K> {
+        self.0.cipher.as_ref()
+    }
+
+    fn compression(&self) -> CompressionType {
+        self.0.compression
     }
 }
 

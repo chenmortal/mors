@@ -79,14 +79,15 @@ where
     }
     pub(crate) async fn handle_flush(&self, memtable: Arc<M>) -> Result<()> {
         let cipher = self.kms().latest_cipher()?;
-        let table_builder = self.levelctl().table_builder();
         let next_id = self.levelctl().next_id();
         let skip_list = memtable.skip_list();
-        if let Some(t) = table_builder
+        if let Some(t) = self
+            .levelctl()
+            .table_builder()
             .build_l0(skip_list.iter(), next_id, cipher)
             .await?
         {
-            self.levelctl().push_level0(t)?;
+            self.levelctl().push_level0(t).await?;
         };
         Ok(())
     }

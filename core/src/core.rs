@@ -215,6 +215,12 @@ impl<
             receiver,
             write_task.clone(),
         )));
+        let flush_task = Closer::new("flush task".to_owned());
+        flush_task.set_joinhandle(tokio::spawn(CoreInner::do_flush_task(
+            inner.clone(),
+            flush_receiver,
+            flush_task.clone(),
+        )));
         let core = Core { inner };
         Ok(core)
     }

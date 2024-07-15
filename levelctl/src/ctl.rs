@@ -37,6 +37,8 @@ pub struct LevelCtl<T: TableTrait<K::Cipher>, K: Kms> {
     next_id: Arc<AtomicU32>,
     level0_stalls_ms: AtomicU64,
     compact_status: CompactStatus,
+    level0_num_tables_stall: usize,
+    level0_stalls: AtomicU64,
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlTrait<T, K> for LevelCtl<T, K> {
     type ErrorType = MorsLevelCtlError;
@@ -58,13 +60,28 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlTrait<T, K> for LevelCtl<T, K> {
         self.next_id.clone()
     }
 
-    fn push_level0(&self, table: T) -> std::result::Result<(), LevelCtlError> {
-        todo!()
+    async fn push_level0(
+        &self,
+        table: T,
+    ) -> std::result::Result<(), LevelCtlError> {
+        Ok(self.push_level0_impl(table).await?)
     }
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
-    async fn push_level0_impl(&self, table: T)->Result<()>{
-       Ok(())
+    pub(crate) fn manifest(&self) -> &Manifest {
+        &self.manifest
+    }
+    pub(crate) fn level0_num_tables_stall(&self) -> usize {
+        self.level0_num_tables_stall
+    }
+    pub(crate) fn level0_stalls_ms(&self) -> &AtomicU64 {
+        &self.level0_stalls_ms
+    }
+    pub(crate) fn handler(
+        &self,
+        level: Level,
+    ) -> Option<&LevelHandler<T, K::Cipher>> {
+        self.handlers.iter().find(|h| *h.level() == level)
     }
 }
 
@@ -72,6 +89,7 @@ pub struct LevelCtlBuilder<T: TableTrait<K::Cipher>, K: Kms> {
     manifest: ManifestBuilder,
     table: T::TableBuilder,
     max_level: Level,
+    level0_num_tables_stall: usize,
     cache: Option<T::Cache>,
     dir: PathBuf,
     read_only: bool,
@@ -85,6 +103,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> Default for LevelCtlBuilder<T, K> {
             dir: PathBuf::from(DEFAULT_DIR),
             cache: None,
             read_only: false,
+            level0_num_tables_stall: 15,
         }
     }
 }
@@ -145,6 +164,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
             level0_stalls_ms: Default::default(),
             compact_status,
             table_builder: self.table.clone(),
+            level0_num_tables_stall: self.level0_num_tables_stall,
+            level0_stalls: Default::default(),
         };
         Ok(ctl)
     }
@@ -186,7 +207,10 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
             let kms_clone = kms.clone();
             let table_id = *id;
             let future = async move {
-                let cipher = kms_clone.get_cipher(cipher_id)?;
+                let cipher = cipher_id
+                    .map(|id| kms_clone.get_cipher(id))
+                    .transpose()?
+                    .flatten();
                 let table = table_builder.open(table_id, cipher).await?;
                 Ok::<Option<T>, MorsLevelCtlError>(table)
             };

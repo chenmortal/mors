@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::{marker::PhantomData, sync::Arc};
 
 use mors_traits::ts::TxnTs;
@@ -13,11 +14,21 @@ type Result<T> = std::result::Result<T, LevelHandlerError>;
 pub(crate) struct LevelHandler<T: TableTrait<K>, K: KmsCipher>(
     Arc<LevelHandlerInner<T, K>>,
 );
+impl<T: TableTrait<K>, K: KmsCipher> Deref for LevelHandler<T, K>
+where
+    T: TableTrait<K>,
+    K: KmsCipher,
+{
+    type Target = RwLock<LevelHandlerTables<T, K>>;
+    fn deref(&self) -> &Self::Target {
+        &self.0.table_handler
+    }
+}
 struct LevelHandlerInner<T: TableTrait<K>, K: KmsCipher> {
     table_handler: RwLock<LevelHandlerTables<T, K>>,
     level: Level,
 }
-struct LevelHandlerTables<T: TableTrait<K>, K: KmsCipher> {
+pub(crate) struct LevelHandlerTables<T: TableTrait<K>, K: KmsCipher> {
     tables: Vec<T>,
     total_size: usize,
     total_stale_size: usize,
@@ -45,6 +56,12 @@ impl<T: TableTrait<K>, K: KmsCipher> LevelHandler<T, K> {
             }),
             level,
         }))
+    }
+    pub(crate) fn level(&self) -> &Level {
+        &self.0.level
+    }
+    pub(crate) fn tables_len(&self) -> usize {
+        self.read().tables.len()
     }
     pub(crate) fn validate(&self) -> Result<()> {
         let inner = self.0.table_handler.read();
@@ -80,5 +97,29 @@ impl<T: TableTrait<K>, K: KmsCipher> LevelHandler<T, K> {
             max_version = max_version.max(t.max_version());
         });
         max_version
+    }
+}
+impl<T: TableTrait<K>, K: KmsCipher> LevelHandlerTables<T, K> {
+    pub(crate) fn tables(&self) -> &[T] {
+        &self.tables
+    }
+
+    pub(crate) fn total_size(&self) -> usize {
+        self.total_size
+    }
+    pub(crate) fn total_stale_size(&self) -> usize {
+        self.total_stale_size
+    }
+    pub(crate) fn push(&mut self, table: T) {
+        self.total_size += table.size();
+        self.total_stale_size += table.stale_data_size();
+        self.tables.push(table);
+    }
+    pub(crate) fn pop(&mut self) -> Option<T> {
+        self.tables.pop().map(|t| {
+            self.total_size -= t.size();
+            self.total_stale_size -= t.stale_data_size();
+            t
+        })
     }
 }
