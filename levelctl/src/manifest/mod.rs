@@ -3,12 +3,8 @@ use log::info;
 use manifest_change::{
     manifest_change::Operation, EncryptionAlgo, ManifestChange,
 };
-use mors_common::compress::CompressionType;
-use mors_traits::{
-    file_id::{FileId, SSTableId},
-    kms::CipherKeyId,
-    levelctl::Level,
-};
+use mors_common::{compress::CompressionType, file_id::{FileId, SSTableId}};
+use mors_traits::{kms::CipherKeyId, levelctl::Level};
 use std::{
     collections::{HashMap, HashSet},
     fs::{remove_file, rename, File, OpenOptions},

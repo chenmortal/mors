@@ -10,7 +10,7 @@ use mors_common::mmap::{MmapFile, MmapFileBuilder};
 // use mors_encrypt::registry::MorsKms;
 
 // use mors_encrypt::NONCE_SIZE;
-use mors_traits::file_id::FileId;
+use mors_common::file_id::FileId;
 use mors_traits::kms::{CipherKeyId, Kms, KmsCipher};
 
 use crate::error::MorsWalError;

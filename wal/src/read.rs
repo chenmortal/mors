@@ -4,11 +4,11 @@ use std::io::{BufRead, BufReader, Read};
 
 use bytes::Buf;
 
-use mors_traits::file_id::FileId;
+use mors_common::file_id::FileId;
+use mors_common::kv::{Entry, Meta, ValuePointer};
+use mors_common::ts::TxnTs;
 use mors_traits::kms::Kms;
-use mors_traits::kv::{Entry, Meta, ValuePointer};
 use mors_traits::log_header::LogEntryHeader;
-use mors_traits::ts::TxnTs;
 
 use crate::error::MorsWalError::{self};
 use crate::LogFile;
@@ -95,7 +95,9 @@ impl<'a, F: FileId, K: Kms> LogFileIter<'a, F, K> {
         Ok((entry, v_ptr))
     }
     //
-    pub fn next_entry(&mut self) -> Result<Option<&Vec<(Entry, ValuePointer)>>> {
+    pub fn next_entry(
+        &mut self,
+    ) -> Result<Option<&Vec<(Entry, ValuePointer)>>> {
         let mut last_commit = TxnTs::default();
         self.entries_vptrs.clear();
         loop {

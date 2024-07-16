@@ -9,10 +9,9 @@ use std::{
 };
 
 use log::info;
-use mors_common::closer::{Closer, Throttle};
+use mors_common::{closer::{Closer, Throttle}, file_id::SSTableId, ts::TxnTs};
 use mors_traits::{
     default::{WithDir, WithReadOnly, DEFAULT_DIR},
-    file_id::SSTableId,
     kms::Kms,
     levelctl::{
         Level, LevelCtlBuilderTrait, LevelCtlError, LevelCtlTrait, LEVEL0,
@@ -21,7 +20,7 @@ use mors_traits::{
 };
 
 type Result<T> = std::result::Result<T, MorsLevelCtlError>;
-use mors_traits::ts::TxnTs;
+
 use tokio::{select, task::JoinHandle};
 
 use crate::{

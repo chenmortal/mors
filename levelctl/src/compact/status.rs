@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use mors_traits::{file_id::SSTableId, ts::KeyTs};
+use mors_common::{file_id::SSTableId, ts::KeyTs};
 
 pub(crate) struct CompactStatus(Arc<RwLock<CompactStatusInner>>);
 pub(crate) struct CompactStatusInner {

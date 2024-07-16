@@ -8,10 +8,8 @@ use moka::sync::Cache as MokaCache;
 #[cfg(feature = "sync")]
 use moka::sync::CacheBuilder as MokaCacheBuilder;
 
-use mors_traits::{
-    cache::{BlockCacheKey, CacheBuilder, CacheTrait},
-    file_id::SSTableId,
-};
+use mors_common::file_id::SSTableId;
+use mors_traits::cache::{BlockCacheKey, CacheBuilder, CacheTrait};
 
 use crate::block::Block;
 use crate::table_index::TableIndexBuf;
@@ -32,10 +30,17 @@ impl Cache {
             block_cache.insert(key, block).await;
         }
     }
-    pub(crate)  async fn get_index(&self, key: SSTableId) -> Option<TableIndexBuf> {
+    pub(crate) async fn get_index(
+        &self,
+        key: SSTableId,
+    ) -> Option<TableIndexBuf> {
         self.index_cache.get(&key).await
     }
-    pub(crate)  async fn insert_index(&self, key: SSTableId, index: TableIndexBuf) {
+    pub(crate) async fn insert_index(
+        &self,
+        key: SSTableId,
+        index: TableIndexBuf,
+    ) {
         self.index_cache.insert(key, index).await;
     }
 }

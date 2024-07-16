@@ -12,15 +12,13 @@ use crate::{
     Result,
 };
 use log::{debug, error};
-use mors_common::closer::Closer;
-use mors_traits::{
-    kms::Kms,
+use mors_common::{
+    closer::Closer,
     kv::{Entry, Meta, ValuePointer},
-    levelctl::LevelCtlTrait,
-    memtable::MemtableTrait,
-    skip_list::SkipListTrait,
-    sstable::TableTrait,
-    txn::TxnManagerTrait,
+};
+use mors_traits::{
+    kms::Kms, levelctl::LevelCtlTrait, memtable::MemtableTrait,
+    skip_list::SkipListTrait, sstable::TableTrait, txn::TxnManagerTrait,
 };
 use tokio::{
     select,
@@ -269,4 +267,41 @@ async fn test_notify() {
     });
     handle_notify.await.unwrap();
     handle_notified.await.unwrap();
+}
+
+mod test {
+
+    use std::{fs::create_dir, path::PathBuf};
+
+    use log::LevelFilter;
+
+    use crate::MorsBuilder;
+
+    use super::*;
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_write() {
+        if let Err(e) = test_write_impl().await {
+            eprintln!("Error: {:?}", e.to_string());
+        }
+    }
+    async fn test_write_impl() -> Result<()> {
+        let mut logger = env_logger::builder();
+        logger.filter_level(LevelFilter::Trace);
+        logger.init();
+
+        let path = "./data/";
+        let dir = PathBuf::from(path);
+        if !dir.exists() {
+            create_dir(&dir).unwrap();
+        }
+        let mut builder = MorsBuilder::default();
+        builder.set_dir(dir).set_read_only(false);
+        builder.set_num_memtables(1).set_memtable_size(1024 * 1024);
+        let mors = builder.build().await?;
+        // let (sender, receiver) = oneshot::channel();
+        // Entry::new(key, value);
+        // WriteRequest::new(entries, sender);
+        // mors.inner().write_sender().send(value);
+        Ok(())
+    }
 }

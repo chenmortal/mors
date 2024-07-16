@@ -1,10 +1,10 @@
-use std::io::{self, Read};
-
 use bytes::{Buf, BufMut};
 use integer_encoding::{VarInt, VarIntReader};
-
-use crate::kv::{Entry, Meta};
-use crate::ts::PhyTs;
+use mors_common::{
+    kv::{Entry, Meta},
+    ts::PhyTs,
+};
+use std::io::{self, Read};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LogEntryHeader {
@@ -22,7 +22,7 @@ impl LogEntryHeader {
             value_len: e.value_meta().value().len() as u32,
             expires_at: e.value_meta().expires_at(),
             meta: e.value_meta().meta(),
-            user_meta: e.value_meta().user_meta()
+            user_meta: e.value_meta().user_meta(),
         }
     }
     // +------+----------+------------+--------------+-----------+
@@ -61,9 +61,7 @@ impl LogEntryHeader {
         };
         (e, index)
     }
-    pub fn decode_from<R: Read>(
-        reader: &mut R,
-    ) -> std::io::Result<Self> {
+    pub fn decode_from<R: Read>(reader: &mut R) -> std::io::Result<Self> {
         let meta: u8 = 0;
         reader.read_exact(&mut [meta])?;
         let meta = Meta::from_bits_retain(meta);
@@ -102,11 +100,11 @@ impl LogEntryHeader {
     pub fn expires_at(&self) -> PhyTs {
         self.expires_at
     }
-    pub fn check_key_len(&self)->Result<(),io::Error>{
+    pub fn check_key_len(&self) -> Result<(), io::Error> {
         if self.key_len() > 1 << 16_u32 {
             return Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
-                format!("key length must be below u16 {:?}",self)
+                format!("key length must be below u16 {:?}", self),
             ));
         }
         Ok(())

@@ -1,11 +1,10 @@
 use std::{collections::VecDeque, sync::Arc};
 
+use mors_common::{file_id::MemtableId, kv::{Entry, ValueMeta}, ts::{KeyTs, TxnTs}};
 use mors_traits::{
-    file_id::MemtableId,
     kms::Kms,
     memtable::{MemtableBuilderTrait, MemtableError, MemtableTrait},
     skip_list::SkipListTrait,
-    ts::KeyTs,
 };
 
 use crate::{
@@ -41,7 +40,7 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
     type ErrorType = MorsMemtableError;
     type MemtableBuilder = MemtableBuilder<T>;
 
-    fn push(&mut self, entry: &mors_traits::kv::Entry) -> Result<()> {
+    fn push(&mut self, entry: &Entry) -> Result<()> {
         Ok(self.push_impl(entry)?)
     }
 
@@ -52,12 +51,12 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
     fn get(
         &self,
         key_ts: &KeyTs,
-    ) -> Result<Option<(mors_traits::ts::TxnTs, mors_traits::kv::ValueMeta)>>
+    ) -> Result<Option<(TxnTs, ValueMeta)>>
     {
         todo!()
     }
 
-    fn max_version(&self) -> mors_traits::ts::TxnTs {
+    fn max_version(&self) -> TxnTs {
         self.max_version
     }
 

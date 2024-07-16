@@ -5,9 +5,8 @@ use std::{
 };
 
 use bytes::BufMut;
-use mors_traits::{
-    file_id::FileId, kms::Kms, kv::Entry, log_header::LogEntryHeader,
-};
+use mors_common::{file_id::FileId, kv::Entry};
+use mors_traits::{kms::Kms, log_header::LogEntryHeader};
 
 use crate::LogFile;
 use crate::Result;

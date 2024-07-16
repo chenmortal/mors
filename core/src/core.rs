@@ -50,6 +50,18 @@ impl<
         L: LevelCtlTrait<T, K>,
         T: TableTrait<K::Cipher>,
         S: SkipListTrait,
+    > Core<M, K, L, T, S>
+{
+    pub(crate) fn inner(&self) -> &Arc<CoreInner<M, K, L, T, S>> {
+        &self.inner
+    }
+}
+impl<
+        M: MemtableTrait<S, K>,
+        K: Kms,
+        L: LevelCtlTrait<T, K>,
+        T: TableTrait<K::Cipher>,
+        S: SkipListTrait,
     > CoreInner<M, K, L, T, S>
 {
     pub(crate) fn memtable(&self) -> Option<&Arc<RwLock<M>>> {
@@ -60,6 +72,9 @@ impl<
     }
     pub(crate) fn flush_sender(&self) -> &Sender<Arc<M>> {
         &self.flush_sender
+    }
+    pub(crate) fn write_sender(&self) -> &Sender<WriteRequest> {
+        &self.write_sender
     }
     pub(crate) fn build_memtable(&self) -> Result<M> {
         Ok(self.memtable_builder.build(self.kms.clone())?)

@@ -13,7 +13,7 @@ use prost::bytes::{Buf, BufMut};
 use prost::Message;
 
 use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
-use mors_traits::ts::PhyTs;
+use mors_common::ts::PhyTs;
 
 use crate::cipher::{AesCipher, Nonce};
 use crate::error::{MorsEncryptError, MorsKmsError};

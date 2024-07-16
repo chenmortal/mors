@@ -1,4 +1,4 @@
-use mors_traits::file_id::SSTableId;
+use mors_common::file_id::SSTableId;
 use thiserror::Error;
 use super::MAGIC_VERSION;
 #[derive(Error, Debug)]
