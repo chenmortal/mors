@@ -15,7 +15,7 @@ use log::{debug, error};
 use mors_common::closer::Closer;
 use mors_traits::{
     kms::Kms,
-    kv::{Entry, ValuePointer},
+    kv::{Entry, Meta, ValuePointer},
     levelctl::LevelCtlTrait,
     memtable::MemtableTrait,
     skip_list::SkipListTrait,
@@ -171,31 +171,69 @@ where
                 continue;
             }
             count += request.entries_vptrs.len();
-            self.ensure_room_for_write().await?;
+            if let Err(e) = self.ensure_room_for_write().await {
+                request.result = Err(e);
+            };
+            if let Err(e) = self.write_to_memtable(request).await {
+                request.result = Err(e);
+                break;
+            };
         }
         debug!("Writing to memtable done:{}", count);
         Ok(())
     }
     async fn ensure_room_for_write(&self) -> Result<()> {
         let memtable = self.memtable().unwrap();
-        let memtable_r = memtable
-            .read()
+        let new_memtable = {
+            let memtable_r = memtable
+                .read()
+                .map_err(|e| MorsError::RwLockPoisoned(e.to_string()))?;
+            if !memtable_r.is_full() {
+                return Ok(());
+            }
+            debug!("Memtable is full, making room for writes");
+            self.build_memtable()?
+        };
+
+        let old_memtable = {
+            let mut memtable_w = memtable
+                .write()
+                .map_err(|e| MorsError::RwLockPoisoned(e.to_string()))?;
+
+            let old_memtable = replace(&mut *memtable_w, new_memtable);
+            Arc::new(old_memtable)
+        };
+
+        self.flush_sender()
+            .send(old_memtable.clone())
+            .await
+            .map_err(|e| MorsError::SendError(e.to_string()))?;
+
+        let mut immut_w = self
+            .immut_memtable()
+            .write()
             .map_err(|e| MorsError::RwLockPoisoned(e.to_string()))?;
-        if !memtable_r.is_full() {
-            return Ok(());
-        }
-
-        debug!("Memtable is full, making room for writes");
-        let new_memtable = self.build_memtable()?;
-        drop(memtable_r);
-
+        immut_w.push_back(old_memtable);
+        Ok(())
+    }
+    async fn write_to_memtable(
+        &self,
+        request: &mut WriteRequest,
+    ) -> Result<()> {
+        let memtable = self.memtable().unwrap();
         let mut memtable_w = memtable
             .write()
             .map_err(|e| MorsError::RwLockPoisoned(e.to_string()))?;
-        let old_memtable = replace(&mut *memtable_w, new_memtable);
-        drop(memtable_w);
-        let old_memtable = Arc::new(old_memtable);
-
+        for (entry, vptr) in &mut request.entries_vptrs {
+            if vptr.is_empty() {
+                entry.meta_mut().remove(Meta::VALUE_POINTER);
+            } else {
+                entry.meta_mut().insert(Meta::VALUE_POINTER);
+                entry.set_value(vptr.encode());
+            }
+            memtable_w.push(entry)?;
+        }
+        memtable_w.flush()?;
         Ok(())
     }
 }

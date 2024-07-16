@@ -47,4 +47,8 @@ impl<T: SkipListTrait, K: Kms> Memtable<T, K> {
         self.max_version = self.max_version.max(entry.version());
         Ok(())
     }
+    pub fn flush_impl(&mut self) -> Result<()> {
+        self.wal.flush()?;
+        Ok(())
+    }
 }

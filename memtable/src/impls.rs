@@ -28,6 +28,14 @@ impl<T: SkipListTrait, K: Kms> MemtableBuilderTrait<Memtable<T, K>, T, K>
     fn build(&self, kms: K) -> Result<Memtable<T, K>> {
         Ok(self.build_impl(kms)?)
     }
+
+    fn set_num_memtables(&mut self, num_memtables: usize) {
+        self.set_num_memtables_impl(num_memtables);
+    }
+
+    fn set_memtable_size(&mut self, memtable_size: usize) {
+        self.set_memtable_size_impl(memtable_size);
+    }
 }
 impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
     type ErrorType = MorsMemtableError;
@@ -63,5 +71,9 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
 
     fn skip_list(&self) -> T {
         self.skip_list.clone()
+    }
+
+    fn flush(&mut self) -> std::result::Result<(), MemtableError> {
+        Ok(self.flush_impl()?)
     }
 }

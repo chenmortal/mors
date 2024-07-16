@@ -62,8 +62,14 @@ impl Entry {
     pub fn value_meta(&self) -> &ValueMeta {
         &self.value_meta
     }
+    pub fn set_value<B: Into<Bytes>>(&mut self, value: B) {
+        self.value_meta.set_value(value.into());
+    }
     pub fn meta(&self) -> Meta {
         self.value_meta.meta()
+    }
+    pub fn meta_mut(&mut self) -> &mut Meta {
+        &mut self.value_meta.meta
     }
     pub fn user_meta(&self) -> u8 {
         self.value_meta.user_meta()
@@ -109,7 +115,7 @@ impl ValuePointer {
         self.offset
     }
     pub fn encode(&self) -> Vec<u8> {
-        let mut v=Vec::with_capacity(16);
+        let mut v = Vec::with_capacity(16);
         v.put_u32(self.fid);
         v.put_u32(self.size);
         v.put_u64(self.offset);
@@ -119,14 +125,13 @@ impl ValuePointer {
         if data.len() < 16 {
             return None;
         }
-        let fid=data.get_u32();
-        let size=data.get_u32();
-        let offset=data.get_u64();
-        Some(Self{
-            fid,
-            size,
-            offset
-        })
+        let fid = data.get_u32();
+        let size = data.get_u32();
+        let offset = data.get_u64();
+        Some(Self { fid, size, offset })
+    }
+    pub fn is_empty(&self) -> bool {
+        *self == ValuePointer::default()
     }
 }
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone)]

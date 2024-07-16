@@ -33,6 +33,9 @@ impl<F: FileId, K: Kms> LogFile<F, K> {
         self.mmap.pwrite(&buf[..size], offset)?;
         Ok(())
     }
+    pub fn flush(&mut self) -> Result<()> {
+        Ok(self.mmap.flush()?)
+    }
     fn encode_entry(
         &self,
         buf: &mut Vec<u8>,

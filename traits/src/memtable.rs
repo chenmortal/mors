@@ -27,6 +27,7 @@ pub trait MemtableTrait<T: SkipListTrait, K: Kms>:
     fn id(&self) -> MemtableId;
     fn max_version(&self) -> TxnTs;
     fn skip_list(&self) -> T;
+    fn flush(&mut self) -> Result<(), MemtableError>;
 }
 pub trait MemtableBuilderTrait<
     M: MemtableTrait<T, K> + Sized,
@@ -39,6 +40,8 @@ pub trait MemtableBuilderTrait<
     fn open_exist(&self, kms: K) -> Result<VecDeque<Arc<M>>, MemtableError>;
 
     fn build(&self, kms: K) -> Result<M, MemtableError>;
+    fn set_num_memtables(&mut self, num_memtables: usize);
+    fn set_memtable_size(&mut self, memtable_size: usize);
 }
 #[derive(Error, Debug)]
 pub struct MemtableError(Box<dyn Error>);

@@ -76,6 +76,14 @@ impl<T: SkipListTrait> MemtableBuilder<T>
     fn max_batch_count(&self) -> usize {
         self.max_batch_size() / T::MAX_NODE_SIZE
     }
+    #[inline]
+    pub(crate) fn set_num_memtables_impl(&mut self, num_memtables: usize) {
+        self.num_memtables = num_memtables;
+    }
+    #[inline]
+    pub(crate) fn set_memtable_size_impl(&mut self, memtable_size: usize) {
+        self.memtable_size = memtable_size;
+    }
 }
 impl<T: SkipListTrait> MemtableBuilder<T> {
     pub(crate) fn open_impl<K: Kms>(
