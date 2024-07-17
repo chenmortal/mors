@@ -11,7 +11,7 @@ use crate::{
     error::MorsError,
     Result,
 };
-use log::{debug, error};
+use log::{debug, error, info};
 use mors_common::{
     closer::Closer,
     kv::{Entry, Meta, ValuePointer},
@@ -189,8 +189,13 @@ where
             if !memtable_r.is_full() {
                 return Ok(());
             }
-            debug!("Memtable is full, making room for writes");
-            self.build_memtable()?
+            debug!(
+                "Memtable {} is full, making room for writes",
+                memtable_r.id()
+            );
+            let new_memtable = self.build_memtable()?;
+            debug!("New memtable {} created", new_memtable.id());
+            new_memtable
         };
 
         let old_memtable = {
@@ -206,12 +211,13 @@ where
             .send(old_memtable.clone())
             .await
             .map_err(|e| MorsError::SendError(e.to_string()))?;
-
+        debug!("Old memtable {} sent for flushing", old_memtable.id());
         let mut immut_w = self
             .immut_memtable()
             .write()
             .map_err(|e| MorsError::RwLockPoisoned(e.to_string()))?;
         immut_w.push_back(old_memtable);
+        debug!("Old memtable added to immut_memtable");
         Ok(())
     }
     async fn write_to_memtable(
@@ -274,6 +280,7 @@ mod test {
     use std::{fs::create_dir, path::PathBuf};
 
     use log::LevelFilter;
+    use mors_common::test::{gen_random_entries, get_rng};
 
     use crate::MorsBuilder;
 
@@ -289,19 +296,53 @@ mod test {
         logger.filter_level(LevelFilter::Trace);
         logger.init();
 
-        let path = "./data/";
+        let path = "../data/";
         let dir = PathBuf::from(path);
         if !dir.exists() {
             create_dir(&dir).unwrap();
         }
         let mut builder = MorsBuilder::default();
         builder.set_dir(dir).set_read_only(false);
-        builder.set_num_memtables(1).set_memtable_size(1024 * 1024);
+        builder
+            .set_num_memtables(1)
+            .set_memtable_size(5 * 1024 * 1024);
         let mors = builder.build().await?;
-        // let (sender, receiver) = oneshot::channel();
-        // Entry::new(key, value);
-        // WriteRequest::new(entries, sender);
-        // mors.inner().write_sender().send(value);
+
+        let mut rng = get_rng("abcd");
+        let random = gen_random_entries(&mut rng, 100000);
+
+        let mut entries = Vec::new();
+        let mut receivers = Vec::new();
+        for entry in random {
+            entries.push(entry);
+            if entries.len() == 10 {
+                let (sender, receiver) = oneshot::channel();
+                receivers.push(receiver);
+                let write_request = WriteRequest::new(entries, sender);
+                mors.inner()
+                    .write_sender()
+                    .send(write_request)
+                    .await
+                    .unwrap();
+                entries = Vec::new();
+            }
+        }
+        debug!("Waiting for write to complete");
+        for recv in receivers {
+            match recv.await {
+                Ok(e) => {
+                    if let Err(k) = e {
+                        eprintln!("Error: {:?}", k.to_string());
+                        return Err(MorsError::SendError(k.to_string()));
+                    }
+                }
+                Err(k) => {
+                    eprintln!("Error: {:?}", k.to_string());
+                    return Err(MorsError::SendError(k.to_string()));
+                }
+            };
+        }
+        info!("Write completed");
         Ok(())
     }
 }

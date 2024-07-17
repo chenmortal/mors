@@ -2,9 +2,10 @@ use bytes::{Buf, BufMut, Bytes};
 use integer_encoding::VarInt;
 use lazy_static::lazy_static;
 
-use crate::{file_id::FileId, ts::{KeyTs, PhyTs, TxnTs}};
-
-
+use crate::{
+    file_id::FileId,
+    ts::{KeyTs, PhyTs, TxnTs},
+};
 
 pub trait Key {}
 #[derive(Debug, Default, Clone)]
@@ -61,8 +62,9 @@ impl Entry {
     pub fn value_meta(&self) -> &ValueMeta {
         &self.value_meta
     }
-    pub fn set_value<B: Into<Bytes>>(&mut self, value: B) {
+    pub fn set_value<B: Into<Bytes>>(&mut self, value: B) -> &mut Self {
         self.value_meta.set_value(value.into());
+        self
     }
     pub fn meta(&self) -> Meta {
         self.value_meta.meta()
@@ -78,6 +80,10 @@ impl Entry {
     }
     pub fn version(&self) -> TxnTs {
         self.key_ts.txn_ts()
+    }
+    pub fn set_version(&mut self, txn_ts: TxnTs) -> &mut Self {
+        self.key_ts.set_txn_ts(txn_ts);
+        self
     }
     pub fn offset(&self) -> usize {
         self.offset
