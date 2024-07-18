@@ -9,3 +9,4 @@ pub mod levelctl;
 pub mod log_header;
 pub mod sstable;
 pub mod txn;
+pub mod vlog;
