@@ -29,7 +29,7 @@ impl<F: FileId, K: Kms> LogFile<F, K> {
 
         let offset = self.mmap.write_at();
         let size = self.encode_entry(buf, entry, offset)?;
-        self.mmap.pwrite(&buf[..size], offset)?;
+        self.mmap.write_all(&buf[..size])?;
         Ok(())
     }
     pub fn flush(&mut self) -> Result<()> {
