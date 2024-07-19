@@ -125,6 +125,16 @@ impl AsRef<[u8]> for MmapFile {
         unsafe { slice::from_raw_parts(self.raw.as_ptr() as _, self.raw.len()) }
     }
 }
+impl AsMut<[u8]> for MmapFile {
+    fn as_mut(&mut self) -> &mut [u8] {
+        unsafe {
+            slice::from_raw_parts_mut(
+                self.raw.as_mut_ptr() as _,
+                self.raw.len(),
+            )
+        }
+    }
+}
 impl MmapFile {
     #[inline]
     pub fn len(&self) -> Result<usize, Error> {
@@ -206,8 +216,10 @@ impl MmapFile {
         Ok(buf_len)
     }
 
-    pub fn pread_ref(&self,offset: usize,len:usize)->&[u8]{
-        let buf = unsafe { slice::from_raw_parts(self.raw.as_ptr().add(offset) as _, len) };
+    pub fn pread_ref(&self, offset: usize, len: usize) -> &[u8] {
+        let buf = unsafe {
+            slice::from_raw_parts(self.raw.as_ptr().add(offset) as _, len)
+        };
         buf
     }
     pub fn pwrite(
