@@ -5,19 +5,19 @@ use crate::{
 use std::{error::Error, fmt::Display};
 use thiserror::Error;
 
-pub trait VlogCtlTrait<K: Kms, D: DiscardTrait>:
-    Sized + Send + Sync + 'static
-{
+pub trait VlogCtlTrait<K: Kms>: Sized + Send + Sync + 'static {
     type ErrorType: Into<VlogError>;
-    type LevelCtlBuilder: VlogCtlBuilderTrait<Self, K, D>;
+    type Discard: DiscardTrait;
+    type VlogCtlBuilder: VlogCtlBuilderTrait<Self, K>;
 }
-pub trait VlogCtlBuilderTrait<V: VlogCtlTrait<K, D>, K: Kms, D: DiscardTrait>:
+pub trait VlogCtlBuilderTrait<V: VlogCtlTrait<K>, K: Kms>:
     WithDir + WithReadOnly
 {
     fn build(
         &self,
         kms: K,
     ) -> impl std::future::Future<Output = Result<V, VlogError>>;
+    fn build_discard(&self) -> Result<V::Discard, VlogError>;
 }
 
 pub trait DiscardTrait {}

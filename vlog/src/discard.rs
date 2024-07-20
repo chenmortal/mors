@@ -7,6 +7,8 @@ use mors_common::{mmap::MmapFile, util::search};
 use mors_traits::vlog::DiscardTrait;
 use parking_lot::Mutex;
 
+use crate::error::MorsVlogError;
+
 const DISCARD_FILE_NAME: &str = "DISCARD";
 const DISCARD_FILE_SIZE: usize = 1 << 20; //1MB
 const SLOT_SIZE: usize = 2 * size_of::<u64>();
@@ -19,7 +21,7 @@ struct DiscardInner {
     next_slot: usize,
 }
 impl Discard {
-    pub fn new(vlog_dir: &Path) -> io::Result<Self> {
+    pub fn new(vlog_dir: &Path) -> Result<Self, MorsVlogError> {
         let path = vlog_dir.join(DISCARD_FILE_NAME);
         let mut mmap_builder = MmapFile::builder();
         mmap_builder.read(true).write(true).create(true);
@@ -28,11 +30,11 @@ impl Discard {
         let mut inner = DiscardInner { mmap, next_slot: 0 };
         for slot in 0..DISCARD_MAX_SLOT {
             if inner.get(slot * SLOT_SIZE) == 0 {
-                inner.next_slot = slot as usize;
+                inner.next_slot = slot;
                 break;
             }
         }
-        inner.sort();
+        inner.sort()?;
         info!("Discard file loaded, next slot: {}", inner.next_slot);
         Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
@@ -72,7 +74,7 @@ impl Discard {
                         let len = inner.mmap.len()?;
                         inner.mmap.set_len(2 * len)?;
                     }
-                    inner.sort();
+                    inner.sort()?;
                     Ok(discard as u64)
                 }
             }
@@ -88,7 +90,7 @@ impl DiscardInner {
         buf.as_mut().put_u64(value);
         self.mmap.pwrite(&buf, offset)
     }
-    fn sort(&mut self) {
+    fn sort(&mut self) -> io::Result<()> {
         let slice = &mut self.mmap.as_mut()[..self.next_slot * SLOT_SIZE];
         let mut chunks: Vec<[u8; 16]> = Vec::new();
         for chunk in slice.chunks(SLOT_SIZE) {
@@ -101,8 +103,9 @@ impl DiscardInner {
         });
         for (i, chunk) in chunks.iter().enumerate() {
             let offset = i * SLOT_SIZE;
-            self.mmap.pwrite(chunk, offset);
+            let _ = self.mmap.pwrite(chunk, offset)?;
         }
+        Ok(())
     }
 }
 impl DiscardTrait for Discard {}

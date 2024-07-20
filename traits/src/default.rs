@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 pub const DEFAULT_DIR: &str = "/tmp/badger";
+pub const DEFAULT_VALUE_DIR: &str = "/tmp/badger";
 
 pub trait WithDir {
     fn set_dir(&mut self, dir: PathBuf) -> &mut Self;

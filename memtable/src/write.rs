@@ -27,10 +27,10 @@ impl<T: SkipListTrait, K: Kms> Memtable<T, K> {
         }
 
         let end_offset = wal_iter.valid_end_offset();
-        if end_offset < self.wal.max_size() && self.read_only {
+        if end_offset < self.wal.len() && self.read_only {
             return Err(MorsMemtableError::TruncateNeeded(
                 end_offset,
-                self.wal.max_size(),
+                self.wal.len(),
             ));
         }
 

@@ -36,23 +36,23 @@ impl<F: FileId, K: Kms> LogFile<F, K> {
 }
 impl<F: FileId, K: Kms> LogFile<F, K>
 // where
-    // MorsWalError: From<<K::Cipher as KmsCipher>::ErrorType>,
+// MorsWalError: From<<K::Cipher as KmsCipher>::ErrorType>,
 {
-    pub fn open(
+    pub fn open<P: AsRef<Path>>(
         id: F,
-        path_buf: PathBuf,
+        path_buf: P,
         max_size: u64,
         builder: MmapFileBuilder,
         kms: K,
     ) -> Result<Self> {
-        let is_exist = Path::new(path_buf.as_path()).exists();
+        let is_exist = path_buf.as_ref().exists();
         let mmap = builder.build(&path_buf, max_size)?;
         let mut log_file = Self {
             id,
             kms,
             cipher: None,
             mmap,
-            path_buf:path_buf.clone(),
+            path_buf: path_buf.as_ref().to_owned(),
             size: AtomicUsize::new(0),
             base_nonce: Vec::new(),
         };
@@ -68,10 +68,12 @@ impl<F: FileId, K: Kms> LogFile<F, K>
                 .store(Self::LOG_HEADER_SIZE, Ordering::Relaxed);
         }
         log_file.size.store(log_file.mmap.len()?, Ordering::Relaxed);
-        
-        let mut buf=vec![0; Self::LOG_HEADER_SIZE];
+
+        let mut buf = vec![0; Self::LOG_HEADER_SIZE];
         if log_file.mmap.read(&mut buf)? != Self::LOG_HEADER_SIZE {
-            return Err(MorsWalError::InvalidLogHeader(path_buf));
+            return Err(MorsWalError::InvalidLogHeader(
+                path_buf.as_ref().to_owned(),
+            ));
         };
 
         let mut buf_ref = buf.as_slice();
@@ -113,7 +115,9 @@ impl<F: FileId, K: Kms> LogFile<F, K>
     fn generate_nonce(&self, offset: usize) -> Vec<u8> {
         let mut v = Vec::with_capacity(K::Cipher::NONCE_SIZE);
         let offset = offset.to_ne_bytes();
-        v.extend_from_slice(&self.base_nonce[..K::Cipher::NONCE_SIZE - offset.len()]);
+        v.extend_from_slice(
+            &self.base_nonce[..K::Cipher::NONCE_SIZE - offset.len()],
+        );
         v.extend_from_slice(&offset);
         v
     }
@@ -135,8 +139,14 @@ impl<F: FileId, K: Kms> LogFile<F, K>
             None => None,
         })
     }
-    pub fn max_size(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.size.load(Ordering::Relaxed)
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == Self::LOG_HEADER_SIZE
+    }
+    pub fn delete(&self) -> Result<()> {
+        Ok(self.mmap.delete()?)
     }
     pub(crate) fn set_size(&self, size: usize) {
         self.size.store(size, Ordering::Relaxed);

@@ -287,6 +287,7 @@ mod test {
     use super::*;
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_write() {
+        console_subscriber::init();
         if let Err(e) = test_write_impl().await {
             eprintln!("Error: {:?}", e.to_string());
         }

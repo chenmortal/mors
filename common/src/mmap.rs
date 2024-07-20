@@ -28,22 +28,6 @@ pub struct MmapFile {
     path: PathBuf,
     fd: File,
 }
-impl MmapFile {
-    pub fn builder() -> MmapFileBuilder {
-        MmapFileBuilder::new()
-    }
-    pub fn path(&self) -> &PathBuf {
-        &self.path
-    }
-    pub fn write_at(&self) -> usize {
-        self.w_pos
-    }
-    pub fn delete(&self) -> Result<(), io::Error> {
-        self.fd.set_len(0)?;
-        self.fd.sync_all()?;
-        Ok(())
-    }
-}
 
 impl MmapFile {
     #[inline(always)]
@@ -136,6 +120,20 @@ impl AsMut<[u8]> for MmapFile {
     }
 }
 impl MmapFile {
+    pub fn builder() -> MmapFileBuilder {
+        MmapFileBuilder::new()
+    }
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+    pub fn write_at(&self) -> usize {
+        self.w_pos
+    }
+    pub fn delete(&self) -> Result<(), io::Error> {
+        self.fd.set_len(0)?;
+        std::fs::remove_file(&self.path)?;
+        Ok(())
+    }
     #[inline]
     pub fn len(&self) -> Result<usize, Error> {
         Ok(self.raw.len())
