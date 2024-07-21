@@ -1,9 +1,5 @@
 use std::{
-    collections::HashSet,
-    fmt::{Debug, Display},
-    fs::read_dir,
-    hash::Hash,
-    path::{Path, PathBuf},
+    collections::HashSet, fmt::{Debug, Display}, fs::read_dir, hash::Hash, ops::Add, path::{Path, PathBuf}
 };
 
 use thiserror::Error;
@@ -115,5 +111,11 @@ impl FileId for VlogId {
 impl Display for VlogId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:06}.vlog", self.0)
+    }
+}
+impl Add<u32> for VlogId {
+    type Output = VlogId;
+    fn add(self, rhs: u32) -> Self::Output {
+        VlogId(self.0 + rhs)
     }
 }

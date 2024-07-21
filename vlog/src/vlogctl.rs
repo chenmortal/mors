@@ -3,7 +3,7 @@ use std::{
     marker::PhantomData,
     path::PathBuf,
     sync::{
-        atomic::{AtomicU32, Ordering},
+        atomic::{AtomicUsize, Ordering},
         Arc, RwLock,
     },
 };
@@ -23,11 +23,14 @@ use mors_wal::LogFile;
 
 use crate::{discard::Discard, error::MorsVlogError};
 type Result<T> = std::result::Result<T, MorsVlogError>;
+type LogFileWrapper<K> = Arc<RwLock<LogFile<VlogId, K>>>;
 pub struct VlogCtl<K: Kms> {
     inner: Arc<VlogCtlInner<K>>,
 }
 struct VlogCtlInner<K: Kms> {
-    id_logfile: RwLock<BTreeMap<VlogId, Arc<RwLock<LogFile<VlogId, K>>>>>,
+    id_logfile: RwLock<BTreeMap<VlogId, LogFileWrapper<K>>>,
+    max_id: RwLock<VlogId>,
+    writeable_offset: AtomicUsize,
     kms: K,
     builder: VlogCtlBuilder<K>,
 }
@@ -40,16 +43,35 @@ impl<K: Kms> VlogCtlTrait<K> for VlogCtl<K> {
 }
 impl<K: Kms> VlogCtl<K> {
     pub fn latest_logfile(&self) -> Result<Arc<RwLock<LogFile<VlogId, K>>>> {
-        let id = self.inner.builder.max_id.load(Ordering::Relaxed);
-        let id_logfile = self
-            .inner
-            .id_logfile
-            .read()
-            .map_err(|e| MorsVlogError::PosionError(e.to_string()))?;
-        if let Some(log) = id_logfile.get(&id.into()) {
+        let id_r = self.inner.max_id.read()?;
+        
+        let id_logfile = self.inner.id_logfile.read()?;
+        let id = *id_r;
+        if let Some(log) = id_logfile.get(&id) {
             return Ok(log.clone());
         };
-        Err(MorsVlogError::LogNotFound(id.into()))
+        Err(MorsVlogError::LogNotFound(id))
+    }
+    fn create_new(&self) -> Result<LogFileWrapper<K>> {
+        let mut max_id_w = self.inner.max_id.write()?;
+
+        let id = *max_id_w + 1;
+
+        let log = self
+            .inner
+            .builder
+            .open_logfile(id, self.inner.kms.clone())?;
+
+        let mut id_logfile = self.inner.id_logfile.write()?;
+
+        let log = Arc::new(RwLock::new(log));
+        id_logfile.insert(id, log.clone());
+        debug_assert!(id > *max_id_w);
+        *max_id_w = id;
+        self.inner
+            .writeable_offset
+            .store(LogFile::<VlogId, K>::LOG_HEADER_SIZE, Ordering::SeqCst);
+        Ok(log)
     }
 }
 #[derive(Debug, Clone)]
@@ -58,7 +80,7 @@ pub struct VlogCtlBuilder<K: Kms> {
     vlog_dir: PathBuf,
     vlog_file_size: usize,
     vlog_max_entries: usize,
-    max_id: Arc<AtomicU32>,
+
     kms: PhantomData<K>,
 }
 impl<K: Kms> Default for VlogCtlBuilder<K> {
@@ -69,7 +91,6 @@ impl<K: Kms> Default for VlogCtlBuilder<K> {
             vlog_file_size: 1 << 30,
             vlog_max_entries: 1_000_000,
             kms: PhantomData,
-            max_id: Arc::new(AtomicU32::new(0)),
         }
     }
 }
@@ -110,45 +131,58 @@ impl<K: Kms> VlogCtlBuilder<K> {
     pub fn build_impl(&self, kms: K) -> Result<()> {
         let mut id_logfile = BTreeMap::new();
         let ids = VlogId::parse_set_from_dir(&self.vlog_dir);
-
+        let mut max_id: VlogId = 0.into();
         for id in ids {
-            let path = id.join_dir(&self.vlog_dir);
-            let mut builder = MmapFileBuilder::new();
-            builder
-                .read(true)
-                .write(!self.read_only)
-                .create(!self.read_only);
-            builder.advice(Advice::Sequential);
-            let log = LogFile::open(
-                id,
-                &path,
-                2 * self.vlog_file_size as u64,
-                builder,
-                kms.clone(),
-            )?;
+            let log = self.open_logfile(id, kms.clone())?;
             if log.is_empty() {
-                info!("Empty log file: {:?}", &path);
+                info!("Empty log file: {:?}", &id.join_dir(&self.vlog_dir));
                 log.delete()?;
             }
             id_logfile.insert(id, Arc::new(RwLock::new(log)));
-            self.max_id.fetch_max(id.into(), Ordering::SeqCst);
+            max_id = max_id.max(id);
         }
 
+        let id_len = id_logfile.len();
         let vlog_ctl = VlogCtl {
             inner: Arc::new(VlogCtlInner {
                 id_logfile: RwLock::new(id_logfile),
                 builder: self.clone(),
                 kms,
+                max_id: RwLock::new(max_id),
+                writeable_offset: AtomicUsize::new(0),
             }),
         };
-        // let vlog_ctl =
+
         if self.read_only {
             return Ok(());
         }
+        if id_len == 0 {
+            vlog_ctl.create_new()?;
+            return Ok(());
+        }
+
+        let latest = vlog_ctl.latest_logfile()?;
+        latest.write()?;
+        // latest.write().map_err(|e|MorsVlogError::PosionError(()));
+
         Ok(())
     }
-    fn create_new(){
-        
+    fn open_logfile(&self, id: VlogId, kms: K) -> Result<LogFile<VlogId, K>> {
+        let path = id.join_dir(&self.vlog_dir);
+        let mut builder = MmapFileBuilder::new();
+        builder
+            .read(true)
+            .write(!self.read_only)
+            .create(!self.read_only);
+        builder.advice(Advice::Sequential);
+        let log = LogFile::open(
+            id,
+            &path,
+            2 * self.vlog_file_size as u64,
+            builder,
+            kms,
+        )?;
+        Ok(log)
     }
     // BTreeMap::new();
 }
