@@ -5,7 +5,7 @@ const PRECISION: f64 = 100.;
 const BUCKETS: usize = 1 << 16;
 
 /// A histogram collector that uses zero-configuration logarithmic buckets.
-pub(crate) struct Histogram {
+pub struct Histogram {
     vals: Vec<AtomicUsize>,
     sum: AtomicUsize,
     count: AtomicUsize,
@@ -34,7 +34,7 @@ impl Debug for Histogram {
         for p in &PS {
             let res = self.percentile(*p).round();
             let line = format!("({} -> {}) ", p, res);
-            f.write_str(&*line)?;
+            f.write_str(&line)?;
         }
 
         f.write_str("]")
@@ -44,7 +44,7 @@ impl Debug for Histogram {
 impl Histogram {
     /// Record a value.
     #[inline]
-    pub(crate) fn measure(&self, raw_value: usize) -> usize {
+    pub fn measure(&self, raw_value: usize) -> usize {
         {
             let value_float: f64 = raw_value as f64;
             self.sum
@@ -63,14 +63,14 @@ impl Histogram {
 
     /// Retrieve a percentile [0-100]. Returns NAN if no metrics have been
     /// collected yet.
-    pub(crate) fn percentile(&self, p: f64) -> f64 {
+    pub fn percentile(&self, p: f64) -> f64 {
         {
             assert!(p <= 100., "percentiles must not exceed 100.0");
 
             let count = self.count.load(Ordering::Acquire);
 
             if count == 0 {
-                return std::f64::NAN;
+                return f64::NAN;
             }
 
             let mut target = count as f64 * (p / 100.);
@@ -90,25 +90,25 @@ impl Histogram {
             }
         }
 
-        std::f64::NAN
+        f64::NAN
     }
 
     /// Dump out some common percentiles.
-    pub(crate) fn print_percentiles(&self) {
+    pub fn print_percentiles(&self) {
         println!("{:?}", self);
     }
 
     /// Return the sum of all observations in this histogram.
-    pub(crate) fn sum(&self) -> usize {
+    pub fn sum(&self) -> usize {
         self.sum.load(Ordering::Acquire)
     }
 
     /// Return the count of observations in this histogram.
-    pub(crate) fn count(&self) -> usize {
+    pub fn count(&self) -> usize {
         self.count.load(Ordering::Acquire)
     }
 
-    pub(crate) fn clear(&self) {
+    pub fn clear(&self) {
         self.count.store(0, Ordering::SeqCst);
         self.sum.store(0, Ordering::SeqCst);
     }
@@ -125,7 +125,7 @@ fn compress<T: Into<f64>>(value: T) -> u16 {
     let boosted = 1. + abs;
     let ln = boosted.ln();
     let compressed = PRECISION * ln + 0.5;
-    assert!(compressed <= std::u16::MAX as f64);
+    assert!(compressed <= u16::MAX as f64);
     compressed as u16
 }
 

@@ -142,6 +142,9 @@ impl<F: FileId, K: Kms> LogFile<F, K>
     pub fn len(&self) -> usize {
         self.size.load(Ordering::Relaxed)
     }
+    pub fn max_size(&self) -> usize {
+        self.mmap.len().unwrap_or(0)
+    }
     pub fn is_empty(&self) -> bool {
         self.len() == Self::LOG_HEADER_SIZE
     }

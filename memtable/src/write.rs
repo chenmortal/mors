@@ -34,7 +34,7 @@ impl<T: SkipListTrait, K: Kms> Memtable<T, K> {
             ));
         }
 
-        self.wal.truncate(end_offset)?;
+        self.wal.set_len(end_offset)?;
         Ok(())
     }
     pub fn push_impl(&mut self, entry: &Entry) -> Result<()> {

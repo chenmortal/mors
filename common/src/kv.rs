@@ -62,12 +62,19 @@ impl Entry {
     pub fn value_meta(&self) -> &ValueMeta {
         &self.value_meta
     }
+    pub fn value(&self) -> &Bytes {
+        &self.value_meta.value
+    }
     pub fn set_value<B: Into<Bytes>>(&mut self, value: B) -> &mut Self {
         self.value_meta.set_value(value.into());
         self
     }
     pub fn meta(&self) -> Meta {
         self.value_meta.meta()
+    }
+    pub fn set_meta(&mut self, meta: Meta) -> &mut Self {
+        self.value_meta.meta = meta;
+        self
     }
     pub fn meta_mut(&mut self) -> &mut Meta {
         &mut self.value_meta.meta
@@ -93,6 +100,10 @@ impl Entry {
     }
     pub fn value_threshold(&self) -> usize {
         self.value_threshold
+    }
+    pub fn set_value_threshold(&mut self, value_threshold: usize) -> &mut Self {
+        self.value_threshold = value_threshold;
+        self
     }
 }
 

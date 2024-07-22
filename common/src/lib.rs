@@ -15,6 +15,7 @@ pub mod kv;
 pub mod test;
 pub mod ts;
 pub mod file_id;
+pub mod histogram;
 // lazy_static! {
 //     pub static ref DEFAULT_PAGE_SIZE: usize = unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize };
 // }

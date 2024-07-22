@@ -11,7 +11,7 @@ use mors_traits::{kms::Kms, log_header::LogEntryHeader};
 use crate::LogFile;
 use crate::Result;
 impl<F: FileId, K: Kms> LogFile<F, K> {
-    pub fn truncate(&mut self, end_offset: usize) -> io::Result<()> {
+    pub fn set_len(&mut self, end_offset: usize) -> io::Result<()> {
         let file_size = self.mmap.file_len()? as usize;
         if end_offset == file_size {
             return Ok(());
@@ -32,10 +32,13 @@ impl<F: FileId, K: Kms> LogFile<F, K> {
         self.mmap.write_all(&buf[..size])?;
         Ok(())
     }
+    pub fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        self.mmap.write_all(buf)
+    }
     pub fn flush(&mut self) -> Result<()> {
         Ok(self.mmap.flush()?)
     }
-    fn encode_entry(
+    pub fn encode_entry(
         &self,
         buf: &mut Vec<u8>,
         entry: &Entry,
