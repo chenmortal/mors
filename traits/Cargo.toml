@@ -12,6 +12,6 @@ thiserror = { workspace = true }
 bytes = { workspace = true }
 integer-encoding = { workspace = true }
 lazy_static = { workspace = true }
-
+# mors-wal= { workspace = true }
 mors-common = { workspace = true }
 # mors-encrypt = { workspace = true }

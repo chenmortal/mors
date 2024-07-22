@@ -19,9 +19,13 @@ use mors_traits::{
     kms::Kms,
     vlog::{VlogCtlBuilderTrait, VlogCtlTrait, VlogError},
 };
-use mors_wal::LogFile;
+use mors_wal::{read::LogFileIter, LogFile};
 
-use crate::{discard::Discard, error::MorsVlogError};
+use crate::{
+    discard::Discard,
+    error::MorsVlogError,
+    threshold::{VlogThreshold, VlogThresholdConfig},
+};
 type Result<T> = std::result::Result<T, MorsVlogError>;
 type LogFileWrapper<K> = Arc<RwLock<LogFile<VlogId, K>>>;
 pub struct VlogCtl<K: Kms> {
@@ -32,6 +36,7 @@ struct VlogCtlInner<K: Kms> {
     max_id: RwLock<VlogId>,
     writeable_offset: AtomicUsize,
     kms: K,
+    vlog_threshold: VlogThreshold,
     builder: VlogCtlBuilder<K>,
 }
 impl<K: Kms> VlogCtlTrait<K> for VlogCtl<K> {
@@ -40,11 +45,22 @@ impl<K: Kms> VlogCtlTrait<K> for VlogCtl<K> {
     type Discard = Discard;
 
     type VlogCtlBuilder = VlogCtlBuilder<K>;
+
+    fn writeable_offset(&self) -> usize {
+        self.inner.writeable_offset.load(Ordering::SeqCst)
+    }
+    fn vlog_file_size(&self) -> usize {
+        self.inner.builder.vlog_file_size
+    }
+
+    const MAX_VLOG_SIZE: usize = 22;
+
+    const MAX_VLOG_FILE_SIZE: usize = u32::MAX as usize;
 }
 impl<K: Kms> VlogCtl<K> {
     pub fn latest_logfile(&self) -> Result<Arc<RwLock<LogFile<VlogId, K>>>> {
         let id_r = self.inner.max_id.read()?;
-        
+
         let id_logfile = self.inner.id_logfile.read()?;
         let id = *id_r;
         if let Some(log) = id_logfile.get(&id) {
@@ -73,6 +89,9 @@ impl<K: Kms> VlogCtl<K> {
             .store(LogFile::<VlogId, K>::LOG_HEADER_SIZE, Ordering::SeqCst);
         Ok(log)
     }
+    pub fn woffset(&self) -> usize {
+        self.inner.writeable_offset.load(Ordering::SeqCst)
+    }
 }
 #[derive(Debug, Clone)]
 pub struct VlogCtlBuilder<K: Kms> {
@@ -80,7 +99,7 @@ pub struct VlogCtlBuilder<K: Kms> {
     vlog_dir: PathBuf,
     vlog_file_size: usize,
     vlog_max_entries: usize,
-
+    vlog_threshold: VlogThresholdConfig,
     kms: PhantomData<K>,
 }
 impl<K: Kms> Default for VlogCtlBuilder<K> {
@@ -91,15 +110,16 @@ impl<K: Kms> Default for VlogCtlBuilder<K> {
             vlog_file_size: 1 << 30,
             vlog_max_entries: 1_000_000,
             kms: PhantomData,
+            vlog_threshold: VlogThresholdConfig::default(),
         }
     }
 }
 impl<K: Kms> VlogCtlBuilderTrait<VlogCtl<K>, K> for VlogCtlBuilder<K> {
     async fn build(
-        &self,
+        &mut self,
         kms: K,
     ) -> std::result::Result<VlogCtl<K>, VlogError> {
-        todo!()
+        Ok(self.build_impl(kms)?)
     }
 
     fn build_discard(
@@ -111,24 +131,28 @@ impl<K: Kms> VlogCtlBuilderTrait<VlogCtl<K>, K> for VlogCtlBuilder<K> {
 }
 impl<K: Kms> WithDir for VlogCtlBuilder<K> {
     fn set_dir(&mut self, dir: PathBuf) -> &mut Self {
-        todo!()
+        self.vlog_dir = dir;
+        self
     }
 
     fn dir(&self) -> &PathBuf {
-        todo!()
+        &self.vlog_dir
     }
 }
 impl<K: Kms> WithReadOnly for VlogCtlBuilder<K> {
     fn set_read_only(&mut self, read_only: bool) -> &mut Self {
-        todo!()
+        self.read_only = read_only;
+        self
     }
 
     fn read_only(&self) -> bool {
-        todo!()
+        self.read_only
     }
 }
 impl<K: Kms> VlogCtlBuilder<K> {
-    pub fn build_impl(&self, kms: K) -> Result<()> {
+    pub fn build_impl(&mut self, kms: K) -> Result<VlogCtl<K>> {
+        self.vlog_threshold.check_threshold_config()?;
+        let vlog_threshold = VlogThreshold::new(self.vlog_threshold);
         let mut id_logfile = BTreeMap::new();
         let ids = VlogId::parse_set_from_dir(&self.vlog_dir);
         let mut max_id: VlogId = 0.into();
@@ -150,22 +174,31 @@ impl<K: Kms> VlogCtlBuilder<K> {
                 kms,
                 max_id: RwLock::new(max_id),
                 writeable_offset: AtomicUsize::new(0),
+                vlog_threshold,
             }),
         };
 
         if self.read_only {
-            return Ok(());
+            return Ok(vlog_ctl);
         }
         if id_len == 0 {
             vlog_ctl.create_new()?;
-            return Ok(());
+            return Ok(vlog_ctl);
         }
 
         let latest = vlog_ctl.latest_logfile()?;
-        latest.write()?;
-        // latest.write().map_err(|e|MorsVlogError::PosionError(()));
-
-        Ok(())
+        let mut latest_w = latest.write()?;
+        let mut logfile_iter =
+            LogFileIter::new(&latest_w, LogFile::<VlogId, K>::LOG_HEADER_SIZE);
+        loop {
+            if logfile_iter.next_entry()?.is_none() {
+                break;
+            };
+        }
+        let end_offset = logfile_iter.valid_end_offset();
+        latest_w.truncate(end_offset)?;
+        vlog_ctl.create_new()?;
+        Ok(vlog_ctl)
     }
     fn open_logfile(&self, id: VlogId, kms: K) -> Result<LogFile<VlogId, K>> {
         let path = id.join_dir(&self.vlog_dir);
@@ -184,5 +217,4 @@ impl<K: Kms> VlogCtlBuilder<K> {
         )?;
         Ok(log)
     }
-    // BTreeMap::new();
 }

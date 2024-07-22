@@ -8,7 +8,7 @@ use mors_traits::{
     memtable::MemtableTrait,
     skip_list::SkipListTrait,
     sstable::{TableBuilderTrait, TableTrait},
-    txn::TxnManagerTrait,
+    txn::TxnManagerTrait, vlog::VlogCtlTrait,
 };
 use tokio::{
     select,
@@ -17,7 +17,7 @@ use tokio::{
 
 use crate::core::{CoreBuilder, CoreInner};
 use crate::Result;
-impl<M, K, L, T, S, Txn> CoreBuilder<M, K, L, T, S, Txn>
+impl<M, K, L, T, S, Txn,V> CoreBuilder<M, K, L, T, S, Txn,V>
 where
     M: MemtableTrait<S, K>,
     K: Kms,
@@ -25,6 +25,7 @@ where
     T: TableTrait<K::Cipher>,
     S: SkipListTrait,
     Txn: TxnManagerTrait,
+    V: VlogCtlTrait<K>,
 {
     pub(crate) fn init_flush_channel(
         num_memtables: usize,
@@ -32,13 +33,14 @@ where
         mpsc::channel::<Arc<M>>(num_memtables)
     }
 }
-impl<M, K, L, T, S> CoreInner<M, K, L, T, S>
+impl<M, K, L, T, S,V> CoreInner<M, K, L, T, S,V>
 where
     M: MemtableTrait<S, K>,
     K: Kms,
     L: LevelCtlTrait<T, K>,
     T: TableTrait<K::Cipher>,
     S: SkipListTrait,
+    V: VlogCtlTrait<K>,
 {
     pub(crate) async fn do_flush_task(
         this: Arc<Self>,

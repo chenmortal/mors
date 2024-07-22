@@ -90,8 +90,9 @@ impl<E: Error> ThrottlePermit<E> {
         }
     }
 }
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct Closer(Arc<CloserInner>);
+#[derive(Debug)]
 struct CloserInner {
     join_handle: Mutex<Option<JoinHandle<()>>>,
     notify: Notify,
