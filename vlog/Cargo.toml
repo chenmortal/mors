@@ -1,0 +1,19 @@
+[package]
+name = "mors-vlog"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+version.workspace = true
+
+[dependencies]
+mors-traits = { workspace = true }
+mors-common = { workspace = true }
+mors-wal = { workspace = true }
+thiserror = { workspace = true }
+parking_lot = { workspace = true }
+memmap2 = { workspace = true }
+bytes = { workspace = true }
+log = { workspace = true }
+[lints]
+workspace = true

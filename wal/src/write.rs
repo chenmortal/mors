@@ -5,9 +5,8 @@ use std::{
 };
 
 use bytes::BufMut;
-use mors_traits::{
-    file_id::FileId, kms::Kms, kv::Entry, log_header::LogEntryHeader,
-};
+use mors_common::{file_id::FileId, kv::Entry};
+use mors_traits::{kms::Kms, log_header::LogEntryHeader};
 
 use crate::LogFile;
 use crate::Result;
@@ -30,8 +29,11 @@ impl<F: FileId, K: Kms> LogFile<F, K> {
 
         let offset = self.mmap.write_at();
         let size = self.encode_entry(buf, entry, offset)?;
-        self.mmap.pwrite(&buf[..size], offset)?;
+        self.mmap.write_all(&buf[..size])?;
         Ok(())
+    }
+    pub fn flush(&mut self) -> Result<()> {
+        Ok(self.mmap.flush()?)
     }
     fn encode_entry(
         &self,

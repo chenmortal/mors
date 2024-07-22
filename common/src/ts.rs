@@ -129,7 +129,7 @@ impl KeyTs {
         self.txn_ts = txn_ts;
     }
 
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.key.len() + std::mem::size_of::<u64>()
     }
 

@@ -2,14 +2,11 @@ mod read;
 pub mod write;
 use std::sync::Arc;
 
-use read::CacheBlockIter;
 use bytes::Buf;
-use mors_common::util::BufExt;
-use mors_traits::{
-    file_id::SSTableId,
-    sstable::{BlockIndex, BlockTrait},
-};
+use mors_common::{file_id::SSTableId, util::BufExt};
+use mors_traits::sstable::{BlockIndex, BlockTrait};
 use prost::Message;
+use read::CacheBlockIter;
 
 use crate::{error::MorsTableError, pb::proto::Checksum, Result};
 #[derive(Default, Clone)]

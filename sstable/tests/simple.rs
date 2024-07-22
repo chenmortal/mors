@@ -9,9 +9,9 @@ use mors_traits::default::WithDir;
 use mors_traits::iter::{
     CacheIter, CacheIterator, IterError, KvCacheIter, KvCacheIterator,
 };
-use mors_traits::kv::ValueMeta;
+use mors_common::kv::ValueMeta;
 use mors_traits::sstable::TableBuilderTrait;
-use mors_traits::ts::{KeyTs, KeyTsBorrow};
+use mors_common::ts::{KeyTs, KeyTsBorrow};
 use rand::Rng;
 use rand::{rngs::StdRng, SeedableRng};
 use sha2::Digest;

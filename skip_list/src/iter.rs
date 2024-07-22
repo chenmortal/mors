@@ -1,7 +1,7 @@
 use log::error;
-use mors_traits::{
-    iter::{CacheIter, CacheIterator, IterError, KvCacheIter, KvCacheIterator},
-    kv::ValueMeta,
+use mors_common::{kv::ValueMeta, ts::KeyTsBorrow};
+use mors_traits::iter::{
+    CacheIter, CacheIterator, IterError, KvCacheIter, KvCacheIterator,
 };
 
 use crate::skip_list::{Node, SkipListInner};
@@ -50,7 +50,7 @@ impl<'a> CacheIterator for SkipListIter<'a> {
     }
 }
 impl<'a> KvCacheIter<ValueMeta> for SkipListIter<'a> {
-    fn key(&self) -> Option<mors_traits::ts::KeyTsBorrow<'_>> {
+    fn key(&self) -> Option<KeyTsBorrow<'_>> {
         if let Some(item) = self.item() {
             match item.get_key(self.inner.arena()) {
                 Ok(k) => Some(k.into()),

@@ -1,7 +1,6 @@
 use std::ops::Deref;
 use std::{marker::PhantomData, sync::Arc};
-
-use mors_traits::ts::TxnTs;
+use mors_common::ts::TxnTs;
 use mors_traits::{
     kms::KmsCipher,
     levelctl::{Level, LEVEL0},

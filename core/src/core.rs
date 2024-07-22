@@ -50,6 +50,18 @@ impl<
         L: LevelCtlTrait<T, K>,
         T: TableTrait<K::Cipher>,
         S: SkipListTrait,
+    > Core<M, K, L, T, S>
+{
+    pub(crate) fn inner(&self) -> &Arc<CoreInner<M, K, L, T, S>> {
+        &self.inner
+    }
+}
+impl<
+        M: MemtableTrait<S, K>,
+        K: Kms,
+        L: LevelCtlTrait<T, K>,
+        T: TableTrait<K::Cipher>,
+        S: SkipListTrait,
     > CoreInner<M, K, L, T, S>
 {
     pub(crate) fn memtable(&self) -> Option<&Arc<RwLock<M>>> {
@@ -57,6 +69,12 @@ impl<
     }
     pub(crate) fn immut_memtable(&self) -> &RwLock<VecDeque<Arc<M>>> {
         &self.immut_memtable
+    }
+    pub(crate) fn flush_sender(&self) -> &Sender<Arc<M>> {
+        &self.flush_sender
+    }
+    pub(crate) fn write_sender(&self) -> &Sender<WriteRequest> {
+        &self.write_sender
     }
     pub(crate) fn build_memtable(&self) -> Result<M> {
         Ok(self.memtable_builder.build(self.kms.clone())?)
@@ -154,6 +172,15 @@ impl<
     }
     pub(crate) fn num_memtables(&self) -> usize {
         self.num_memtables
+    }
+    pub fn set_num_memtables(&mut self, num_memtables: usize) -> &mut Self {
+        self.num_memtables = num_memtables;
+        self.memtable.set_num_memtables(num_memtables);
+        self
+    }
+    pub fn set_memtable_size(&mut self, memtable_size: usize) -> &mut Self {
+        self.memtable.set_memtable_size(memtable_size);
+        self
     }
 }
 impl<

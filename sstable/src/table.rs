@@ -7,16 +7,17 @@ use log::error;
 use memmap2::Advice;
 use mors_common::bloom::Bloom;
 use mors_common::compress::CompressionType;
+use mors_common::file_id::{FileId, SSTableId};
+use mors_common::kv::ValueMeta;
 use mors_common::mmap::{MmapFile, MmapFileBuilder};
+use mors_common::ts::{KeyTs, TxnTs};
 use mors_traits::cache::BlockCacheKey;
 use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
-use mors_traits::file_id::{FileId, SSTableId};
 use mors_traits::iter::{DoubleEndedCacheIterator, KvDoubleEndedCacheIter};
 use mors_traits::kms::KmsCipher;
 use mors_traits::sstable::{
     BlockIndex, SSTableError, TableBuilderTrait, TableTrait,
 };
-use mors_traits::ts::{KeyTs, TxnTs};
 use prost::Message;
 
 use crate::block::Block;
@@ -124,7 +125,7 @@ impl<K: KmsCipher> TableBuilderTrait<Table<K>, K> for TableBuilder {
 
     async fn build_l0<
         I: mors_traits::iter::KvCacheIterator<V>,
-        V: Into<mors_traits::kv::ValueMeta>,
+        V: Into<ValueMeta>,
     >(
         &self,
         iter: I,

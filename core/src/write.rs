@@ -11,16 +11,14 @@ use crate::{
     error::MorsError,
     Result,
 };
-use log::{debug, error};
-use mors_common::closer::Closer;
+use log::{debug, error, info};
+use mors_common::{
+    closer::Closer,
+    kv::{Entry, Meta, ValuePointer},
+};
 use mors_traits::{
-    kms::Kms,
-    kv::{Entry, ValuePointer},
-    levelctl::LevelCtlTrait,
-    memtable::MemtableTrait,
-    skip_list::SkipListTrait,
-    sstable::TableTrait,
-    txn::TxnManagerTrait,
+    kms::Kms, levelctl::LevelCtlTrait, memtable::MemtableTrait,
+    skip_list::SkipListTrait, sstable::TableTrait, txn::TxnManagerTrait,
 };
 use tokio::{
     select,
@@ -171,31 +169,75 @@ where
                 continue;
             }
             count += request.entries_vptrs.len();
-            self.ensure_room_for_write().await?;
+            if let Err(e) = self.ensure_room_for_write().await {
+                request.result = Err(e);
+            };
+            if let Err(e) = self.write_to_memtable(request).await {
+                request.result = Err(e);
+                break;
+            };
         }
         debug!("Writing to memtable done:{}", count);
         Ok(())
     }
     async fn ensure_room_for_write(&self) -> Result<()> {
         let memtable = self.memtable().unwrap();
-        let memtable_r = memtable
-            .read()
+        let new_memtable = {
+            let memtable_r = memtable
+                .read()
+                .map_err(|e| MorsError::RwLockPoisoned(e.to_string()))?;
+            if !memtable_r.is_full() {
+                return Ok(());
+            }
+            debug!(
+                "Memtable {} is full, making room for writes",
+                memtable_r.id()
+            );
+            let new_memtable = self.build_memtable()?;
+            debug!("New memtable {} created", new_memtable.id());
+            new_memtable
+        };
+
+        let old_memtable = {
+            let mut memtable_w = memtable
+                .write()
+                .map_err(|e| MorsError::RwLockPoisoned(e.to_string()))?;
+
+            let old_memtable = replace(&mut *memtable_w, new_memtable);
+            Arc::new(old_memtable)
+        };
+
+        self.flush_sender()
+            .send(old_memtable.clone())
+            .await
+            .map_err(|e| MorsError::SendError(e.to_string()))?;
+        debug!("Old memtable {} sent for flushing", old_memtable.id());
+        let mut immut_w = self
+            .immut_memtable()
+            .write()
             .map_err(|e| MorsError::RwLockPoisoned(e.to_string()))?;
-        if !memtable_r.is_full() {
-            return Ok(());
-        }
-
-        debug!("Memtable is full, making room for writes");
-        let new_memtable = self.build_memtable()?;
-        drop(memtable_r);
-
+        immut_w.push_back(old_memtable);
+        debug!("Old memtable added to immut_memtable");
+        Ok(())
+    }
+    async fn write_to_memtable(
+        &self,
+        request: &mut WriteRequest,
+    ) -> Result<()> {
+        let memtable = self.memtable().unwrap();
         let mut memtable_w = memtable
             .write()
             .map_err(|e| MorsError::RwLockPoisoned(e.to_string()))?;
-        let old_memtable = replace(&mut *memtable_w, new_memtable);
-        drop(memtable_w);
-        let old_memtable = Arc::new(old_memtable);
-
+        for (entry, vptr) in &mut request.entries_vptrs {
+            if vptr.is_empty() {
+                entry.meta_mut().remove(Meta::VALUE_POINTER);
+            } else {
+                entry.meta_mut().insert(Meta::VALUE_POINTER);
+                entry.set_value(vptr.encode());
+            }
+            memtable_w.push(entry)?;
+        }
+        memtable_w.flush()?;
         Ok(())
     }
 }
@@ -231,4 +273,77 @@ async fn test_notify() {
     });
     handle_notify.await.unwrap();
     handle_notified.await.unwrap();
+}
+
+mod test {
+
+    use std::{fs::create_dir, path::PathBuf};
+
+    use log::LevelFilter;
+    use mors_common::test::{gen_random_entries, get_rng};
+
+    use crate::MorsBuilder;
+
+    use super::*;
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_write() {
+        console_subscriber::init();
+        if let Err(e) = test_write_impl().await {
+            eprintln!("Error: {:?}", e.to_string());
+        }
+    }
+    async fn test_write_impl() -> Result<()> {
+        let mut logger = env_logger::builder();
+        logger.filter_level(LevelFilter::Trace);
+        logger.init();
+
+        let path = "../data/";
+        let dir = PathBuf::from(path);
+        if !dir.exists() {
+            create_dir(&dir).unwrap();
+        }
+        let mut builder = MorsBuilder::default();
+        builder.set_dir(dir).set_read_only(false);
+        builder
+            .set_num_memtables(1)
+            .set_memtable_size(5 * 1024 * 1024);
+        let mors = builder.build().await?;
+
+        let mut rng = get_rng("abcd");
+        let random = gen_random_entries(&mut rng, 100000);
+
+        let mut entries = Vec::new();
+        let mut receivers = Vec::new();
+        for entry in random {
+            entries.push(entry);
+            if entries.len() == 10 {
+                let (sender, receiver) = oneshot::channel();
+                receivers.push(receiver);
+                let write_request = WriteRequest::new(entries, sender);
+                mors.inner()
+                    .write_sender()
+                    .send(write_request)
+                    .await
+                    .unwrap();
+                entries = Vec::new();
+            }
+        }
+        debug!("Waiting for write to complete");
+        for recv in receivers {
+            match recv.await {
+                Ok(e) => {
+                    if let Err(k) = e {
+                        eprintln!("Error: {:?}", k.to_string());
+                        return Err(MorsError::SendError(k.to_string()));
+                    }
+                }
+                Err(k) => {
+                    eprintln!("Error: {:?}", k.to_string());
+                    return Err(MorsError::SendError(k.to_string()));
+                }
+            };
+        }
+        info!("Write completed");
+        Ok(())
+    }
 }

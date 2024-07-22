@@ -1,9 +1,9 @@
 use std::mem::size_of;
 use std::sync::Arc;
 
+use mors_common::kv::ValueMeta;
 use mors_traits::{
     iter::KvCacheIterator,
-    kv::ValueMeta,
     skip_list::{SkipListError, SkipListTrait},
 };
 
@@ -55,9 +55,7 @@ impl SkipListTrait for SkipList {
 
     const MAX_NODE_SIZE: usize = size_of::<Node>();
 
-    fn iter(
-        &self,
-    ) -> impl KvCacheIterator<ValueMeta> {
+    fn iter(&self) -> impl KvCacheIterator<ValueMeta> {
         SkipListIter::new(&self.inner)
     }
 }

@@ -2,14 +2,15 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use flatbuffers::InvalidFlatbuffer;
-use mors_traits::{sstable::TableIndexBufTrait, ts::KeyTs};
+use mors_common::ts::KeyTs;
+use mors_traits::sstable::TableIndexBufTrait;
 
 use crate::fb::table_generated::TableIndex;
 
 #[derive(Clone, Debug, Default)]
 pub struct TableIndexBuf(Arc<TableIndexBufInner>);
-#[derive(Debug,Default)]
-struct TableIndexBufInner{
+#[derive(Debug, Default)]
+struct TableIndexBufInner {
     offsets: Vec<BlockOffsetBuf>,
     bloom_filter: Option<Bytes>,
     max_version: u64,
@@ -40,15 +41,18 @@ impl TableIndexBuf {
         let bloom_filter = table_index
             .bloom_filter()
             .and_then(|x| Bytes::from(x.bytes().to_vec()).into());
-        Ok(Self(TableIndexBufInner {
-            offsets,
-            bloom_filter,
-            max_version: table_index.max_version(),
-            key_count: table_index.key_count(),
-            uncompressed_size: table_index.uncompressed_size(),
-            on_disk_size: table_index.on_disk_size(),
-            stale_data_size: table_index.stale_data_size(),
-        }.into()))
+        Ok(Self(
+            TableIndexBufInner {
+                offsets,
+                bloom_filter,
+                max_version: table_index.max_version(),
+                key_count: table_index.key_count(),
+                uncompressed_size: table_index.uncompressed_size(),
+                on_disk_size: table_index.on_disk_size(),
+                stale_data_size: table_index.stale_data_size(),
+            }
+            .into(),
+        ))
     }
     pub(crate) fn offsets(&self) -> &[BlockOffsetBuf] {
         &self.0.offsets

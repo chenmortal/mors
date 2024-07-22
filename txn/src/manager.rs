@@ -1,8 +1,8 @@
 use std::{collections::HashSet, sync::Arc};
 
-use mors_traits::{
-    ts::TxnTs,
-    txn::{TxnManagerBuilderTrait, TxnManagerError, TxnManagerTrait},
+use mors_common::ts::TxnTs;
+use mors_traits::txn::{
+    TxnManagerBuilderTrait, TxnManagerError, TxnManagerTrait,
 };
 use parking_lot::Mutex;
 

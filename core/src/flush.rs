@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use log::{error, info};
+use log::{debug, error, info};
 use mors_common::closer::Closer;
 use mors_traits::{
     kms::Kms,
@@ -48,11 +48,12 @@ where
         'a: loop {
             select! {
                 Some(memtable) = receiver.recv() => {
+                    debug!("received memtable {} for flushing",memtable.id());
                     'b:loop {
                         if let Err(e)=this.handle_flush(memtable.clone()).await{
                             error!("flushing memtable to disk for {}, retrying",e);
                             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                            continue;
+                            continue; 
                         }
                         info!("flushed memtable {} to disk",memtable.id());
                         match this.immut_memtable().write() {
@@ -80,6 +81,7 @@ where
     pub(crate) async fn handle_flush(&self, memtable: Arc<M>) -> Result<()> {
         let cipher = self.kms().latest_cipher()?;
         let next_id = self.levelctl().next_id();
+        debug!("building table for memtable {} with next_id {:?}", memtable.id(), next_id);
         let skip_list = memtable.skip_list();
         if let Some(t) = self
             .levelctl()
@@ -87,6 +89,7 @@ where
             .build_l0(skip_list.iter(), next_id, cipher)
             .await?
         {
+            debug!("pushing table for memtable {} to level 0", memtable.id());
             self.levelctl().push_level0(t).await?;
         };
         Ok(())

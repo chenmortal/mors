@@ -19,9 +19,13 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 parking_lot = { workspace = true }
-rayon= { workspace = true }
+rayon = { workspace = true }
 num_cpus = { workspace = true }
 log = { workspace = true }
+rand = { workspace = true }
+sha2 = { workspace = true }
+integer-encoding = { workspace = true }
+bitflags = { workspace = true }
 [dev-dependencies]
 criterion = { workspace = true, features = ["html_reports"] }
 crc32fast = { workspace = true }

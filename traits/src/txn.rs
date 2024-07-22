@@ -1,7 +1,7 @@
+use mors_common::ts::TxnTs;
 use std::{error::Error, fmt::Display};
 use thiserror::Error;
 
-use crate::ts::TxnTs;
 pub trait TxnManagerTrait: Sized {
     type ErrorType: Into<TxnManagerError>;
     type TxnManagerBuilder: TxnManagerBuilderTrait<Self>;

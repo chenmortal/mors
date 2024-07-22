@@ -1,12 +1,8 @@
 use bytes::{Buf, BufMut};
-use mors_traits::{
-    iter::{
-        CacheIter, CacheIterator, DoubleEndedCacheIter,
-        DoubleEndedCacheIterator, IterError, KvCacheIter,
-        KvDoubleEndedCacheIter, KvSeekIter,
-    },
-    kv::ValueMeta,
-    ts::KeyTsBorrow,
+use mors_common::{kv::ValueMeta, ts::KeyTsBorrow};
+use mors_traits::iter::{
+    CacheIter, CacheIterator, DoubleEndedCacheIter, DoubleEndedCacheIterator,
+    IterError, KvCacheIter, KvDoubleEndedCacheIter, KvSeekIter,
 };
 
 use crate::block::Block;
@@ -210,7 +206,7 @@ impl DoubleEndedCacheIterator for CacheBlockIter {
     }
 }
 impl KvCacheIter<ValueMeta> for CacheBlockIter {
-    fn key(&self) -> Option<mors_traits::ts::KeyTsBorrow<'_>> {
+    fn key(&self) -> Option<KeyTsBorrow<'_>> {
         if self.key.is_empty() {
             return None;
         }
@@ -236,7 +232,7 @@ impl KvCacheIter<ValueMeta> for CacheBlockIter {
     }
 }
 impl KvDoubleEndedCacheIter<ValueMeta> for CacheBlockIter {
-    fn key_back(&self) -> Option<mors_traits::ts::KeyTsBorrow<'_>> {
+    fn key_back(&self) -> Option<KeyTsBorrow<'_>> {
         if self.back_key.is_empty() {
             return None;
         }
@@ -265,7 +261,7 @@ impl KvDoubleEndedCacheIter<ValueMeta> for CacheBlockIter {
 impl KvSeekIter for CacheBlockIter {
     fn seek(
         &mut self,
-        k: mors_traits::ts::KeyTsBorrow<'_>,
+        k: KeyTsBorrow<'_>,
     ) -> Result<bool, IterError> {
         if self.entry_index.is_none() && !self.next()? {
             return Ok(false);

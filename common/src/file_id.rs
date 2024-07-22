@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet, fmt::{Debug, Display}, fs::read_dir, path::{Path, PathBuf}
+    collections::HashSet, fmt::{Debug, Display}, fs::read_dir, hash::Hash, ops::Add, path::{Path, PathBuf}
 };
 
 use thiserror::Error;
@@ -8,7 +8,7 @@ pub enum FildIdError {
     #[error("failed parse PathBuf {path:?} , maybe not ends with {suffix}")]
     ParseError { path: PathBuf, suffix: &'static str },
 }
-pub trait FileId: From<u32> + Into<u32> + Debug + Copy {
+pub trait FileId: From<u32> + Into<u32> + Debug + Copy + Eq + Hash {
     const SUFFIX: &'static str;
 
     fn parse<P: AsRef<Path>>(path: P) -> Result<Self, FildIdError>
@@ -37,6 +37,21 @@ pub trait FileId: From<u32> + Into<u32> + Debug + Copy {
         let id: u32 = self.into();
         dir.join(format!("{:06}{}", id, Self::SUFFIX))
     }
+    fn parse_set_from_dir<P: AsRef<Path>>(dir: P) -> HashSet<Self> {
+        let mut id_set = HashSet::new();
+        let dir = dir.as_ref();
+        if let Ok(read_dir) = read_dir(dir) {
+            for dir_entry in read_dir.flatten() {
+                let path = dir_entry.path();
+                if path.is_file() {
+                    if let Ok(id) = Self::parse(path) {
+                        id_set.insert(id);
+                    };
+                }
+            }
+        };
+        id_set
+    }
 }
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MemtableId(u32);
@@ -56,9 +71,9 @@ impl FileId for MemtableId {
 impl Display for MemtableId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:06}.mem", self.0)
-    }   
+    }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash,Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct SSTableId(u32);
 impl From<u32> for SSTableId {
     fn from(value: u32) -> Self {
@@ -77,22 +92,30 @@ impl Display for SSTableId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:06}.sst", self.0)
     }
-    
 }
-impl SSTableId {
-    pub fn parse_set_from_dir<P: AsRef<Path>>(dir: P) -> HashSet<SSTableId> {
-        let mut id_set = HashSet::new();
-        let dir = dir.as_ref();
-        if let Ok(read_dir) = read_dir(dir) {
-            for dir_entry in read_dir.flatten() {
-                let path = dir_entry.path();
-                if path.is_file() {
-                    if let Ok(id) = Self::parse(path) {
-                        id_set.insert(id);
-                    };
-                }
-            }
-        };
-        id_set
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct VlogId(u32);
+impl From<u32> for VlogId {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+impl From<VlogId> for u32 {
+    fn from(val: VlogId) -> Self {
+        val.0
+    }
+}
+impl FileId for VlogId {
+    const SUFFIX: &'static str = ".vlog";
+}
+impl Display for VlogId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:06}.vlog", self.0)
+    }
+}
+impl Add<u32> for VlogId {
+    type Output = VlogId;
+    fn add(self, rhs: u32) -> Self::Output {
+        VlogId(self.0 + rhs)
     }
 }

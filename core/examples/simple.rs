@@ -23,6 +23,7 @@ async fn main_impl() -> Result<()> {
     }
     let mut builder = MorsBuilder::default();
     builder.set_dir(dir).set_read_only(false);
+    builder.set_num_memtables(1).set_memtable_size(1024 * 1024);
     let mors = builder.build().await?;
     Ok(())
 }

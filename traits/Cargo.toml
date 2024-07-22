@@ -10,8 +10,8 @@ version.workspace = true
 [dependencies]
 thiserror = { workspace = true }
 bytes = { workspace = true }
-bitflags = { workspace = true }
-lazy_static = { workspace = true }
 integer-encoding = { workspace = true }
+lazy_static = { workspace = true }
+
 mors-common = { workspace = true }
 # mors-encrypt = { workspace = true }

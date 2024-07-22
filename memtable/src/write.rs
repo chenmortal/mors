@@ -1,6 +1,6 @@
-use mors_traits::file_id::MemtableId;
+use mors_common::file_id::MemtableId;
+use mors_common::kv::{Entry, Meta};
 use mors_traits::kms::Kms;
-use mors_traits::kv::{Entry, Meta};
 use mors_traits::skip_list::SkipListTrait;
 use mors_wal::read::LogFileIter;
 use mors_wal::LogFile;
@@ -27,10 +27,10 @@ impl<T: SkipListTrait, K: Kms> Memtable<T, K> {
         }
 
         let end_offset = wal_iter.valid_end_offset();
-        if end_offset < self.wal.max_size() && self.read_only {
+        if end_offset < self.wal.len() && self.read_only {
             return Err(MorsMemtableError::TruncateNeeded(
                 end_offset,
-                self.wal.max_size(),
+                self.wal.len(),
             ));
         }
 
@@ -45,6 +45,10 @@ impl<T: SkipListTrait, K: Kms> Memtable<T, K> {
         self.skip_list
             .push(&entry.key_ts().encode(), &entry.value_meta().encode())?;
         self.max_version = self.max_version.max(entry.version());
+        Ok(())
+    }
+    pub fn flush_impl(&mut self) -> Result<()> {
+        self.wal.flush()?;
         Ok(())
     }
 }

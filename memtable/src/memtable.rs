@@ -7,14 +7,14 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use memmap2::Advice;
+use mors_common::file_id::{FileId, MemtableId};
 use mors_common::mmap::MmapFileBuilder;
 use mors_common::page_size;
+use mors_common::ts::{KeyTsBorrow, TxnTs};
 use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
-use mors_traits::file_id::{FileId, MemtableId};
 use mors_traits::kms::Kms;
 use mors_traits::memtable::MemtableBuilderTrait;
 use mors_traits::skip_list::SkipListTrait;
-use mors_traits::ts::{KeyTsBorrow, TxnTs};
 
 use mors_wal::LogFile;
 
@@ -75,6 +75,14 @@ impl<T: SkipListTrait> MemtableBuilder<T>
     }
     fn max_batch_count(&self) -> usize {
         self.max_batch_size() / T::MAX_NODE_SIZE
+    }
+    #[inline]
+    pub(crate) fn set_num_memtables_impl(&mut self, num_memtables: usize) {
+        self.num_memtables = num_memtables;
+    }
+    #[inline]
+    pub(crate) fn set_memtable_size_impl(&mut self, memtable_size: usize) {
+        self.memtable_size = memtable_size;
     }
 }
 impl<T: SkipListTrait> MemtableBuilder<T> {

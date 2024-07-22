@@ -8,7 +8,7 @@ use std::{
 };
 
 use mors_common::closer::Closer;
-use mors_traits::ts::TxnTs;
+use mors_common::ts::TxnTs;
 use tokio::{
     select,
     sync::{

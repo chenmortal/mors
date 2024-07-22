@@ -1,15 +1,13 @@
 use crate::default::{WithDir, WithReadOnly};
-use crate::file_id::MemtableId;
+use crate::kms::Kms;
 use crate::skip_list::SkipListTrait;
-use crate::{
-    kms::Kms,
-    kv::{Entry, ValueMeta},
-    ts::{KeyTs, TxnTs},
-};
 use std::collections::VecDeque;
 use std::error::Error;
 use std::fmt::Display;
 use std::sync::Arc;
+use mors_common::file_id::MemtableId;
+use mors_common::kv::{Entry, ValueMeta};
+use mors_common::ts::{KeyTs, TxnTs};
 use thiserror::Error;
 
 pub trait MemtableTrait<T: SkipListTrait, K: Kms>:
@@ -27,6 +25,7 @@ pub trait MemtableTrait<T: SkipListTrait, K: Kms>:
     fn id(&self) -> MemtableId;
     fn max_version(&self) -> TxnTs;
     fn skip_list(&self) -> T;
+    fn flush(&mut self) -> Result<(), MemtableError>;
 }
 pub trait MemtableBuilderTrait<
     M: MemtableTrait<T, K> + Sized,
@@ -39,6 +38,8 @@ pub trait MemtableBuilderTrait<
     fn open_exist(&self, kms: K) -> Result<VecDeque<Arc<M>>, MemtableError>;
 
     fn build(&self, kms: K) -> Result<M, MemtableError>;
+    fn set_num_memtables(&mut self, num_memtables: usize);
+    fn set_memtable_size(&mut self, memtable_size: usize);
 }
 #[derive(Error, Debug)]
 pub struct MemtableError(Box<dyn Error>);

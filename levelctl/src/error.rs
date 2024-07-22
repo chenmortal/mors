@@ -1,9 +1,8 @@
+use mors_common::{file_id::SSTableId, ts::KeyTs};
 use mors_traits::{
-    file_id::SSTableId,
     kms::KmsError,
     levelctl::{Level, LevelCtlError},
     sstable::SSTableError,
-    ts::KeyTs,
 };
 use thiserror::Error;
 

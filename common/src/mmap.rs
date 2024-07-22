@@ -28,22 +28,6 @@ pub struct MmapFile {
     path: PathBuf,
     fd: File,
 }
-impl MmapFile {
-    pub fn builder() -> MmapFileBuilder {
-        MmapFileBuilder::new()
-    }
-    pub fn path(&self) -> &PathBuf {
-        &self.path
-    }
-    pub fn write_at(&self) -> usize {
-        self.w_pos
-    }
-    pub fn delete(&self) -> Result<(), io::Error> {
-        self.fd.set_len(0)?;
-        self.fd.sync_all()?;
-        Ok(())
-    }
-}
 
 impl MmapFile {
     #[inline(always)]
@@ -125,7 +109,31 @@ impl AsRef<[u8]> for MmapFile {
         unsafe { slice::from_raw_parts(self.raw.as_ptr() as _, self.raw.len()) }
     }
 }
+impl AsMut<[u8]> for MmapFile {
+    fn as_mut(&mut self) -> &mut [u8] {
+        unsafe {
+            slice::from_raw_parts_mut(
+                self.raw.as_mut_ptr() as _,
+                self.raw.len(),
+            )
+        }
+    }
+}
 impl MmapFile {
+    pub fn builder() -> MmapFileBuilder {
+        MmapFileBuilder::new()
+    }
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+    pub fn write_at(&self) -> usize {
+        self.w_pos
+    }
+    pub fn delete(&self) -> Result<(), io::Error> {
+        self.fd.set_len(0)?;
+        std::fs::remove_file(&self.path)?;
+        Ok(())
+    }
     #[inline]
     pub fn len(&self) -> Result<usize, Error> {
         Ok(self.raw.len())
@@ -206,8 +214,10 @@ impl MmapFile {
         Ok(buf_len)
     }
 
-    pub fn pread_ref(&self,offset: usize,len:usize)->&[u8]{
-        let buf = unsafe { slice::from_raw_parts(self.raw.as_ptr().add(offset) as _, len) };
+    pub fn pread_ref(&self, offset: usize, len: usize) -> &[u8] {
+        let buf = unsafe {
+            slice::from_raw_parts(self.raw.as_ptr().add(offset) as _, len)
+        };
         buf
     }
     pub fn pwrite(

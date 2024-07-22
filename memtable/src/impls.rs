@@ -1,11 +1,10 @@
 use std::{collections::VecDeque, sync::Arc};
 
+use mors_common::{file_id::MemtableId, kv::{Entry, ValueMeta}, ts::{KeyTs, TxnTs}};
 use mors_traits::{
-    file_id::MemtableId,
     kms::Kms,
     memtable::{MemtableBuilderTrait, MemtableError, MemtableTrait},
     skip_list::SkipListTrait,
-    ts::KeyTs,
 };
 
 use crate::{
@@ -28,12 +27,20 @@ impl<T: SkipListTrait, K: Kms> MemtableBuilderTrait<Memtable<T, K>, T, K>
     fn build(&self, kms: K) -> Result<Memtable<T, K>> {
         Ok(self.build_impl(kms)?)
     }
+
+    fn set_num_memtables(&mut self, num_memtables: usize) {
+        self.set_num_memtables_impl(num_memtables);
+    }
+
+    fn set_memtable_size(&mut self, memtable_size: usize) {
+        self.set_memtable_size_impl(memtable_size);
+    }
 }
 impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
     type ErrorType = MorsMemtableError;
     type MemtableBuilder = MemtableBuilder<T>;
 
-    fn push(&mut self, entry: &mors_traits::kv::Entry) -> Result<()> {
+    fn push(&mut self, entry: &Entry) -> Result<()> {
         Ok(self.push_impl(entry)?)
     }
 
@@ -44,12 +51,12 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
     fn get(
         &self,
         key_ts: &KeyTs,
-    ) -> Result<Option<(mors_traits::ts::TxnTs, mors_traits::kv::ValueMeta)>>
+    ) -> Result<Option<(TxnTs, ValueMeta)>>
     {
         todo!()
     }
 
-    fn max_version(&self) -> mors_traits::ts::TxnTs {
+    fn max_version(&self) -> TxnTs {
         self.max_version
     }
 
@@ -63,5 +70,9 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
 
     fn skip_list(&self) -> T {
         self.skip_list.clone()
+    }
+
+    fn flush(&mut self) -> std::result::Result<(), MemtableError> {
+        Ok(self.flush_impl()?)
     }
 }
