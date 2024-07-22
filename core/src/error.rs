@@ -1,9 +1,11 @@
+use std::sync::PoisonError;
+
 use mors_traits::{
     kms::{EncryptError, KmsError},
     levelctl::LevelCtlError,
     memtable::MemtableError,
     sstable::SSTableError,
-    txn::TxnManagerError,
+    txn::TxnManagerError, vlog::VlogError,
 };
 use thiserror::Error;
 
@@ -23,9 +25,22 @@ pub enum MorsError {
     MemtableError(#[from] MemtableError),
     #[error("SSTable Error: {0}")]
     SSTableError(#[from] SSTableError),
+    #[error("Vlog Error: {0}")]
+    VlogError(#[from] VlogError),
     #[error("Poisoned RwLock: {0}")]
     RwLockPoisoned(String),
     #[error("Send Error: {0}")]
     SendError(String),
+    #[error("Write Request too long: {0} > {1}")]
+    ToLongWriteRequest(usize,usize),
+    #[error("Write Request Error: {0}")]
+    WriteRequestError(String),
+    #[error("Poison error: {0}")]
+    PoisonError(String),
+}
+impl<T> From<PoisonError<T>> for MorsError {
+    fn from(e: PoisonError<T>) -> MorsError {
+        MorsError::PoisonError(e.to_string())
+    }
 }
 unsafe impl Send for MorsError {}

@@ -19,6 +19,7 @@ use mors_common::{
 use mors_traits::{
     kms::Kms, levelctl::LevelCtlTrait, memtable::MemtableTrait,
     skip_list::SkipListTrait, sstable::TableTrait, txn::TxnManagerTrait,
+    vlog::VlogCtlTrait,
 };
 use tokio::{
     select,
@@ -57,7 +58,7 @@ impl Drop for WriteRequest {
         }
     }
 }
-impl<M, K, L, T, S, Txn> CoreBuilder<M, K, L, T, S, Txn>
+impl<M, K, L, T, S, Txn, V> CoreBuilder<M, K, L, T, S, Txn, V>
 where
     M: MemtableTrait<S, K>,
     K: Kms,
@@ -65,19 +66,21 @@ where
     T: TableTrait<K::Cipher>,
     S: SkipListTrait,
     Txn: TxnManagerTrait,
+    V: VlogCtlTrait<K>,
 {
     pub(crate) fn init_write_channel(
     ) -> (Sender<WriteRequest>, Receiver<WriteRequest>) {
         mpsc::channel::<WriteRequest>(CHANNEL_CAPACITY)
     }
 }
-impl<M, K, L, T, S> CoreInner<M, K, L, T, S>
+impl<M, K, L, T, S, V> CoreInner<M, K, L, T, S, V>
 where
     M: MemtableTrait<S, K>,
     K: Kms,
     L: LevelCtlTrait<T, K>,
     T: TableTrait<K::Cipher>,
     S: SkipListTrait,
+    V: VlogCtlTrait<K>,
 {
     pub(crate) async fn do_write_task(
         this: Arc<Self>,
@@ -162,6 +165,15 @@ where
         if requests.is_empty() {
             return Ok(());
         }
+
+        if let Err(e) = self.validate_vlog_write(&requests) {
+            for request in requests.iter_mut() {
+                request.result =
+                    Err(MorsError::WriteRequestError(e.to_string()));
+            }
+            return Err(e);
+        }
+
         debug!("Writing to memtable :{}", requests.len());
         let mut count = 0;
         for request in requests.iter_mut() {
@@ -178,6 +190,34 @@ where
             };
         }
         debug!("Writing to memtable done:{}", count);
+        Ok(())
+    }
+    fn validate_vlog_write(&self, requests: &Vec<WriteRequest>) -> Result<()> {
+        let mut vlog_offset = self.vlogctl().writeable_offset();
+        for request in requests {
+            let size: usize = request
+                .entries_vptrs
+                .iter()
+                .map(|(x, _)| {
+                    V::MAX_VLOG_SIZE
+                        + x.key_ts().len()
+                        + x.value_meta().value().len()
+                        + size_of::<u32>() //crc32fast u32
+                })
+                .sum();
+            let estimate_offset = vlog_offset + size;
+            if estimate_offset > V::MAX_VLOG_FILE_SIZE {
+                return Err(MorsError::ToLongWriteRequest(
+                    estimate_offset,
+                    V::MAX_VLOG_FILE_SIZE,
+                ));
+            }
+            if estimate_offset > self.vlogctl().vlog_file_size() {
+                vlog_offset = 0;
+                continue;
+            }
+            vlog_offset = estimate_offset;
+        }
         Ok(())
     }
     async fn ensure_room_for_write(&self) -> Result<()> {
@@ -238,6 +278,21 @@ where
             memtable_w.push(entry)?;
         }
         memtable_w.flush()?;
+        Ok(())
+    }
+    fn write_to_vlog(&self, requests: &mut Vec<WriteRequest>) -> Result<()> {
+        // let mut buf = Vec::with_capacity(page_size());
+        // let mut latest = self.vlogctl().latest_logfile()?;
+        let p = requests
+            .iter_mut()
+            .map(|x| x.entries_vptrs.iter_mut())
+            .collect::<Vec<_>>();
+        for ele in p {
+            
+        }
+        // for request in requests.iter_mut() {
+        // let p = latest.write()?;
+        // }
         Ok(())
     }
 }

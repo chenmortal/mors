@@ -1,7 +1,7 @@
 use bytes::BufMut;
 use mors_common::file_id::SSTableId;
 
-use crate::{sstable::BlockIndex};
+use crate::sstable::BlockIndex;
 
 pub trait CacheTrait: Sized + Send + Sync + Clone + 'static {
     type ErrorType;

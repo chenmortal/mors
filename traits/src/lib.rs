@@ -1,10 +1,3 @@
-use std::{
-    fmt::{Debug, Display},
-    sync::PoisonError,
-};
-
-use thiserror::Error;
-
 pub mod default;
 pub mod iter;
 pub mod memtable;
@@ -17,4 +10,3 @@ pub mod log_header;
 pub mod sstable;
 pub mod txn;
 pub mod vlog;
-

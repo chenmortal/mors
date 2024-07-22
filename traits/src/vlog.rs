@@ -2,19 +2,28 @@ use crate::{
     default::{WithDir, WithReadOnly},
     kms::Kms,
 };
-use std::{error::Error, fmt::Display};
+use std::{
+    error::Error,
+    fmt::Display,
+    sync::{Arc, RwLock},
+};
 use thiserror::Error;
 
 pub trait VlogCtlTrait<K: Kms>: Sized + Send + Sync + 'static {
     type ErrorType: Into<VlogError>;
     type Discard: DiscardTrait;
     type VlogCtlBuilder: VlogCtlBuilderTrait<Self, K>;
+    // fn latest_logfile(&self) -> Result<LogFileWrapper<K>, VlogError>;
+    fn writeable_offset(&self) -> usize;
+    fn vlog_file_size(&self) -> usize;
+    const MAX_VLOG_SIZE: usize;
+    const MAX_VLOG_FILE_SIZE: usize;
 }
 pub trait VlogCtlBuilderTrait<V: VlogCtlTrait<K>, K: Kms>:
-    WithDir + WithReadOnly
+    WithDir + WithReadOnly + Default
 {
     fn build(
-        &self,
+        &mut self,
         kms: K,
     ) -> impl std::future::Future<Output = Result<V, VlogError>>;
     fn build_discard(&self) -> Result<V::Discard, VlogError>;

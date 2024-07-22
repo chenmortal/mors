@@ -12,10 +12,10 @@ pub enum MorsVlogError {
     LogFileError(#[from] MorsWalError),
     #[error("Poison error: {0}")]
     PoisonError(String),
-    // #[error("Poison error: {0}")]
-    // PoisonErr(#[from] PoisonErr),
     #[error("Log not found: {0}")]
     LogNotFound(VlogId),
+    #[error("Threshold error: {0}")]
+    ThresholdError(String)
 }
 impl From<MorsVlogError> for VlogError {
     fn from(e: MorsVlogError) -> VlogError {

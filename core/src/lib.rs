@@ -9,6 +9,7 @@ use mors_memtable::memtable::Memtable;
 use mors_skip_list::skip_list::SkipList;
 use mors_sstable::table::Table;
 use mors_txn::manager::TxnManager;
+use mors_vlog::vlogctl::VlogCtl;
 pub mod core;
 mod error;
 mod flush;
@@ -21,8 +22,16 @@ type MorsMemtable = Memtable<SkipList, MorsKms>;
 type MorsLevelCtl = LevelCtl<Table<AesCipher>, MorsKms>;
 type MorsTable = Table<AesCipher>;
 type MorsLevelCtlType = LevelCtl<MorsTable, MorsKms>;
+type MorsVlog=VlogCtl<MorsKms>;
 pub struct Mors {
-    core: Core<MorsMemtable, MorsKms, MorsLevelCtl, Table<AesCipher>, SkipList>,
+    core: Core<
+        MorsMemtable,
+        MorsKms,
+        MorsLevelCtl,
+        Table<AesCipher>,
+        SkipList,
+        MorsVlog,
+    >,
 }
 
 #[derive(Default)]
@@ -34,6 +43,7 @@ pub struct MorsBuilder {
         MorsTable,
         SkipList,
         TxnManager,
+        MorsVlog,
     >,
 }
 impl Deref for Mors {
@@ -43,6 +53,7 @@ impl Deref for Mors {
         LevelCtl<Table<AesCipher>, MorsKms>,
         Table<AesCipher>,
         SkipList,
+        MorsVlog
     >;
 
     fn deref(&self) -> &Self::Target {
@@ -57,6 +68,7 @@ impl Deref for MorsBuilder {
         Table<AesCipher>,
         SkipList,
         TxnManager,
+        MorsVlog
     >;
 
     fn deref(&self) -> &Self::Target {
