@@ -1,10 +1,8 @@
 use std::{
-    ops::{Deref, DerefMut},
-    ptr::NonNull,
-    sync::{
+    ops::{Deref, DerefMut}, pin::Pin, ptr::NonNull, sync::{
         atomic::{AtomicU64, AtomicUsize, Ordering},
         Arc,
-    },
+    }
 };
 
 use rand::Rng;
@@ -32,7 +30,7 @@ pub(crate) struct SkipListInner {
     ///the head of the list
     head: NonNull<Node>,
     ///the memory pool of the list
-    arena: Arena,
+    arena: Pin<Box<Arena>>,
     ///the compare function of the list
     cmp: fn(&[u8], &[u8]) -> std::cmp::Ordering,
 }
