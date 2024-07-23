@@ -23,6 +23,7 @@ impl<K: Kms> VlogCtl<K> {
             {
                 let mut latest_w = latest.write()?;
                 for (entry, vp) in iter {
+                    buf.clear();
                     value_sizes.push(entry.value().len());
                     entry.set_value_threshold(self.value_threshold());
                     if entry.value().len() < entry.value_threshold() {

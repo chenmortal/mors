@@ -112,7 +112,7 @@ impl<K: Kms> VlogCtl<K> {
     pub fn value_threshold(&self) -> usize {
         self.inner.vlog_threshold.value_threshold()
     }
-    pub fn threshold(&self) -> &VlogThreshold {
+    pub(crate) fn threshold(&self) -> &VlogThreshold {
         &self.inner.vlog_threshold
     }
 }
