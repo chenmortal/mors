@@ -17,8 +17,8 @@ pub trait MemtableTrait<T: SkipListTrait, K: Kms>:
     type MemtableBuilder: MemtableBuilderTrait<Self, T, K>;
     fn get(
         &self,
-        key_ts: &KeyTs,
-    ) -> Result<Option<(TxnTs, ValueMeta)>, MemtableError>;
+        key: &KeyTs,
+    ) -> Result<Option<(TxnTs, Option<ValueMeta>)>, MemtableError>;
     fn push(&mut self, entry: &Entry) -> Result<(), MemtableError>;
     fn size(&self) -> usize;
     fn is_full(&self) -> bool;

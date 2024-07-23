@@ -50,10 +50,9 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
 
     fn get(
         &self,
-        key_ts: &KeyTs,
-    ) -> Result<Option<(TxnTs, ValueMeta)>>
-    {
-        todo!()
+        key: &KeyTs,
+    ) -> Result<Option<(TxnTs, Option<ValueMeta>)>> {
+        Ok(self.get_impl(key)?)
     }
 
     fn max_version(&self) -> TxnTs {
@@ -75,4 +74,5 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
     fn flush(&mut self) -> std::result::Result<(), MemtableError> {
         Ok(self.flush_impl()?)
     }
+    
 }

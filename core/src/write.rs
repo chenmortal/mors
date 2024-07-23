@@ -166,18 +166,18 @@ where
             return Ok(());
         }
 
-        // if let Err(e) = self.validate_vlog_write(&requests) {
-        //     for request in requests.iter_mut() {
-        //         request.result =
-        //             Err(MorsError::WriteRequestError(e.to_string()));
-        //     }
-        //     return Err(e);
-        // }
-        // let iter_mut = requests
-        //     .iter_mut()
-        //     .map(|x| x.entries_vptrs.iter_mut())
-        //     .collect::<Vec<_>>();
-        // self.vlogctl().write(iter_mut).await?;
+        if let Err(e) = self.validate_vlog_write(&requests) {
+            for request in requests.iter_mut() {
+                request.result =
+                    Err(MorsError::WriteRequestError(e.to_string()));
+            }
+            return Err(e);
+        }
+        let iter_mut = requests
+            .iter_mut()
+            .map(|x| x.entries_vptrs.iter_mut())
+            .collect::<Vec<_>>();
+        self.vlogctl().write(iter_mut).await?;
 
         debug!("Writing to memtable :{}", requests.len());
         let mut count = 0;

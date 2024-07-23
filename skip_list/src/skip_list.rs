@@ -5,6 +5,7 @@ use std::{
     }
 };
 
+use mors_traits::skip_list::OptionKV;
 use rand::Rng;
 
 use arena::Arena;
@@ -139,6 +140,14 @@ impl SkipListInner {
     pub(crate) fn get_or_next(&self, key: &[u8]) -> Result<Option<&[u8]>> {
         if let Some(node) = self.find_or_next(key, true) {
             return node.get_value(&self.arena);
+        }
+        Ok(None)
+    }
+    pub(crate) fn get_key_value(&self, key: &[u8], allow_next: bool) -> Result<OptionKV> {
+        if let Some(node) = self.find_or_next(key, allow_next) {
+            let key = node.get_key(&self.arena)?;
+            let value = node.get_value(&self.arena)?;
+            return Ok(Some((key, value)));
         }
         Ok(None)
     }
