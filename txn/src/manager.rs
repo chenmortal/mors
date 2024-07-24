@@ -62,8 +62,11 @@ impl TxnManagerBuilderTrait<TxnManager> for TxnManagerBuilder {
         };
         Ok(TxnManager(Arc::new(TxnManagerInner {
             core: Mutex::new(core),
-            read_mark: WaterMark::new("PendingRead", max_version),
-            txn_mark: WaterMark::new("TxnTs", max_version),
+            read_mark: WaterMark::new(
+                "TxnManager PendingRead Process",
+                max_version,
+            ),
+            txn_mark: WaterMark::new("TxnManager TxnTs Process", max_version),
             send_write_req: Mutex::new(()),
         })))
     }

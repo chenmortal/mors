@@ -321,18 +321,17 @@ async fn test_notify() {
 }
 #[cfg(test)]
 mod test {
-    use log::{debug, info};
-    use tokio::sync::oneshot;
     use crate::error::MorsError;
     use crate::write::WriteRequest;
-    use std::{fs::create_dir, path::PathBuf};
-    use log::LevelFilter;
-    use mors_common::test::{gen_random_entries, get_rng};
     use crate::MorsBuilder;
+    use log::LevelFilter;
+    use log::{debug, info};
+    use mors_common::test::{gen_random_entries, get_rng};
+    use std::{fs::create_dir, path::PathBuf};
+    use tokio::sync::oneshot;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_write_impl() -> Result<(), MorsError> {
-        
         console_subscriber::init();
         let mut logger = env_logger::builder();
         logger.filter_level(LevelFilter::Trace);
@@ -351,7 +350,7 @@ mod test {
         let mors = builder.build().await?;
 
         let mut rng = get_rng("abcd");
-        let random = gen_random_entries(&mut rng, 100000,1000.into());
+        let random = gen_random_entries(&mut rng, 100000, 1000.into());
 
         let mut entries = Vec::new();
         let mut receivers = Vec::new();

@@ -22,7 +22,7 @@ type MorsMemtable = Memtable<SkipList, MorsKms>;
 type MorsLevelCtl = LevelCtl<Table<AesCipher>, MorsKms>;
 type MorsTable = Table<AesCipher>;
 type MorsLevelCtlType = LevelCtl<MorsTable, MorsKms>;
-type MorsVlog=VlogCtl<MorsKms>;
+type MorsVlog = VlogCtl<MorsKms>;
 pub struct Mors {
     core: Core<
         MorsMemtable,
@@ -53,7 +53,7 @@ impl Deref for Mors {
         LevelCtl<Table<AesCipher>, MorsKms>,
         Table<AesCipher>,
         SkipList,
-        MorsVlog
+        MorsVlog,
     >;
 
     fn deref(&self) -> &Self::Target {
@@ -68,7 +68,7 @@ impl Deref for MorsBuilder {
         Table<AesCipher>,
         SkipList,
         TxnManager,
-        MorsVlog
+        MorsVlog,
     >;
 
     fn deref(&self) -> &Self::Target {

@@ -9,7 +9,11 @@ use std::{
 };
 
 use log::info;
-use mors_common::{closer::{Closer, Throttle}, file_id::SSTableId, ts::TxnTs};
+use mors_common::{
+    closer::{Closer, Throttle},
+    file_id::SSTableId,
+    ts::TxnTs,
+};
 use mors_traits::{
     default::{WithDir, WithReadOnly, DEFAULT_DIR},
     kms::Kms,
@@ -29,7 +33,11 @@ use crate::{
     handler::LevelHandler,
     manifest::{Manifest, ManifestBuilder},
 };
+#[derive(Clone)]
 pub struct LevelCtl<T: TableTrait<K::Cipher>, K: Kms> {
+    inner: Arc<LevelCtlInner<T, K>>,
+}
+pub struct LevelCtlInner<T: TableTrait<K::Cipher>, K: Kms> {
     manifest: Manifest,
     table_builder: T::TableBuilder,
     handlers: Vec<LevelHandler<T, K::Cipher>>,
@@ -37,6 +45,8 @@ pub struct LevelCtl<T: TableTrait<K::Cipher>, K: Kms> {
     level0_stalls_ms: AtomicU64,
     compact_status: CompactStatus,
     level0_num_tables_stall: usize,
+    levelmax2max_compaction: bool,
+    num_compactors: usize,
     level0_stalls: AtomicU64,
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlTrait<T, K> for LevelCtl<T, K> {
@@ -45,7 +55,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlTrait<T, K> for LevelCtl<T, K> {
     type LevelCtlBuilder = LevelCtlBuilder<T, K>;
 
     fn max_version(&self) -> TxnTs {
-        self.handlers
+        self.inner
+            .handlers
             .iter()
             .map(|h| h.max_version())
             .max()
@@ -53,10 +64,10 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlTrait<T, K> for LevelCtl<T, K> {
     }
 
     fn table_builder(&self) -> &<T as TableTrait<K::Cipher>>::TableBuilder {
-        &self.table_builder
+        &self.inner.table_builder
     }
     fn next_id(&self) -> Arc<AtomicU32> {
-        self.next_id.clone()
+        self.inner.next_id.clone()
     }
 
     async fn push_level0(
@@ -68,19 +79,25 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlTrait<T, K> for LevelCtl<T, K> {
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     pub(crate) fn manifest(&self) -> &Manifest {
-        &self.manifest
+        &self.inner.manifest
+    }
+    pub(crate) fn num_compactors(&self) -> usize {
+        self.inner.num_compactors
+    }
+    pub(crate) fn levelmax2max_compaction(&self) -> bool {
+        self.inner.levelmax2max_compaction
     }
     pub(crate) fn level0_num_tables_stall(&self) -> usize {
-        self.level0_num_tables_stall
+        self.inner.level0_num_tables_stall
     }
     pub(crate) fn level0_stalls_ms(&self) -> &AtomicU64 {
-        &self.level0_stalls_ms
+        &self.inner.level0_stalls_ms
     }
     pub(crate) fn handler(
         &self,
         level: Level,
     ) -> Option<&LevelHandler<T, K::Cipher>> {
-        self.handlers.iter().find(|h| *h.level() == level)
+        self.inner.handlers.iter().find(|h| *h.level() == level)
     }
 }
 
@@ -89,6 +106,8 @@ pub struct LevelCtlBuilder<T: TableTrait<K::Cipher>, K: Kms> {
     table: T::TableBuilder,
     max_level: Level,
     level0_num_tables_stall: usize,
+    num_compactors: usize,
+    levelmax2max_compaction: bool,
     cache: Option<T::Cache>,
     dir: PathBuf,
     read_only: bool,
@@ -103,6 +122,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> Default for LevelCtlBuilder<T, K> {
             cache: None,
             read_only: false,
             level0_num_tables_stall: 15,
+            num_compactors: 4,
+            levelmax2max_compaction: false,
         }
     }
 }
@@ -139,6 +160,23 @@ impl<T: TableTrait<K::Cipher>, K: Kms>
     }
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
+    pub fn set_max_level(&mut self, max_level: Level) -> &mut Self {
+        self.max_level = max_level;
+        self
+    }
+
+    pub fn set_level0_num_tables_stall(
+        &mut self,
+        level0_num_tables_stall: usize,
+    ) -> &mut Self {
+        self.level0_num_tables_stall = level0_num_tables_stall;
+        self
+    }
+    pub fn set_num_compactors(&mut self, num_compactors: usize) -> &mut Self {
+        self.num_compactors = num_compactors;
+        self
+    }
+
     async fn build_impl(&self, kms: K) -> Result<LevelCtl<T, K>> {
         let compact_status = CompactStatus::new(self.max_level.to_usize());
         let manifest = self.manifest.build()?;
@@ -156,7 +194,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
             level += 1;
         }
 
-        let ctl = LevelCtl {
+        let ctl = LevelCtlInner {
             manifest,
             handlers,
             next_id,
@@ -165,8 +203,12 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
             table_builder: self.table.clone(),
             level0_num_tables_stall: self.level0_num_tables_stall,
             level0_stalls: Default::default(),
+            num_compactors: self.num_compactors,
+            levelmax2max_compaction: self.levelmax2max_compaction,
         };
-        Ok(ctl)
+        Ok(LevelCtl {
+            inner: Arc::new(ctl),
+        })
     }
 
     async fn open_tables_by_manifest(
@@ -257,7 +299,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
         use tokio::time::Instant;
 
         let start = Instant::now();
-        let closer = Closer::new("levelctl init watch_num_opened".to_owned());
+        let closer = Closer::new("levelctl init watch_num_opened");
         let closer_clone = closer.clone();
 
         closer.set_joinhandle(tokio::spawn(async move {

@@ -35,7 +35,7 @@ pub trait VlogCtlBuilderTrait<V: VlogCtlTrait<K>, K: Kms>:
     fn build_discard(&self) -> Result<V::Discard, VlogError>;
 }
 
-pub trait DiscardTrait {}
+pub trait DiscardTrait: Clone + Send + Sync + 'static {}
 #[derive(Error, Debug)]
 pub struct VlogError(Box<dyn Error>);
 impl VlogError {

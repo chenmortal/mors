@@ -17,6 +17,8 @@ parking_lot = { workspace = true }
 log = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
+rand = { workspace = true }
+
 [build-dependencies]
 prost-build = { workspace = true }
 [lints]

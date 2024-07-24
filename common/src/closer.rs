@@ -90,25 +90,25 @@ impl<E: Error> ThrottlePermit<E> {
         }
     }
 }
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct Closer(Arc<CloserInner>);
 #[derive(Debug)]
 struct CloserInner {
     join_handle: Mutex<Option<JoinHandle<()>>>,
     notify: Notify,
-    _task: String,
+    _task: &'static str,
 }
 impl Default for Closer {
     fn default() -> Self {
         Self(Arc::new(CloserInner {
             join_handle: Mutex::new(None),
             notify: Notify::new(),
-            _task: String::new(),
+            _task: Default::default(),
         }))
     }
 }
 impl Closer {
-    pub fn new(task: String) -> Self {
+    pub fn new(task: &'static str) -> Self {
         Self(Arc::new(CloserInner {
             join_handle: Mutex::new(None),
             notify: Notify::new(),
@@ -116,7 +116,7 @@ impl Closer {
         }))
     }
     pub fn cancel(&self) {
-        self.0.notify.notify_one();
+        self.0.notify.notify_waiters();
     }
 
     pub fn cancelled(&self) -> Notified<'_> {

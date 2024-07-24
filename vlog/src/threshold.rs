@@ -139,8 +139,7 @@ impl VlogThreshold {
         let (sender, receiver) = tokio::sync::mpsc::channel::<Vec<usize>>(1000);
         let clear_notify = Arc::new(Notify::new());
         let clear_notified = clear_notify.clone();
-        let closer =
-            Closer::new("listen for value threshold update".to_string());
+        let closer = Closer::new("listen for value threshold update");
         let vlog_threshold = VlogThreshold(Arc::new(VlogThresholdInner::new(
             config,
             closer.clone(),

@@ -1,5 +1,6 @@
 use crate::default::{WithDir, WithReadOnly};
 use crate::{kms::Kms, sstable::TableTrait};
+use mors_common::ts::TxnTs;
 use std::error::Error;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
@@ -7,7 +8,6 @@ use std::{
     fmt::Display,
     ops::{Add, AddAssign, Sub},
 };
-use mors_common::ts::TxnTs;
 use thiserror::Error;
 
 pub trait LevelCtlTrait<T: TableTrait<K::Cipher>, K: Kms>:
@@ -48,7 +48,9 @@ impl Display for LevelCtlError {
 }
 unsafe impl Send for LevelCtlError {}
 pub const LEVEL0: Level = Level(0);
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(
+    Debug,  Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default,
+)]
 pub struct Level(u8);
 impl From<u8> for Level {
     fn from(value: u8) -> Self {
