@@ -259,13 +259,13 @@ impl<
             vlogctl,
         });
 
-        let write_task = Closer::new("write request task".to_owned());
+        let write_task = Closer::new("write request task");
         write_task.set_joinhandle(tokio::spawn(CoreInner::do_write_task(
             inner.clone(),
             receiver,
             write_task.clone(),
         )));
-        let flush_task = Closer::new("flush task".to_owned());
+        let flush_task = Closer::new("flush task");
         flush_task.set_joinhandle(tokio::spawn(CoreInner::do_flush_task(
             inner.clone(),
             flush_receiver,

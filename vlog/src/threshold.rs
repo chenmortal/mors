@@ -4,7 +4,7 @@ use std::{
 };
 
 use log::info;
-use mors_common::closer::Closer;
+use mors_common::{closer::Closer, histogram::Histogram};
 use tokio::{
     select,
     sync::{
@@ -13,7 +13,7 @@ use tokio::{
     },
 };
 
-use crate::{error::MorsVlogError, histogram::Histogram};
+use crate::error::MorsVlogError;
 
 type Result<T> = std::result::Result<T, MorsVlogError>;
 const MAX_VALUE_THRESHOLD: usize = 1 << 20;
@@ -99,7 +99,7 @@ impl VlogThresholdInner {
         sender: Sender<Vec<usize>>,
         clear_notify: Arc<Notify>,
     ) -> Self {
-        let mut histogram = Histogram::default();
+        let histogram = Histogram::default();
         histogram.measure(config.value_threshold);
         histogram.measure(config.max_value_threshold);
 
@@ -113,9 +113,6 @@ impl VlogThresholdInner {
         }
     }
 
-    pub(crate) fn sender(&self) -> Sender<Vec<usize>> {
-        self.sender.clone()
-    }
     pub(crate) fn clear(&self) {
         self.set_value_threshold(self.config.value_threshold);
         self.clear_notify.notify_one();
@@ -142,8 +139,7 @@ impl VlogThreshold {
         let (sender, receiver) = tokio::sync::mpsc::channel::<Vec<usize>>(1000);
         let clear_notify = Arc::new(Notify::new());
         let clear_notified = clear_notify.clone();
-        let closer =
-            Closer::new("listen for value threshold update".to_string());
+        let closer = Closer::new("listen for value threshold update");
         let vlog_threshold = VlogThreshold(Arc::new(VlogThresholdInner::new(
             config,
             closer.clone(),
@@ -184,5 +180,8 @@ impl VlogThreshold {
                 }
             }
         }
+    }
+    pub(crate) fn sender(&self) -> Sender<Vec<usize>> {
+        self.sender.clone()
     }
 }

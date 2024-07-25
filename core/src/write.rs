@@ -11,7 +11,7 @@ use crate::{
     error::MorsError,
     Result,
 };
-use log::{debug, error, info};
+use log::{debug, error};
 use mors_common::{
     closer::Closer,
     kv::{Entry, Meta, ValuePointer},
@@ -173,6 +173,11 @@ where
             }
             return Err(e);
         }
+        let iter_mut = requests
+            .iter_mut()
+            .map(|x| x.entries_vptrs.iter_mut())
+            .collect::<Vec<_>>();
+        self.vlogctl().write(iter_mut).await?;
 
         debug!("Writing to memtable :{}", requests.len());
         let mut count = 0;
@@ -280,21 +285,6 @@ where
         memtable_w.flush()?;
         Ok(())
     }
-    fn write_to_vlog(&self, requests: &mut Vec<WriteRequest>) -> Result<()> {
-        // let mut buf = Vec::with_capacity(page_size());
-        // let mut latest = self.vlogctl().latest_logfile()?;
-        let p = requests
-            .iter_mut()
-            .map(|x| x.entries_vptrs.iter_mut())
-            .collect::<Vec<_>>();
-        for ele in p {
-            
-        }
-        // for request in requests.iter_mut() {
-        // let p = latest.write()?;
-        // }
-        Ok(())
-    }
 }
 #[tokio::test]
 async fn test_notify() {
@@ -329,25 +319,20 @@ async fn test_notify() {
     handle_notify.await.unwrap();
     handle_notified.await.unwrap();
 }
-
+#[cfg(test)]
 mod test {
-
-    use std::{fs::create_dir, path::PathBuf};
-
-    use log::LevelFilter;
-    use mors_common::test::{gen_random_entries, get_rng};
-
+    use crate::error::MorsError;
+    use crate::write::WriteRequest;
     use crate::MorsBuilder;
+    use log::LevelFilter;
+    use log::{debug, info};
+    use mors_common::test::{gen_random_entries, get_rng};
+    use std::{fs::create_dir, path::PathBuf};
+    use tokio::sync::oneshot;
 
-    use super::*;
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_write() {
+    async fn test_write_impl() -> Result<(), MorsError> {
         console_subscriber::init();
-        if let Err(e) = test_write_impl().await {
-            eprintln!("Error: {:?}", e.to_string());
-        }
-    }
-    async fn test_write_impl() -> Result<()> {
         let mut logger = env_logger::builder();
         logger.filter_level(LevelFilter::Trace);
         logger.init();
@@ -365,7 +350,7 @@ mod test {
         let mors = builder.build().await?;
 
         let mut rng = get_rng("abcd");
-        let random = gen_random_entries(&mut rng, 100000);
+        let random = gen_random_entries(&mut rng, 100000, 1000.into());
 
         let mut entries = Vec::new();
         let mut receivers = Vec::new();

@@ -21,12 +21,12 @@ use mors_traits::{
 };
 use mors_wal::{read::LogFileIter, LogFile};
 
+use crate::Result;
 use crate::{
     discard::Discard,
     error::MorsVlogError,
     threshold::{VlogThreshold, VlogThresholdConfig},
 };
-type Result<T> = std::result::Result<T, MorsVlogError>;
 type LogFileWrapper<K> = Arc<RwLock<LogFile<VlogId, K>>>;
 pub struct VlogCtl<K: Kms> {
     inner: Arc<VlogCtlInner<K>>,
@@ -56,6 +56,18 @@ impl<K: Kms> VlogCtlTrait<K> for VlogCtl<K> {
     const MAX_VLOG_SIZE: usize = 22;
 
     const MAX_VLOG_FILE_SIZE: usize = u32::MAX as usize;
+
+    async fn write<'a>(
+        &self,
+        iter_mut: Vec<
+            std::slice::IterMut<
+                'a,
+                (mors_common::kv::Entry, mors_common::kv::ValuePointer),
+            >,
+        >,
+    ) -> std::result::Result<(), VlogError> {
+        Ok(self.write_impl(iter_mut).await?)
+    }
 }
 impl<K: Kms> VlogCtl<K> {
     pub fn latest_logfile(&self) -> Result<Arc<RwLock<LogFile<VlogId, K>>>> {
@@ -68,7 +80,7 @@ impl<K: Kms> VlogCtl<K> {
         };
         Err(MorsVlogError::LogNotFound(id))
     }
-    fn create_new(&self) -> Result<LogFileWrapper<K>> {
+    pub(crate) fn create_new(&self) -> Result<LogFileWrapper<K>> {
         let mut max_id_w = self.inner.max_id.write()?;
 
         let id = *max_id_w + 1;
@@ -91,6 +103,17 @@ impl<K: Kms> VlogCtl<K> {
     }
     pub fn woffset(&self) -> usize {
         self.inner.writeable_offset.load(Ordering::SeqCst)
+    }
+    pub fn woffset_fetch_add(&self, offset: usize) -> usize {
+        self.inner
+            .writeable_offset
+            .fetch_add(offset, Ordering::SeqCst)
+    }
+    pub fn value_threshold(&self) -> usize {
+        self.inner.vlog_threshold.value_threshold()
+    }
+    pub(crate) fn threshold(&self) -> &VlogThreshold {
+        &self.inner.vlog_threshold
     }
 }
 #[derive(Debug, Clone)]
@@ -196,7 +219,7 @@ impl<K: Kms> VlogCtlBuilder<K> {
             };
         }
         let end_offset = logfile_iter.valid_end_offset();
-        latest_w.truncate(end_offset)?;
+        latest_w.set_len(end_offset)?;
         vlog_ctl.create_new()?;
         Ok(vlog_ctl)
     }

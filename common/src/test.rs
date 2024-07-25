@@ -27,10 +27,23 @@ pub fn gen_random_entry(rng: &mut StdRng) -> Entry {
     entry.set_version(txn.into());
     entry
 }
-pub fn gen_random_entries(rng: &mut StdRng, count: usize) -> Vec<Entry> {
+pub fn gen_random_entries(
+    rng: &mut StdRng,
+    count: usize,
+    fix_size: Option<usize>,
+) -> Vec<Entry> {
     let mut entries = Vec::new();
     for _ in 0..count {
-        entries.push(gen_random_entry(rng));
+        if let Some(s) = fix_size {
+            let key = generate_random_fixed_len(rng, s as u8);
+            let value = generate_random_fixed_len(rng, s as u8);
+            let mut entry = Entry::new(key.into(), value.into());
+            let txn: u64 = rng.gen();
+            entry.set_version(txn.into());
+            entries.push(entry);
+        } else {
+            entries.push(gen_random_entry(rng));
+        }
     }
     entries
 }

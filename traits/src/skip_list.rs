@@ -6,6 +6,7 @@ use mors_common::kv::ValueMeta;
 use thiserror::Error;
 
 //需满足并发安全
+pub type OptionKV<'a> =Option<(&'a[u8], Option<&'a[u8]>)>;
 pub trait SkipListTrait: Send + Sync + Clone + 'static {
     type ErrorType: Into<SkipListError>;
     fn new(
@@ -18,6 +19,7 @@ pub trait SkipListTrait: Send + Sync + Clone + 'static {
     fn push(&self, key: &[u8], value: &[u8]) -> Result<(), SkipListError>;
     fn get(&self, key: &[u8]) -> Result<Option<&[u8]>, SkipListError>;
     fn get_or_next(&self, key: &[u8]) -> Result<Option<&[u8]>, SkipListError>;
+    fn get_key_value(&self, key: &[u8],allow_next:bool) -> Result<OptionKV, SkipListError>;
     fn is_empty(&self) -> bool;
     fn height(&self) -> usize;
     fn iter(&self) -> impl KvCacheIterator<ValueMeta>;

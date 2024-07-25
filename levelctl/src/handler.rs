@@ -62,6 +62,9 @@ impl<T: TableTrait<K>, K: KmsCipher> LevelHandler<T, K> {
     pub(crate) fn tables_len(&self) -> usize {
         self.read().tables.len()
     }
+    pub(crate) fn total_size(&self) -> usize {
+        self.read().total_size
+    }
     pub(crate) fn validate(&self) -> Result<()> {
         let inner = self.0.table_handler.read();
         if self.0.level == LEVEL0 {

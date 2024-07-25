@@ -3,7 +3,10 @@ use log::info;
 use manifest_change::{
     manifest_change::Operation, EncryptionAlgo, ManifestChange,
 };
-use mors_common::{compress::CompressionType, file_id::{FileId, SSTableId}};
+use mors_common::{
+    compress::CompressionType,
+    file_id::{FileId, SSTableId},
+};
 use mors_traits::{kms::CipherKeyId, levelctl::Level};
 use std::{
     collections::{HashMap, HashSet},
@@ -32,7 +35,7 @@ const MAGIC_VERSION: u16 = 1;
 const MAGIC_TEXT: &[u8; 4] = b"Mors";
 
 type Result<T> = std::result::Result<T, ManifestError>;
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct Manifest(Arc<Mutex<ManifestInner>>);
 impl Deref for Manifest {
     type Target = Mutex<ManifestInner>;
@@ -41,6 +44,7 @@ impl Deref for Manifest {
         &self.0
     }
 }
+#[derive(Debug)]
 pub(crate) struct ManifestInner {
     file: File,
     deletions_rewrite_threshold: usize,

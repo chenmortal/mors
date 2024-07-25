@@ -1,6 +1,8 @@
 use std::alloc::{alloc, dealloc, handle_alloc_error, Layout};
+use std::marker::PhantomPinned;
 use std::mem::size_of;
 
+use std::pin::Pin;
 use std::ptr::{self, NonNull};
 use std::sync::atomic::AtomicUsize;
 
@@ -19,9 +21,10 @@ pub struct Arena {
     ptr_offset: AtomicUsize,
     end: NonNull<u8>,
     layout: Layout,
+    _pin:PhantomPinned,
 }
 impl Arena {
-    pub fn new(size: usize) -> Result<Arena> {
+    pub fn new(size: usize) -> Result<Pin<Box<Arena>>> {
         let chunk_align = CHUNK_ALIGN;
         let mut request_size = Self::round_up_to(size, chunk_align);
         debug_assert_eq!(chunk_align % CHUNK_ALIGN, 0);
@@ -50,8 +53,10 @@ impl Arena {
             ptr_offset,
             end,
             layout,
+            _pin: PhantomPinned,
         };
-        Ok(s)
+        
+        Ok(Box::pin(s))
     }
     pub fn alloc<T>(&self, value: T) -> Result<&mut T> {
         self.alloc_with(|| value)

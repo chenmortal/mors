@@ -13,6 +13,7 @@ const DISCARD_FILE_NAME: &str = "DISCARD";
 const DISCARD_FILE_SIZE: usize = 1 << 20; //1MB
 const SLOT_SIZE: usize = 2 * size_of::<u64>();
 const DISCARD_MAX_SLOT: usize = DISCARD_FILE_SIZE / SLOT_SIZE; //1MB file can store 65536 discard entries. Each entry is 16 bytes;
+#[derive(Clone)]
 pub struct Discard {
     inner: Arc<Mutex<DiscardInner>>,
 }

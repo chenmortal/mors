@@ -44,9 +44,7 @@ impl Mark {
 impl WaterMark {
     pub(crate) fn new(name: &'static str, done_until: TxnTs) -> Self {
         let (sender, receiver) = tokio::sync::mpsc::channel::<Mark>(100);
-        let closer = Closer::new(
-            "Txn manager watermark ".to_owned() + name + " process",
-        );
+        let closer = Closer::new(name);
         let water = Self(Arc::new(WaterMarkInner {
             done_until: AtomicU64::new(done_until.into()),
             last_index: AtomicU64::new(0),

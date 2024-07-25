@@ -113,7 +113,7 @@ impl KeyTs {
         v
     }
 
-    pub(crate) fn key(&self) -> &Bytes {
+    pub fn key(&self) -> &Bytes {
         &self.key
     }
 

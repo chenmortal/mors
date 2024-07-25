@@ -4,7 +4,7 @@ use std::sync::Arc;
 use mors_common::kv::ValueMeta;
 use mors_traits::{
     iter::KvCacheIterator,
-    skip_list::{SkipListError, SkipListTrait},
+    skip_list::{OptionKV, SkipListError, SkipListTrait},
 };
 
 use crate::{
@@ -44,7 +44,9 @@ impl SkipListTrait for SkipList {
     fn get_or_next(&self, key: &[u8]) -> Result<Option<&[u8]>> {
         Ok(self.inner.get_or_next(key)?)
     }
-
+    fn get_key_value(&self, key: &[u8],allow_next:bool) -> Result<OptionKV> {
+        Ok(self.inner.get_key_value(key,allow_next)?)
+    }
     fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
@@ -58,6 +60,8 @@ impl SkipListTrait for SkipList {
     fn iter(&self) -> impl KvCacheIterator<ValueMeta> {
         SkipListIter::new(&self.inner)
     }
+    
+    
 }
 impl From<MorsSkipListError> for SkipListError {
     fn from(val: MorsSkipListError) -> Self {
