@@ -6,6 +6,7 @@ use mors_traits::{
     kms::Kms, levelctl::Level, sstable::TableTrait, vlog::DiscardTrait,
 };
 use rand::Rng;
+use target::CompactTarget;
 use tokio::{
     select,
     time::{interval, sleep},
@@ -14,17 +15,15 @@ use tokio::{
 use crate::{ctl::LevelCtl, manifest::Manifest};
 
 pub mod status;
+mod target;
+#[derive(Debug, Default)]
 struct CompactPriority {
     level: Level,
     score: f64,
     adjusted: f64,
     target: CompactTarget,
 }
-struct CompactTarget {
-    base_level: Level,
-    target_level: Level,
-    file_size: Vec<usize>,
-}
+
 #[derive(Debug, Clone)]
 pub struct CompactContext<T: TableTrait<K::Cipher>, K: Kms, D: DiscardTrait> {
     kms: K,
@@ -92,8 +91,11 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                     count += 1;
                     info!("task {} count {}", task_id, count);
                     if self.levelmax2max_compaction()
-                        && task_id ==2 && count >= 200 {
-
+                    && task_id ==2 && count >= 200 {
+                        CompactPriority{
+                            level:self.max_level(),
+                            ..Default::default()
+                        };
                     }
                 }
                 _=closer.cancelled() => {

@@ -107,12 +107,14 @@ impl WithReadOnly for TableBuilder {
     }
 }
 impl<K: KmsCipher> TableBuilderTrait<Table<K>, K> for TableBuilder {
-    fn set_compression(&mut self, compression: CompressionType) {
+    fn set_compression(&mut self, compression: CompressionType) -> &mut Self {
         self.compression = compression;
+        self
     }
 
-    fn set_cache(&mut self, cache: Cache) {
+    fn set_cache(&mut self, cache: Cache) -> &mut Self {
         self.cache = Some(cache);
+        self
     }
 
     async fn open(
@@ -139,6 +141,15 @@ impl<K: KmsCipher> TableBuilderTrait<Table<K>, K> for TableBuilder {
         } else {
             Ok(None)
         }
+    }
+
+    fn set_table_size(&mut self, size: usize) -> &mut Self {
+        self.table_size = size;
+        self
+    }
+
+    fn table_size(&self) -> usize {
+        self.table_size
     }
 }
 impl TableBuilder {

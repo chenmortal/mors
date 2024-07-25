@@ -1,6 +1,3 @@
-use std::fmt::Display;
-use std::sync::atomic::AtomicU32;
-use std::sync::Arc;
 use crate::default::{WithDir, WithReadOnly};
 use crate::iter::KvCacheIterator;
 use crate::{cache::CacheTrait, kms::KmsCipher};
@@ -9,6 +6,9 @@ use mors_common::file_id::SSTableId;
 use mors_common::kv::ValueMeta;
 use mors_common::ts::{KeyTs, TxnTs};
 use std::error::Error;
+use std::fmt::Display;
+use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
 use thiserror::Error;
 
 pub trait TableTrait<K: KmsCipher>:
@@ -32,8 +32,10 @@ pub trait TableTrait<K: KmsCipher>:
 pub trait TableBuilderTrait<T: TableTrait<K>, K: KmsCipher>:
     Default + Clone + Send + Sync + 'static + WithDir + WithReadOnly
 {
-    fn set_compression(&mut self, compression: CompressionType);
-    fn set_cache(&mut self, cache: T::Cache);
+    fn set_compression(&mut self, compression: CompressionType) -> &mut Self;
+    fn set_cache(&mut self, cache: T::Cache) -> &mut Self;
+    fn set_table_size(&mut self, size: usize) -> &mut Self;
+    fn table_size(&self) -> usize;
     fn open(
         &self,
         id: SSTableId,

@@ -17,9 +17,7 @@ use mors_common::{
 use mors_traits::{
     default::{WithDir, WithReadOnly, DEFAULT_DIR},
     kms::Kms,
-    levelctl::{
-        Level, LevelCtlBuilderTrait, LevelCtlError, LevelCtlTrait, LEVEL0,
-    },
+    levelctl::{Level, LevelCtlBuilderTrait, LevelCtlError, LevelCtlTrait},
     sstable::{TableBuilderTrait, TableTrait},
 };
 
@@ -43,11 +41,16 @@ pub struct LevelCtlInner<T: TableTrait<K::Cipher>, K: Kms> {
     handlers: Vec<LevelHandler<T, K::Cipher>>,
     next_id: Arc<AtomicU32>,
     level0_stalls_ms: AtomicU64,
+    level0_stalls: AtomicU64,
+    max_level: Level,
     compact_status: CompactStatus,
     level0_num_tables_stall: usize,
     levelmax2max_compaction: bool,
     num_compactors: usize,
-    level0_stalls: AtomicU64,
+    level0_size: usize,
+    base_level_size: usize,
+    level_size_multiplier: usize,
+    table_size_multiplier: usize,
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlTrait<T, K> for LevelCtl<T, K> {
     type ErrorType = MorsLevelCtlError;
@@ -93,11 +96,31 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     pub(crate) fn level0_stalls_ms(&self) -> &AtomicU64 {
         &self.inner.level0_stalls_ms
     }
+    pub(crate) fn base_level_size(&self) -> usize {
+        self.inner.base_level_size
+    }
+    pub(crate) fn level_size_multiplier(&self) -> usize {
+        self.inner.level_size_multiplier
+    }
+    pub(crate) fn table_size_multiplier(&self) -> usize {
+        self.inner.table_size_multiplier
+    }
+    pub(crate) fn level0_size(&self) -> usize {
+        self.inner.level0_size
+    }
     pub(crate) fn handler(
         &self,
         level: Level,
     ) -> Option<&LevelHandler<T, K::Cipher>> {
-        self.inner.handlers.iter().find(|h| *h.level() == level)
+        if level > self.inner.max_level {
+            return None;
+        }
+        let handler = &self.inner.handlers[level.to_usize()];
+        debug_assert_eq!(handler.level(), &level);
+        Some(handler)
+    }
+    pub(crate) fn max_level(&self) -> Level {
+        self.inner.max_level
     }
 }
 
@@ -108,6 +131,10 @@ pub struct LevelCtlBuilder<T: TableTrait<K::Cipher>, K: Kms> {
     level0_num_tables_stall: usize,
     num_compactors: usize,
     levelmax2max_compaction: bool,
+    base_level_size: usize,
+    level_size_multiplier: usize,
+    table_size_multiplier:usize,
+    level0_size: usize,
     cache: Option<T::Cache>,
     dir: PathBuf,
     read_only: bool,
@@ -124,6 +151,10 @@ impl<T: TableTrait<K::Cipher>, K: Kms> Default for LevelCtlBuilder<T, K> {
             level0_num_tables_stall: 15,
             num_compactors: 4,
             levelmax2max_compaction: false,
+            base_level_size: 10 << 20, //10 MB
+            level_size_multiplier: 10,
+            level0_size: 64 << 20,
+            table_size_multiplier: 2
         }
     }
 }
@@ -160,6 +191,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms>
     }
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
+    // set max_level,notice [0..max_level] is valid level
     pub fn set_max_level(&mut self, max_level: Level) -> &mut Self {
         self.max_level = max_level;
         self
@@ -181,18 +213,10 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
         let compact_status = CompactStatus::new(self.max_level.to_usize());
         let manifest = self.manifest.build()?;
 
-        let (max_id, level_tables) =
+        let (max_id, handlers) =
             self.open_tables_by_manifest(manifest.clone(), kms).await?;
 
         let next_id = Arc::new(AtomicU32::new(1 + Into::<u32>::into(max_id)));
-        let mut handlers = Vec::with_capacity(level_tables.len());
-        let mut level = LEVEL0;
-        for tables in level_tables {
-            let handler = LevelHandler::new(level, tables);
-            handler.validate()?;
-            handlers.push(handler);
-            level += 1;
-        }
 
         let ctl = LevelCtlInner {
             manifest,
@@ -205,6 +229,11 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
             level0_stalls: Default::default(),
             num_compactors: self.num_compactors,
             levelmax2max_compaction: self.levelmax2max_compaction,
+            max_level: self.max_level,
+            base_level_size: self.base_level_size,
+            level_size_multiplier: self.level_size_multiplier,
+            level0_size: self.level0_size,
+            table_size_multiplier: self.table_size_multiplier,
         };
         Ok(LevelCtl {
             inner: Arc::new(ctl),
@@ -215,7 +244,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
         &self,
         manifest: Manifest,
         kms: K,
-    ) -> Result<(SSTableId, Vec<Vec<T>>)> {
+    ) -> Result<(SSTableId, Vec<LevelHandler<T, K::Cipher>>)> {
         manifest.revert(&self.dir).await?;
 
         let num_opened = Arc::new(AtomicUsize::new(0));
@@ -272,9 +301,10 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
         watch_closer.cancel();
         watch_closer.wait().await?;
 
-        let mut level_tables = Vec::new();
-        for level in 0..self.max_level.to_u8() {
-            match tasks.remove(&level.into()) {
+        let mut handlers = Vec::new();
+        for level in 0..(self.max_level.to_u8() + 1) {
+            let level: Level = level.into();
+            match tasks.remove(&level) {
                 Some(task_vec) => {
                     let mut tables = Vec::with_capacity(task_vec.len());
                     for handle in task_vec {
@@ -282,14 +312,16 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
                             tables.push(t);
                         };
                     }
-                    level_tables.push(tables);
+                    let handler = LevelHandler::new(level, tables);
+                    handler.validate()?;
+                    handlers.push(handler);
                 }
                 None => {
-                    level_tables.push(Vec::new());
+                    handlers.push(LevelHandler::new(level, Vec::new()));
                 }
             }
         }
-        Ok((max_id, level_tables))
+        Ok((max_id, handlers))
     }
     fn watch_num_opened(
         num_opened: Arc<AtomicUsize>,
