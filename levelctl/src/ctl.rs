@@ -44,13 +44,7 @@ pub struct LevelCtlInner<T: TableTrait<K::Cipher>, K: Kms> {
     level0_stalls: AtomicU64,
     max_level: Level,
     compact_status: CompactStatus,
-    level0_num_tables_stall: usize,
-    levelmax2max_compaction: bool,
-    num_compactors: usize,
-    level0_size: usize,
-    base_level_size: usize,
-    level_size_multiplier: usize,
-    table_size_multiplier: usize,
+    config: LevelCtlConfig,
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlTrait<T, K> for LevelCtl<T, K> {
     type ErrorType = MorsLevelCtlError;
@@ -84,29 +78,11 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     pub(crate) fn manifest(&self) -> &Manifest {
         &self.inner.manifest
     }
-    pub(crate) fn num_compactors(&self) -> usize {
-        self.inner.num_compactors
-    }
-    pub(crate) fn levelmax2max_compaction(&self) -> bool {
-        self.inner.levelmax2max_compaction
-    }
-    pub(crate) fn level0_num_tables_stall(&self) -> usize {
-        self.inner.level0_num_tables_stall
+    pub(crate) fn config(&self) -> &LevelCtlConfig {
+        &self.inner.config
     }
     pub(crate) fn level0_stalls_ms(&self) -> &AtomicU64 {
         &self.inner.level0_stalls_ms
-    }
-    pub(crate) fn base_level_size(&self) -> usize {
-        self.inner.base_level_size
-    }
-    pub(crate) fn level_size_multiplier(&self) -> usize {
-        self.inner.level_size_multiplier
-    }
-    pub(crate) fn table_size_multiplier(&self) -> usize {
-        self.inner.table_size_multiplier
-    }
-    pub(crate) fn level0_size(&self) -> usize {
-        self.inner.level0_size
     }
     pub(crate) fn handler(
         &self,
@@ -122,20 +98,73 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     pub(crate) fn max_level(&self) -> Level {
         self.inner.max_level
     }
+    pub(crate) fn handlers_len(&self) -> usize {
+        let len = self.inner.handlers.len();
+        debug_assert!(self.max_level().to_usize() + 1 == len);
+        len
+    }
 }
-
-pub struct LevelCtlBuilder<T: TableTrait<K::Cipher>, K: Kms> {
-    manifest: ManifestBuilder,
-    table: T::TableBuilder,
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct LevelCtlConfig {
     max_level: Level,
     level0_num_tables_stall: usize,
     num_compactors: usize,
     levelmax2max_compaction: bool,
     base_level_size: usize,
     level_size_multiplier: usize,
-    table_size_multiplier:usize,
+    table_size_multiplier: usize,
     level0_size: usize,
+    level0_tables_len: usize,
+}
+impl LevelCtlConfig {
+    pub(crate) fn max_level(&self) -> Level {
+        self.max_level
+    }
+    pub(crate) fn level0_num_tables_stall(&self) -> usize {
+        self.level0_num_tables_stall
+    }
+    pub(crate) fn num_compactors(&self) -> usize {
+        self.num_compactors
+    }
+    pub(crate) fn levelmax2max_compaction(&self) -> bool {
+        self.levelmax2max_compaction
+    }
+    pub(crate) fn base_level_size(&self) -> usize {
+        self.base_level_size
+    }
+    pub(crate) fn level_size_multiplier(&self) -> usize {
+        self.level_size_multiplier
+    }
+    pub(crate) fn table_size_multiplier(&self) -> usize {
+        self.table_size_multiplier
+    }
+    pub(crate) fn level0_size(&self) -> usize {
+        self.level0_size
+    }
+    pub(crate) fn level0_tables_len(&self) -> usize {
+        self.level0_tables_len
+    }
+}
+impl Default for LevelCtlConfig {
+    fn default() -> Self {
+        Self {
+            max_level: 6_u8.into(),
+            level0_num_tables_stall: 15,
+            num_compactors: 4,
+            levelmax2max_compaction: false,
+            base_level_size: 10 << 20, //10 MB
+            level_size_multiplier: 10,
+            table_size_multiplier: 2,
+            level0_size: 64 << 20,
+            level0_tables_len: 5,
+        }
+    }
+}
+pub struct LevelCtlBuilder<T: TableTrait<K::Cipher>, K: Kms> {
+    manifest: ManifestBuilder,
+    table: T::TableBuilder,
     cache: Option<T::Cache>,
+    config: LevelCtlConfig,
     dir: PathBuf,
     read_only: bool,
 }
@@ -144,17 +173,10 @@ impl<T: TableTrait<K::Cipher>, K: Kms> Default for LevelCtlBuilder<T, K> {
         Self {
             manifest: ManifestBuilder::default(),
             table: T::TableBuilder::default(),
-            max_level: 6_u8.into(),
-            dir: PathBuf::from(DEFAULT_DIR),
             cache: None,
+            config: LevelCtlConfig::default(),
+            dir: PathBuf::from(DEFAULT_DIR),
             read_only: false,
-            level0_num_tables_stall: 15,
-            num_compactors: 4,
-            levelmax2max_compaction: false,
-            base_level_size: 10 << 20, //10 MB
-            level_size_multiplier: 10,
-            level0_size: 64 << 20,
-            table_size_multiplier: 2
         }
     }
 }
@@ -193,7 +215,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms>
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
     // set max_level,notice [0..max_level] is valid level
     pub fn set_max_level(&mut self, max_level: Level) -> &mut Self {
-        self.max_level = max_level;
+        self.config.max_level = max_level;
         self
     }
 
@@ -201,16 +223,16 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
         &mut self,
         level0_num_tables_stall: usize,
     ) -> &mut Self {
-        self.level0_num_tables_stall = level0_num_tables_stall;
+        self.config.level0_num_tables_stall = level0_num_tables_stall;
         self
     }
     pub fn set_num_compactors(&mut self, num_compactors: usize) -> &mut Self {
-        self.num_compactors = num_compactors;
+        self.config.num_compactors = num_compactors;
         self
     }
 
     async fn build_impl(&self, kms: K) -> Result<LevelCtl<T, K>> {
-        let compact_status = CompactStatus::new(self.max_level.to_usize());
+        let compact_status = CompactStatus::new(self.config.max_level.to_usize());
         let manifest = self.manifest.build()?;
 
         let (max_id, handlers) =
@@ -225,15 +247,9 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
             level0_stalls_ms: Default::default(),
             compact_status,
             table_builder: self.table.clone(),
-            level0_num_tables_stall: self.level0_num_tables_stall,
+            config: self.config.clone(),
             level0_stalls: Default::default(),
-            num_compactors: self.num_compactors,
-            levelmax2max_compaction: self.levelmax2max_compaction,
-            max_level: self.max_level,
-            base_level_size: self.base_level_size,
-            level_size_multiplier: self.level_size_multiplier,
-            level0_size: self.level0_size,
-            table_size_multiplier: self.table_size_multiplier,
+            max_level: self.config.max_level,
         };
         Ok(LevelCtl {
             inner: Arc::new(ctl),
@@ -291,7 +307,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
                 table.and_then(|x| x)
             });
             tasks
-                .entry(table.level().min(self.max_level))
+                .entry(table.level().min(self.config.max_level))
                 .or_default()
                 .push(task);
         }
@@ -302,7 +318,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
         watch_closer.wait().await?;
 
         let mut handlers = Vec::new();
-        for level in 0..(self.max_level.to_u8() + 1) {
+        for level in 0..(self.config.max_level.to_u8() + 1) {
             let level: Level = level.into();
             match tasks.remove(&level) {
                 Some(task_vec) => {

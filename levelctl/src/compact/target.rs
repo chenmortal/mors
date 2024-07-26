@@ -5,7 +5,7 @@ use mors_traits::{
 };
 
 use crate::ctl::LevelCtl;
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub(crate) struct CompactTarget {
     base_level: Level,
     target_size: Vec<usize>,
@@ -36,7 +36,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         let max_handler = self.handler(self.max_level()).unwrap();
 
         let mut level_size = max_handler.total_size();
-        let base_level_size = self.base_level_size();
+        let base_level_size = self.config().base_level_size();
 
         for i in (1..level_count).rev() {
             // L6->L1, if level size <= base level size and base_level not changed, then Lbase = i
@@ -47,18 +47,18 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             let target_size = level_size.max(base_level_size);
             target.target_size[i] = target_size;
             // if L6 size is 1GB, then L5 target size is 100MB, L4 target size is 10MB and so on.
-            level_size /= self.level_size_multiplier();
+            level_size /= self.config().level_size_multiplier();
         }
 
         let mut table_size = self.table_builder().table_size();
         for i in 0..level_count {
             if i == 0 {
                 // level0_size == memtable_size
-                target.file_size[i] = self.level0_size();
+                target.file_size[i] = self.config().level0_size();
             } else if i <= target.base_level.to_usize() {
                 target.file_size[i] = table_size;
             } else {
-                table_size *= self.table_size_multiplier();
+                table_size *= self.config().table_size_multiplier();
                 target.file_size[i] = table_size;
             }
         }
