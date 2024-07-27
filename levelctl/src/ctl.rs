@@ -81,6 +81,9 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     pub(crate) fn config(&self) -> &LevelCtlConfig {
         &self.inner.config
     }
+    pub(crate) fn compact_status(&self) -> &CompactStatus {
+        &self.inner.compact_status
+    }
     pub(crate) fn level0_stalls_ms(&self) -> &AtomicU64 {
         &self.inner.level0_stalls_ms
     }
@@ -232,7 +235,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
     }
 
     async fn build_impl(&self, kms: K) -> Result<LevelCtl<T, K>> {
-        let compact_status = CompactStatus::new(self.config.max_level.to_usize());
+        let compact_status =
+            CompactStatus::new(self.config.max_level.to_usize());
         let manifest = self.manifest.build()?;
 
         let (max_id, handlers) =
@@ -247,7 +251,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
             level0_stalls_ms: Default::default(),
             compact_status,
             table_builder: self.table.clone(),
-            config: self.config.clone(),
+            config: self.config,
             level0_stalls: Default::default(),
             max_level: self.config.max_level,
         };

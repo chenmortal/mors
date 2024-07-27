@@ -4,7 +4,9 @@ use std::{
 };
 
 use mors_common::{file_id::SSTableId, ts::KeyTs};
+use mors_traits::levelctl::Level;
 
+use super::Result;
 pub(crate) struct CompactStatus(Arc<RwLock<CompactStatusInner>>);
 pub(crate) struct CompactStatusInner {
     levels: Vec<LevelCompactStatus>,
@@ -18,6 +20,11 @@ impl CompactStatus {
             levels,
             tables: HashSet::new(),
         })))
+    }
+    pub(crate) fn delete_size(&self, level: Level) -> Result<i64> {
+        let inner = self.0.read()?;
+        let del_size = inner.levels[level.to_usize()].del_size;
+        Ok(del_size)
     }
 }
 #[derive(Debug, Default, Clone)]

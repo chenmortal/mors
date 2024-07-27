@@ -1,5 +1,3 @@
-use std::ops::Deref;
-use std::{marker::PhantomData, sync::Arc};
 use mors_common::ts::TxnTs;
 use mors_traits::{
     kms::KmsCipher,
@@ -7,9 +5,12 @@ use mors_traits::{
     sstable::TableTrait,
 };
 use parking_lot::RwLock;
+use std::ops::Deref;
+use std::{marker::PhantomData, sync::Arc};
 
 use crate::error::LevelHandlerError;
 type Result<T> = std::result::Result<T, LevelHandlerError>;
+#[derive(Clone)]
 pub(crate) struct LevelHandler<T: TableTrait<K>, K: KmsCipher>(
     Arc<LevelHandlerInner<T, K>>,
 );

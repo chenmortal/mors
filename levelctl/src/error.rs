@@ -1,3 +1,5 @@
+use std::sync::PoisonError;
+
 use mors_common::{file_id::SSTableId, ts::KeyTs};
 use mors_traits::{
     kms::KmsError,
@@ -23,8 +25,15 @@ pub enum MorsLevelCtlError {
     JoinError(#[from] tokio::task::JoinError),
     #[error("Level Handler Error: {0}")]
     LevelHandlerError(#[from] LevelHandlerError),
+    #[error("Poison error: {0}")]
+    PoisonError(String),
 }
 
+impl<T> From<PoisonError<T>> for MorsLevelCtlError {
+    fn from(e: PoisonError<T>) -> MorsLevelCtlError {
+        MorsLevelCtlError::PoisonError(e.to_string())
+    }
+}
 #[derive(Error, Debug)]
 pub enum LevelHandlerError {
     #[error("SSTable Overlap Error:Level {0:?} Pre SSTable {1:?} biggest {2:?} > This SSTable {3:?} smallest {4:?}")]
