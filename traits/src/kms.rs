@@ -46,7 +46,7 @@ pub trait Kms: Clone + Send + Sync + 'static {
     ) -> Result<Option<Self::Cipher>, KmsError>;
     fn latest_cipher(&self) -> Result<Option<Self::Cipher>, KmsError>;
 }
-pub trait KmsCipher: Send + Sync + 'static + Clone {
+pub trait KmsCipher: Sized + Send + Sync + 'static + Clone {
     type ErrorType: Into<EncryptError>;
 
     fn cipher_key_id(&self) -> CipherKeyId;

@@ -94,7 +94,6 @@ impl From<TxnTs> for u64 {
     fn from(value: TxnTs) -> Self {
         value.0
     }
-    
 }
 #[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct KeyTs {
@@ -133,7 +132,7 @@ impl KeyTs {
         self.key.len() + std::mem::size_of::<u64>()
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self == &Self::default()
     }
 }
@@ -224,7 +223,9 @@ impl Ord for KeyTsBorrow<'_> {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.key().cmp(other.key()) {
             Ordering::Equal => {}
-            ord => {return ord;},
+            ord => {
+                return ord;
+            }
         }
         other.txn_ts().cmp(&self.txn_ts())
     }

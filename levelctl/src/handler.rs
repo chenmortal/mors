@@ -1,39 +1,65 @@
-use std::ops::Deref;
-use std::{marker::PhantomData, sync::Arc};
 use mors_common::ts::TxnTs;
 use mors_traits::{
-    kms::KmsCipher,
+    kms::Kms,
     levelctl::{Level, LEVEL0},
     sstable::TableTrait,
 };
 use parking_lot::RwLock;
+use std::ops::Deref;
+use std::{marker::PhantomData, sync::Arc};
 
 use crate::error::LevelHandlerError;
 type Result<T> = std::result::Result<T, LevelHandlerError>;
-pub(crate) struct LevelHandler<T: TableTrait<K>, K: KmsCipher>(
+#[derive(Clone, Debug)]
+pub(crate) struct LevelHandler<T: TableTrait<K::Cipher>, K: Kms>(
     Arc<LevelHandlerInner<T, K>>,
 );
-impl<T: TableTrait<K>, K: KmsCipher> Deref for LevelHandler<T, K>
+impl<T: TableTrait<K::Cipher>, K: Kms> Default for LevelHandler<T, K> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+impl<T, K> Deref for LevelHandler<T, K>
 where
-    T: TableTrait<K>,
-    K: KmsCipher,
+    T: TableTrait<K::Cipher>,
+    K: Kms,
 {
     type Target = RwLock<LevelHandlerTables<T, K>>;
     fn deref(&self) -> &Self::Target {
         &self.0.table_handler
     }
 }
-struct LevelHandlerInner<T: TableTrait<K>, K: KmsCipher> {
+#[derive(Debug)]
+struct LevelHandlerInner<T: TableTrait<K::Cipher>, K: Kms> {
     table_handler: RwLock<LevelHandlerTables<T, K>>,
     level: Level,
 }
-pub(crate) struct LevelHandlerTables<T: TableTrait<K>, K: KmsCipher> {
+impl<T: TableTrait<K::Cipher>, K: Kms> Default for LevelHandlerInner<T, K> {
+    fn default() -> Self {
+        Self {
+            table_handler: Default::default(),
+            level: Default::default(),
+        }
+    }
+}
+#[derive(Debug)]
+pub(crate) struct LevelHandlerTables<T: TableTrait<K::Cipher>, K: Kms> {
     tables: Vec<T>,
     total_size: usize,
     total_stale_size: usize,
     k: PhantomData<K>,
 }
-impl<T: TableTrait<K>, K: KmsCipher> LevelHandler<T, K> {
+impl<T: TableTrait<K::Cipher>, K: Kms> Default for LevelHandlerTables<T, K> {
+    fn default() -> Self {
+        Self {
+            tables: Default::default(),
+            total_size: Default::default(),
+            total_stale_size: Default::default(),
+            k: Default::default(),
+        }
+    }
+}
+impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
     pub(crate) fn new(level: Level, mut tables: Vec<T>) -> Self {
         let mut total_size = 0;
         let mut total_stale_size = 0;
@@ -101,7 +127,7 @@ impl<T: TableTrait<K>, K: KmsCipher> LevelHandler<T, K> {
         max_version
     }
 }
-impl<T: TableTrait<K>, K: KmsCipher> LevelHandlerTables<T, K> {
+impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandlerTables<T, K> {
     pub(crate) fn tables(&self) -> &[T] {
         &self.tables
     }
