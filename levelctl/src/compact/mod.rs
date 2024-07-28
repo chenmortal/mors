@@ -121,6 +121,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         priority: CompactPriority,
         context: CompactContext<T, K, D>,
     ) {
+        self.do_compact(task_id, priority, context);
     }
     // doCompact picks some table on level l and compacts it away to the next level.
     fn do_compact<D: DiscardTrait>(
@@ -131,12 +132,10 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     ) {
         debug_assert!(priority.level() < self.max_level());
         // base level can't be LEVEL0 , update it
-        if priority.target().base_level()==LEVEL0{
+        if priority.target().base_level() == LEVEL0 {
             priority.set_target(self.target())
         };
-
+        self.gen_plan(task_id, priority);
         // let this_level = self.handler(priority.level());
-
     }
-    
 }

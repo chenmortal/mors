@@ -38,7 +38,7 @@ pub struct LevelCtl<T: TableTrait<K::Cipher>, K: Kms> {
 pub struct LevelCtlInner<T: TableTrait<K::Cipher>, K: Kms> {
     manifest: Manifest,
     table_builder: T::TableBuilder,
-    handlers: Vec<LevelHandler<T, K::Cipher>>,
+    handlers: Vec<LevelHandler<T, K>>,
     next_id: Arc<AtomicU32>,
     level0_stalls_ms: AtomicU64,
     level0_stalls: AtomicU64,
@@ -90,7 +90,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     pub(crate) fn handler(
         &self,
         level: Level,
-    ) -> Option<&LevelHandler<T, K::Cipher>> {
+    ) -> Option<&LevelHandler<T, K>> {
         if level > self.inner.max_level {
             return None;
         }
@@ -264,7 +264,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
         &self,
         manifest: Manifest,
         kms: K,
-    ) -> Result<(SSTableId, Vec<LevelHandler<T, K::Cipher>>)> {
+    ) -> Result<(SSTableId, Vec<LevelHandler<T, K>>)> {
         manifest.revert(&self.dir).await?;
 
         let num_opened = Arc::new(AtomicUsize::new(0));

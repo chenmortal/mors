@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 
+use bytes::Bytes;
 use mors_traits::{
     kms::Kms,
     levelctl::{Level, LevelCtlTrait, LEVEL0},
@@ -13,6 +14,7 @@ pub(crate) struct CompactPriority {
     level: Level,
     score: f64,
     adjusted: f64,
+    drop_prefixes: Vec<Bytes>,
     target: CompactTarget,
 }
 impl CompactPriority {
@@ -37,6 +39,9 @@ impl CompactPriority {
     }
     pub(crate) fn adjusted(&self) -> f64 {
         self.adjusted
+    }
+    pub(crate) fn drop_prefixes(&self) -> &[Bytes] {
+        &self.drop_prefixes
     }
 }
 #[derive(Debug, Default, Clone)]
@@ -140,6 +145,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                 level,
                 score,
                 adjusted,
+                drop_prefixes: vec![],
                 target: target.clone(),
             };
             prios.push(priority);

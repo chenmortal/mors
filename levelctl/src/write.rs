@@ -24,7 +24,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         let level0_num_tables_stall = self.config().level0_num_tables_stall();
 
         fn push_level0<T: TableTrait<K::Cipher>, K: Kms>(
-            handler: &LevelHandler<T, K::Cipher>,
+            handler: &LevelHandler<T, K>,
             table: &T,
             level0_num_tables_stall: usize,
         ) -> bool {
