@@ -116,15 +116,15 @@ impl KeyTs {
         &self.key
     }
 
-    pub(crate) fn txn_ts(&self) -> TxnTs {
+    pub fn txn_ts(&self) -> TxnTs {
         self.txn_ts
     }
 
-    pub(crate) fn set_key(&mut self, key: Bytes) {
+    pub fn set_key(&mut self, key: Bytes) {
         self.key = key;
     }
 
-    pub(crate) fn set_txn_ts(&mut self, txn_ts: TxnTs) {
+    pub fn set_txn_ts(&mut self, txn_ts: TxnTs) {
         self.txn_ts = txn_ts;
     }
 
@@ -207,7 +207,7 @@ impl<'a> KeyTsBorrow<'a> {
             TxnTs::default()
         }
     }
-    pub(crate) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.key().is_empty()
     }
 }
@@ -268,15 +268,15 @@ impl KeyTsBorrow<'_> {
             left.cmp(right)
         }
     }
-    pub(crate) fn equal_key(left: &[u8], right: &[u8]) -> bool {
-        if left.len() > 8 && right.len() > 8 {
-            let left_split = left.len() - 8;
-            let right_split = right.len() - 8;
-            left[..left_split] == right[..right_split]
-        } else {
-            left == right
-        }
-    }
+    // pub(crate) fn equal_key(left: &[u8], right: &[u8]) -> bool {
+    //     if left.len() > 8 && right.len() > 8 {
+    //         let left_split = left.len() - 8;
+    //         let right_split = right.len() - 8;
+    //         left[..left_split] == right[..right_split]
+    //     } else {
+    //         left == right
+    //     }
+    // }
 }
 impl<'a> From<&'a [u8]> for KeyTsBorrow<'a> {
     fn from(value: &'a [u8]) -> Self {

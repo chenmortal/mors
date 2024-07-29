@@ -1,5 +1,6 @@
 use std::{
     collections::HashSet,
+    ops::Deref,
     sync::{Arc, RwLock},
 };
 
@@ -28,6 +29,13 @@ impl CompactStatus {
         let inner = self.0.read()?;
         let del_size = inner.levels[level.to_usize()].del_size;
         Ok(del_size)
+    }
+}
+impl Deref for CompactStatus {
+    type Target = Arc<RwLock<CompactStatusInner>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 #[derive(Debug, Default, Clone)]
@@ -73,5 +81,22 @@ impl CompactStatus {
 impl LevelCompactStatus {
     pub(crate) fn intersects(&self, target: &KeyTsRange) -> bool {
         self.ranges.iter().any(|range| range.intersects(target))
+    }
+    pub(crate) fn ranges_mut(&mut self) -> &mut Vec<KeyTsRange> {
+        &mut self.ranges
+    }
+}
+impl CompactStatusInner {
+    pub(crate) fn tables(&self) -> &HashSet<SSTableId> {
+        &self.tables
+    }
+    pub(crate) fn tables_mut(&mut self) -> &mut HashSet<SSTableId> {
+        &mut self.tables
+    }
+    pub(crate) fn levels(&self) -> &[LevelCompactStatus] {
+        &self.levels
+    }
+    pub(crate) fn levels_mut(&mut self) -> &mut [LevelCompactStatus] {
+        &mut self.levels
     }
 }

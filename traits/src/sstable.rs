@@ -9,6 +9,7 @@ use std::error::Error;
 use std::fmt::Display;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
+use std::time::SystemTime;
 use thiserror::Error;
 
 pub trait TableTrait<K: KmsCipher>:
@@ -26,6 +27,7 @@ pub trait TableTrait<K: KmsCipher>:
     fn smallest(&self) -> &KeyTs;
     fn biggest(&self) -> &KeyTs;
     fn max_version(&self) -> TxnTs;
+    fn create_time(&self) -> SystemTime;
     fn cipher(&self) -> Option<&K>;
     fn compression(&self) -> CompressionType;
 }

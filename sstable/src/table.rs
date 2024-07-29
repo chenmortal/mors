@@ -378,6 +378,10 @@ impl<K: KmsCipher> TableTrait<K> for Table<K> {
     fn compression(&self) -> CompressionType {
         self.0.compression
     }
+
+    fn create_time(&self) -> SystemTime {
+        self.0.create_at
+    }
 }
 
 impl<K: KmsCipher> Table<K> {

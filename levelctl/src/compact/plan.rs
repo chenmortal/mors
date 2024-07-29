@@ -1,4 +1,7 @@
-use std::ops::RangeInclusive;
+use std::{
+    ops::RangeInclusive,
+    time::{Duration, SystemTime},
+};
 
 use mors_common::ts::KeyTs;
 use mors_traits::{kms::Kms, levelctl::LEVEL0, sstable::TableTrait};
@@ -21,6 +24,7 @@ pub(crate) struct CompactPlan<T: TableTrait<K::Cipher>, K: Kms> {
     bottom: Vec<T>,
     this_range: KeyTsRange,
     next_range: KeyTsRange,
+    this_size: usize,
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> Default for CompactPlan<T, K> {
     fn default() -> Self {
@@ -33,6 +37,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> Default for CompactPlan<T, K> {
             bottom: Default::default(),
             this_range: Default::default(),
             next_range: Default::default(),
+            this_size: Default::default(),
         }
     }
 }
@@ -81,7 +86,12 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             self.fill_tables_l0(&mut plan)?;
             Ok(plan)
         } else {
-            let next_level = this_level.to_owned();
+            let next_level = if priority.level() == self.max_level() {
+                this_level.to_owned()
+            } else {
+                self.handler(priority.level() + 1).unwrap().clone()
+            };
+
             let plan = CompactPlan {
                 task_id,
                 priority,
@@ -101,8 +111,10 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     // be compacted within L0. Additionally, it would set the compaction range in
     // cstatus to inf, so no other L0 -> Lbase compactions can happen.
     fn fill_tables_l0(&self, plan: &mut CompactPlan<T, K>) -> Result<bool> {
-        Ok(self.fill_tables_l0_to_lbase(plan)? || self.fill_tables_l0_to_l0())
+        Ok(self.fill_tables_l0_to_lbase(plan)?
+            || self.fill_tables_l0_to_l0(plan)?)
     }
+
     fn fill_tables_l0_to_lbase(
         &self,
         plan: &mut CompactPlan<T, K>,
@@ -157,8 +169,126 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
 
         self.compact_status().check_update(&lock, plan)
     }
-    fn fill_tables_l0_to_l0(&self) -> bool {
-        false
+    fn fill_tables_l0_to_l0(
+        &self,
+        plan: &mut CompactPlan<T, K>,
+    ) -> Result<bool> {
+        if plan.task_id != 0 {
+            return Ok(false);
+        }
+        plan.next_level = self.handler(LEVEL0).unwrap().clone();
+        plan.next_range = KeyTsRange::default();
+        plan.bottom.clear();
+
+        // Because this level and next level are both level 0, we should NOT acquire
+        // the read lock twice, because it can result in a deadlock. So, we don't
+        // call compactDef.lockLevels, instead locking the level only once and
+        // directly here.
+        debug_assert!(*plan.this_level.level() == LEVEL0);
+        debug_assert!(*plan.next_level.level() == LEVEL0);
+
+        let this_level = plan.this_level.read();
+        let mut status = self.compact_status().write()?;
+
+        let target = plan.priority.target();
+        let now = SystemTime::now();
+        let out = this_level
+            .tables()
+            .iter()
+            .filter(|t| t.size() < 2 * target.file_size(LEVEL0))
+            .filter(|t| {
+                now.duration_since(t.create_time()).unwrap()
+                    > Duration::from_secs(10)
+            })
+            .filter(|t| !status.tables().contains(&t.id()))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        if out.len() < 4 {
+            return Ok(false);
+        }
+
+        plan.this_range = KeyTsRange::inf();
+        plan.top = out;
+
+        // Avoid any other L0 -> Lbase from happening, while this is going on.
+        status.levels_mut()[plan.this_level.level().to_usize()]
+            .ranges_mut()
+            .push(KeyTsRange::inf());
+
+        plan.top.iter().for_each(|t| {
+            status.tables_mut().insert(t.id());
+        });
+
+        // For L0->L0 compaction, we set the target file size to max, so the output is always one file.
+        // This significantly decreases the L0 table stalls and improves the performance.
+        plan.priority.target_mut().set_file_size(LEVEL0, usize::MAX);
+        Ok(true)
+    }
+    fn fill_tables(&self, plan: &mut CompactPlan<T, K>) -> Result<bool> {
+        if plan.this_level.tables_len() == 0 {
+            return Ok(false);
+        }
+        if *plan.this_level.level() == self.max_level() {}
+        Ok(false)
+    }
+    fn fill_tables_max_level(
+        &self,
+        plan: &mut CompactPlan<T, K>,
+    ) -> Result<bool> {
+        let this_level = plan.this_level().clone();
+        let next_level = plan.next_level().clone();
+        let lock = CompactPlanReadGuard::<T, K> {
+            this_level: this_level.read(),
+            next_level: next_level.read(),
+        };
+        let mut top = lock.this_level.tables().to_vec();
+        top.sort_by_key(|t| std::cmp::Reverse(t.stale_data_size()));
+
+        if !top.is_empty() && top[0].stale_data_size() == 0 {
+            return Ok(false);
+        }
+
+        plan.bottom.clear();
+        let collect_bottom=|t:&T,t_file_size:usize|{
+            let mut total_size=t.size();
+            lock.this_level.tables().iter();
+            // t.binary_search_by();
+        };
+        let now = SystemTime::now();
+        for t in top
+            .drain(..)
+            .filter(|t| {
+                now.duration_since(t.create_time()).unwrap()
+                    > Duration::from_secs(1)
+            })
+            .filter(|t| t.stale_data_size() >= 10 << 20)
+        {
+            plan.this_size = t.size();
+            plan.this_range = KeyTsRange::from::<T, K>(&t);
+            // Set the next range as the same as the current range. If we don't do
+            // this, we won't be able to run more than one max level compactions.
+            plan.next_range = plan.this_range.clone();
+
+            if self.compact_status().read()?.levels()
+                [this_level.level().to_usize()]
+            .intersects(&plan.this_range)
+            {
+                continue;
+            };
+
+            // Found a valid table!
+            plan.top = vec![t.clone()];
+
+            let t_file_size = plan.priority.target().file_size(*this_level.level());
+            // The table size is what we want so no need to collect more tables.
+            if t.size() > t_file_size {
+                break;
+            }
+
+
+        }
+        Ok(false)
     }
 }
 #[derive(Debug, Default, Clone)]
