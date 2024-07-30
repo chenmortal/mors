@@ -30,6 +30,14 @@ impl CompactStatus {
         let del_size = inner.levels[level.to_usize()].del_size;
         Ok(del_size)
     }
+    pub(crate) fn intersects(
+        &self,
+        level: Level,
+        target: &KeyTsRange,
+    ) -> Result<bool> {
+        let inner = self.0.read()?;
+        Ok(inner.levels[level.to_usize()].intersects(target))
+    }
 }
 impl Deref for CompactStatus {
     type Target = Arc<RwLock<CompactStatusInner>>;

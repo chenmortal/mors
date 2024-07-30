@@ -3,12 +3,14 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use bytes::Bytes;
 use mors_common::ts::KeyTs;
 use mors_traits::{kms::Kms, levelctl::LEVEL0, sstable::TableTrait};
 use parking_lot::RwLockReadGuard;
 
 use crate::{
     ctl::LevelCtl,
+    error::MorsLevelCtlError,
     handler::{LevelHandler, LevelHandlerTables},
 };
 
@@ -25,6 +27,8 @@ pub(crate) struct CompactPlan<T: TableTrait<K::Cipher>, K: Kms> {
     this_range: KeyTsRange,
     next_range: KeyTsRange,
     this_size: usize,
+    drop_prefixes: Vec<Bytes>,
+    splits: Vec<KeyTsRange>,
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> Default for CompactPlan<T, K> {
     fn default() -> Self {
@@ -38,6 +42,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> Default for CompactPlan<T, K> {
             this_range: Default::default(),
             next_range: Default::default(),
             this_size: Default::default(),
+            splits: Default::default(),
+            drop_prefixes: Default::default(),
         }
     }
 }
@@ -59,6 +65,38 @@ impl<T: TableTrait<K::Cipher>, K: Kms> CompactPlan<T, K> {
     }
     pub(crate) fn bottom(&self) -> &[T] {
         &self.bottom
+    }
+    pub(crate) fn priority(&self) -> &CompactPriority {
+        &self.priority
+    }
+    pub(crate) fn splits(&self) -> &[KeyTsRange] {
+        &self.splits
+    }
+    pub(crate) fn drop_prefixes(&self) -> &[Bytes] {
+        &self.drop_prefixes
+    }
+    // addSplits can allow us to run multiple sub-compactions in parallel across the split key ranges.
+    pub(crate) fn add_splits(&mut self) {
+        self.splits.clear();
+
+        // Let's say we have 10 tables in plan.bot and min width = 3. Then, we'll pick
+        // 0, 1, 2 (pick), 3, 4, 5 (pick), 6, 7, 8 (pick), 9 (pick, because last table).
+        // This gives us 4 picks for 10 tables.
+        // In an edge case, 142 tables in bottom led to 48 splits. That's too many splits, because it
+        // then uses up a lot of memory for table builder.
+        // We should keep it so we have at max 5 splits.
+        let width = ((self.bottom.len() as f64 / 5.0).ceil() as usize).max(3);
+
+        let mut kr = self.this_range.clone();
+        kr.extend(self.next_range.clone());
+
+        for t in self.bottom.chunks(width) {
+            let last = t.last().unwrap();
+            let right = KeyTs::new(last.biggest().key().clone(), 0.into());
+            kr.right = right.clone();
+            self.splits.push(kr.clone());
+            kr.left = right;
+        }
     }
 }
 pub(crate) struct CompactPlanReadGuard<'a, T: TableTrait<K::Cipher>, K: Kms> {
@@ -83,7 +121,9 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                 next_level,
                 ..Default::default()
             };
-            self.fill_tables_l0(&mut plan)?;
+            if !self.fill_tables_l0(&mut plan)? {
+                return Err(MorsLevelCtlError::FillTablesError);
+            };
             Ok(plan)
         } else {
             let next_level = if priority.level() == self.max_level() {
@@ -92,16 +132,20 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                 self.handler(priority.level() + 1).unwrap().clone()
             };
 
-            let plan = CompactPlan {
+            let mut plan = CompactPlan {
                 task_id,
                 priority,
                 this_level,
                 next_level,
                 ..Default::default()
             };
+            if !self.fill_tables(&mut plan)? {
+                return Err(MorsLevelCtlError::FillTablesError);
+            };
             Ok(plan)
         }
     }
+
     // fillTablesL0 would try to fill tables from L0 to be compacted with Lbase.
     // If it can not do that, it would try to compact tables from L0 -> L0.
     // Say L0 has 10 tables.
@@ -127,8 +171,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             return Ok(false);
         }
         let lock = CompactPlanReadGuard::<T, K> {
-            this_level: self.handler(*plan.this_level.level()).unwrap().read(),
-            next_level: self.handler(*plan.next_level.level()).unwrap().read(),
+            this_level: plan.this_level.read(),
+            next_level: plan.next_level.read(),
         };
 
         let top = lock.this_level.tables().to_vec();
@@ -226,22 +270,70 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         Ok(true)
     }
     fn fill_tables(&self, plan: &mut CompactPlan<T, K>) -> Result<bool> {
-        if plan.this_level.tables_len() == 0 {
-            return Ok(false);
-        }
-        if *plan.this_level.level() == self.max_level() {}
-        Ok(false)
-    }
-    fn fill_tables_max_level(
-        &self,
-        plan: &mut CompactPlan<T, K>,
-    ) -> Result<bool> {
         let this_level = plan.this_level().clone();
         let next_level = plan.next_level().clone();
         let lock = CompactPlanReadGuard::<T, K> {
             this_level: this_level.read(),
             next_level: next_level.read(),
         };
+        if plan.this_level.tables_len() == 0 {
+            return Ok(false);
+        }
+        if *plan.this_level.level() == self.max_level() {
+            return self.fill_tables_max_level(&lock, plan);
+        }
+
+        let mut this_tables = lock.this_level.tables().to_vec();
+        this_tables.sort_by_key(|a| a.max_version());
+
+        let this_level = *plan.this_level.level();
+        for t in this_tables {
+            plan.this_size = t.size();
+            plan.this_range = KeyTsRange::from::<T, K>(&t);
+
+            if self
+                .compact_status()
+                .intersects(this_level, &plan.this_range)?
+            {
+                continue;
+            };
+
+            plan.top = vec![t.clone()];
+
+            let index_range = lock
+                .next_level
+                .table_index_by_range(&lock, &plan.this_range);
+            plan.bottom = lock.next_level.tables()[index_range].to_vec();
+
+            if plan.bottom.is_empty() {
+                plan.next_range = plan.this_range.clone();
+                if !self.compact_status().check_update(&lock, plan)? {
+                    continue;
+                };
+                return Ok(true);
+            }
+            plan.next_range = KeyTsRange::from_slice::<T, K>(&plan.bottom);
+
+            if self
+                .compact_status()
+                .intersects(*plan.next_level.level(), plan.next_range())?
+            {
+                continue;
+            };
+
+            if !self.compact_status().check_update(&lock, plan)? {
+                continue;
+            };
+            return Ok(true);
+        }
+        Ok(false)
+    }
+    fn fill_tables_max_level(
+        &self,
+        lock: &CompactPlanReadGuard<T, K>,
+        plan: &mut CompactPlan<T, K>,
+    ) -> Result<bool> {
+        let this_level = *plan.this_level().level();
         let mut top = lock.this_level.tables().to_vec();
         top.sort_by_key(|t| std::cmp::Reverse(t.stale_data_size()));
 
@@ -250,11 +342,24 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         }
 
         plan.bottom.clear();
-        let collect_bottom=|t:&T,t_file_size:usize|{
-            let mut total_size=t.size();
-            lock.this_level.tables().iter();
-            // t.binary_search_by();
-        };
+        let collect_bottom =
+            |plan: &mut CompactPlan<T, K>, t: &T, t_file_size: usize| {
+                let tables = lock.next_level.tables();
+                let mut total_size = t.size();
+
+                let index = tables
+                    .binary_search_by(|a| a.smallest().cmp(t.smallest()))
+                    .unwrap_or_else(|i| i);
+                assert_eq!(tables[index].id(), t.id());
+                for new in tables[index + 1..].iter() {
+                    total_size += new.size();
+                    plan.bottom.push(new.clone());
+                    plan.next_range.extend(KeyTsRange::from::<T, K>(new));
+                    if total_size >= t_file_size {
+                        break;
+                    }
+                }
+            };
         let now = SystemTime::now();
         for t in top
             .drain(..)
@@ -270,9 +375,9 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             // this, we won't be able to run more than one max level compactions.
             plan.next_range = plan.this_range.clone();
 
-            if self.compact_status().read()?.levels()
-                [this_level.level().to_usize()]
-            .intersects(&plan.this_range)
+            if self
+                .compact_status()
+                .intersects(this_level, plan.this_range())?
             {
                 continue;
             };
@@ -280,15 +385,24 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             // Found a valid table!
             plan.top = vec![t.clone()];
 
-            let t_file_size = plan.priority.target().file_size(*this_level.level());
+            let t_file_size = plan.priority.target().file_size(this_level);
             // The table size is what we want so no need to collect more tables.
             if t.size() > t_file_size {
                 break;
             }
 
-
+            collect_bottom(plan, &t, t_file_size);
+            if !self.compact_status().check_update(lock, plan)? {
+                plan.bottom.clear();
+                plan.next_range = KeyTsRange::default();
+            };
+            return Ok(true);
         }
-        Ok(false)
+
+        if plan.top.is_empty() {
+            return Ok(false);
+        }
+        self.compact_status().check_update(lock, plan)
     }
 }
 #[derive(Debug, Default, Clone)]

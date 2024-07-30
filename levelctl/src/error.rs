@@ -27,6 +27,10 @@ pub enum MorsLevelCtlError {
     LevelHandlerError(#[from] LevelHandlerError),
     #[error("Poison error: {0}")]
     PoisonError(String),
+    #[error("Fill Tables Error")]
+    FillTablesError,
+    #[error("Empty Compact Target")]
+    EmptyCompactTarget,
 }
 
 impl<T> From<PoisonError<T>> for MorsLevelCtlError {
