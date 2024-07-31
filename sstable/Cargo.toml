@@ -7,7 +7,8 @@ readme.workspace = true
 version.workspace = true
 
 [features]
-sync = []
+default = ["sync"]
+sync = ["moka/sync"]
 [dependencies]
 mors-common = { workspace = true }
 mors-traits = { workspace = true }

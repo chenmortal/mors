@@ -1,4 +1,4 @@
-mod read;
+pub mod read;
 pub mod write;
 use std::sync::Arc;
 

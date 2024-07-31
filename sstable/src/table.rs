@@ -13,7 +13,9 @@ use mors_common::mmap::{MmapFile, MmapFileBuilder};
 use mors_common::ts::{KeyTs, TxnTs};
 use mors_traits::cache::BlockCacheKey;
 use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
-use mors_traits::iter::{DoubleEndedCacheIterator, KvDoubleEndedCacheIter};
+use mors_traits::iter::{
+    DoubleEndedCacheIterator, KvCacheIterator, KvDoubleEndedCacheIter,
+};
 use mors_traits::kms::KmsCipher;
 use mors_traits::sstable::{
     BlockIndex, SSTableError, TableBuilderTrait, TableTrait,
@@ -23,6 +25,7 @@ use prost::Message;
 use crate::block::Block;
 use crate::cache::Cache;
 use crate::pb::proto::Checksum;
+use crate::read::CacheTableIter;
 use crate::table_index::TableIndexBuf;
 use crate::Result;
 use crate::{error::MorsTableError, pb::proto::checksum};
@@ -382,12 +385,19 @@ impl<K: KmsCipher> TableTrait<K> for Table<K> {
     fn create_time(&self) -> SystemTime {
         self.0.create_at
     }
+
+    fn iter(
+        &self,
+        use_cache: bool,
+    ) -> impl KvCacheIterator<ValueMeta> + 'static {
+        CacheTableIter::new(self.clone(), use_cache)
+    }
 }
 
 impl<K: KmsCipher> Table<K> {
     async fn verify(&self) -> Result<()> {
         for i in 0..self.0.cheap_index.offsets_len {
-            let block = self.get_block(i.into(), true).await?;
+            let block = self.get_block(i.into(), true)?;
 
             match self.0.checksum_verify_mode {
                 ChecksumVerificationMode::OnBlockRead
@@ -400,6 +410,7 @@ impl<K: KmsCipher> Table<K> {
 
         Ok(())
     }
+    #[cfg(not(feature = "sync"))]
     async fn table_index(&self) -> Result<TableIndexBuf> {
         if self.0.cipher.is_none() {
             return Ok(self.0.index_buf.clone());
@@ -418,7 +429,27 @@ impl<K: KmsCipher> Table<K> {
         }
         Ok(index_buf)
     }
-    async fn get_block(
+    #[cfg(feature = "sync")]
+    fn table_index(&self) -> Result<TableIndexBuf> {
+        if self.0.cipher.is_none() {
+            return Ok(self.0.index_buf.clone());
+        }
+
+        let mut data = vec![0; self.0.index_len];
+        debug_assert_eq!(
+            self.0.mmap.pread(&mut data, self.0.index_start)?,
+            self.0.index_len
+        );
+        let index_buf = TableIndexBuf::from_vec(
+            self.0.cipher.as_ref().unwrap().decrypt(&data)?,
+        )?;
+        if let Some(c) = self.0.cache.as_ref() {
+            c.insert_index(self.0.id, index_buf.clone());
+        }
+        Ok(index_buf)
+    }
+    #[cfg(not(feature = "sync"))]
+    pub(crate) async fn get_block(
         &self,
         block_index: BlockIndex,
         insert_cache: bool,
@@ -468,6 +499,61 @@ impl<K: KmsCipher> Table<K> {
             }
         }
         Ok(block)
+    }
+    #[cfg(feature = "sync")]
+    pub(crate) fn get_block(
+        &self,
+        block_index: BlockIndex,
+        insert_cache: bool,
+    ) -> Result<Block> {
+        if block_index >= self.0.cheap_index.offsets_len.into() {
+            return Err(MorsTableError::BlockIndexOutOfRange);
+        }
+        let key: BlockCacheKey = (self.0.id, block_index).into();
+
+        if let Some(c) = self.0.cache.as_ref() {
+            if let Some(b) = c.get_block(&key) {
+                return Ok(b);
+            };
+        }
+
+        let table_index = self.table_index()?;
+
+        let block_id: usize = block_index.into();
+        let block = &table_index.offsets()[block_id];
+
+        let raw_data_ref = self
+            .0
+            .mmap
+            .pread_ref(block.offset() as usize, block.size() as usize);
+        let data = self
+            .0
+            .cipher
+            .as_ref()
+            .map(|c| c.decrypt(raw_data_ref))
+            .transpose()?
+            .unwrap_or_else(|| raw_data_ref.to_vec());
+
+        let block =
+            Block::decode(self.0.id, block_index, block.offset(), data)?;
+
+        match self.0.checksum_verify_mode {
+            ChecksumVerificationMode::OnBlockRead
+            | ChecksumVerificationMode::OnTableAndBlockRead => {
+                block.verify()?;
+            }
+            _ => {}
+        }
+
+        if insert_cache {
+            if let Some(c) = self.0.cache.as_ref() {
+                c.insert_block(key, block.clone());
+            }
+        }
+        Ok(block)
+    }
+    pub(crate) fn block_offsets_len(&self) -> usize {
+        self.0.cheap_index.offsets_len
     }
 }
 struct CheapTableIndex {
