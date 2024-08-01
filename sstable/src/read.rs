@@ -34,7 +34,7 @@ impl<K: KmsCipher> CacheTableIter<K> {
                 }
             }
         }
-        return false;
+        false
     }
 }
 impl<K: KmsCipher> CacheIter for CacheTableIter<K> {
