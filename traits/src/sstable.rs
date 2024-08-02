@@ -159,6 +159,10 @@ impl<T: TableTrait<K>, K: KmsCipher> KvDoubleEndedCacheIter<ValueMeta>
         self.item_back().and_then(|x| x.value())
     }
 }
+impl<T: TableTrait<K>, K: KmsCipher> KvCacheIterator<ValueMeta>
+    for CacheTableConcatIter<T, K>
+{
+}
 
 pub trait BlockTrait: Sized + Clone + Send + Sync + 'static {}
 pub trait TableIndexBufTrait: Sized + Clone + Send + Sync + 'static {}

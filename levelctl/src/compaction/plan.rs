@@ -16,7 +16,7 @@ use crate::{
 
 use super::priority::CompactPriority;
 use super::Result;
-
+#[derive(Clone)]
 pub(crate) struct CompactPlan<T: TableTrait<K::Cipher>, K: Kms> {
     task_id: usize,
     priority: CompactPriority,
@@ -100,9 +100,10 @@ impl<T: TableTrait<K::Cipher>, K: Kms> CompactPlan<T, K> {
     }
 }
 pub(crate) struct CompactPlanReadGuard<'a, T: TableTrait<K::Cipher>, K: Kms> {
-    this_level: RwLockReadGuard<'a, LevelHandlerTables<T, K>>,
-    next_level: RwLockReadGuard<'a, LevelHandlerTables<T, K>>,
+    pub(crate) this_level: RwLockReadGuard<'a, LevelHandlerTables<T, K>>,
+    pub(crate) next_level: RwLockReadGuard<'a, LevelHandlerTables<T, K>>,
 }
+
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     pub(crate) fn gen_plan(
         &self,
@@ -477,7 +478,7 @@ impl KeyTsRange {
     }
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandlerTables<T, K> {
-    fn table_index_by_range(
+    pub(crate) fn table_index_by_range(
         &self,
         _lock: &CompactPlanReadGuard<T, K>,
         kr: &KeyTsRange,

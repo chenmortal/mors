@@ -9,7 +9,7 @@ use mors_traits::{
 
 use super::Result;
 use crate::ctl::LevelCtl;
-#[derive(Debug, Default)]
+#[derive(Debug, Default,Clone)]
 pub(crate) struct CompactPriority {
     level: Level,
     score: f64,

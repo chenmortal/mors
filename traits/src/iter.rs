@@ -179,7 +179,7 @@ pub struct KvCacheMergeIterator {
     left_small: bool,
 }
 impl KvCacheMergeIterator {
-    pub(crate) fn new(
+    pub fn new(
         mut iters: Vec<Box<dyn KvCacheIterator<ValueMeta>>>,
     ) -> Option<Self> {
         let new = |left, right| Self {
