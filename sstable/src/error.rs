@@ -35,5 +35,9 @@ impl From<MorsTableError> for SSTableError {
         SSTableError::new(err)
     }
 }
-
+impl From<MorsTableError> for IterError {
+    fn from(value: MorsTableError) -> Self {
+        IterError::new(value)
+    }
+}
 unsafe impl Send for MorsTableError {}

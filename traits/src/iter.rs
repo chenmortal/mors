@@ -1,11 +1,10 @@
-
-use std::error::Error;
-use std::fmt::Display;
 use mors_common::kv::ValueMeta;
 use mors_common::ts::KeyTsBorrow;
+use std::cmp::Ordering;
+use std::error::Error;
+use std::fmt::Display;
+use std::ops::{Deref, DerefMut};
 use thiserror::Error;
-
-// use crate::kv::{KeyTsBorrow, ValueMeta};
 
 // here use async fn look at https://blog.rust-lang.org/inside-rust/2022/11/17/async-fn-in-trait-nightly.html
 type Result<T> = std::result::Result<T, IterError>;
@@ -128,7 +127,8 @@ where
     fn key(&self) -> Option<KeyTsBorrow<'_>>;
     fn value(&self) -> Option<ValueMeta>;
 }
-pub trait KvCacheIterator<V>: CacheIterator + KvCacheIter<V> + Send
+pub trait KvCacheIterator<V>:
+    CacheIterator + KvCacheIter<V> + KvSeekIter + Send
 where
     V: Into<ValueMeta>,
 {
@@ -144,6 +144,184 @@ where
 pub trait KvSeekIter: CacheIterator {
     fn seek(&mut self, k: KeyTsBorrow<'_>) -> Result<bool>;
 }
+
+pub struct KvCacheMergeNode {
+    valid: bool,
+    iter: Box<dyn KvCacheIterator<ValueMeta>>,
+}
+impl Deref for KvCacheMergeNode {
+    type Target = Box<dyn KvCacheIterator<ValueMeta>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.iter
+    }
+}
+impl DerefMut for KvCacheMergeNode {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.iter
+    }
+}
+impl From<Box<dyn KvCacheIterator<ValueMeta>>> for KvCacheMergeNode {
+    fn from(iter: Box<dyn KvCacheIterator<ValueMeta>>) -> Self {
+        Self { valid: true, iter }
+    }
+}
+impl From<KvCacheMergeIterator> for KvCacheMergeNode {
+    fn from(value: KvCacheMergeIterator) -> Self {
+        Self {
+            valid: true,
+            iter: Box::new(value),
+        }
+    }
+}
+pub struct KvCacheMergeIterator {
+    left: KvCacheMergeNode,
+    right: Option<KvCacheMergeNode>,
+    temp_key: Vec<u8>,
+    left_small: bool,
+}
+impl KvCacheMergeIterator {
+    pub fn new(
+        mut iters: Vec<Box<dyn KvCacheIterator<ValueMeta>>>,
+    ) -> Option<Self> {
+        let new = |left, right| Self {
+            left,
+            right,
+            temp_key: Vec::new(),
+            left_small: true,
+        };
+        match iters.len() {
+            0 => None,
+            1 => new(iters.pop().unwrap().into(), None).into(),
+            2 => {
+                let right = iters.pop().unwrap();
+                let left = iters.pop().unwrap();
+                new(left.into(), Some(right.into())).into()
+            }
+            len => {
+                let mid = len / 2;
+                let right = iters.drain(mid..).collect::<Vec<_>>();
+                let left = iters;
+                new(
+                    Self::new(left).unwrap().into(),
+                    Some(Self::new(right).unwrap().into()),
+                )
+                .into()
+            }
+        }
+    }
+    fn smaller(&self) -> &KvCacheMergeNode {
+        if self.left_small {
+            &self.left
+        } else {
+            self.right.as_ref().unwrap()
+        }
+    }
+    pub fn valid(&self) -> bool {
+        self.smaller().valid
+    }
+    fn smaller_mut(&mut self) -> &mut KvCacheMergeNode {
+        if self.left_small {
+            &mut self.left
+        } else {
+            self.right.as_mut().unwrap()
+        }
+    }
+    fn bigger(&self) -> &KvCacheMergeNode {
+        if self.left_small {
+            self.right.as_ref().unwrap()
+        } else {
+            &self.left
+        }
+    }
+    fn bigger_mut(&mut self) -> &mut KvCacheMergeNode {
+        if self.left_small {
+            self.right.as_mut().unwrap()
+        } else {
+            &mut self.left
+        }
+    }
+}
+impl CacheIterator for KvCacheMergeIterator {
+    fn next(&mut self) -> Result<bool> {
+        while self.smaller().valid {
+            if let Some(k) = self.smaller().key() {
+                if self.temp_key.as_slice() != k.as_ref() {
+                    self.temp_key = k.to_vec();
+                    return Ok(true);
+                }
+            }
+
+            let result = self.smaller_mut().next()?;
+            if self.bigger().valid {
+                if result {
+                    if self.bigger().key().is_none()
+                        && !self.bigger_mut().next()?
+                    {
+                        continue;
+                    }
+                    match self.smaller().key().cmp(&self.bigger().key()) {
+                        std::cmp::Ordering::Less => {}
+                        std::cmp::Ordering::Equal => {
+                            self.bigger_mut().next()?;
+                        }
+                        std::cmp::Ordering::Greater => {
+                            self.left_small = !self.left_small;
+                        }
+                    };
+                } else {
+                    self.left_small = !self.left_small;
+                }
+            }
+        }
+        Ok(false)
+    }
+}
+impl KvCacheIter<ValueMeta> for KvCacheMergeIterator {
+    fn key(&self) -> Option<KeyTsBorrow<'_>> {
+        self.smaller().key()
+    }
+
+    fn value(&self) -> Option<ValueMeta> {
+        self.smaller().value()
+    }
+}
+impl KvSeekIter for KvCacheMergeIterator {
+    fn seek(&mut self, k: KeyTsBorrow<'_>) -> Result<bool> {
+        let left = self.left.seek(k)?;
+        let right = match self.right.as_mut() {
+            Some(r) => r.seek(k)?,
+            None => false,
+        };
+
+        if self.bigger().valid {
+            if !self.smaller().valid {
+                self.left_small = !self.left_small;
+            } else {
+                let bigger_key = self.bigger().key().unwrap();
+                let smaller_key = self.smaller().key().unwrap();
+                match smaller_key.cmp(&bigger_key) {
+                    Ordering::Less => {}
+                    Ordering::Equal => {
+                        self.bigger_mut().next()?;
+                    }
+                    Ordering::Greater => {
+                        self.left_small = !self.left_small;
+                    }
+                }
+            }
+        }
+
+        if left || right {
+            self.temp_key = k.as_ref().to_vec();
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+}
+impl KvCacheIterator<ValueMeta> for KvCacheMergeIterator {}
+
 #[derive(Error, Debug)]
 pub struct IterError(Box<dyn Error>);
 impl Display for IterError {
@@ -158,8 +336,6 @@ impl IterError {
 }
 mod test {
     use bytes::Buf;
-
-
 
     use super::*;
 

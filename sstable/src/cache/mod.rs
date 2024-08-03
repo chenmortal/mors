@@ -22,26 +22,48 @@ pub struct Cache {
     index_cache: MokaCache<SSTableId, TableIndexBuf>,
 }
 impl Cache {
+    #[cfg(not(feature = "sync"))]
     pub(crate) async fn get_block(&self, key: &BlockCacheKey) -> Option<Block> {
         self.block_cache.as_ref()?.get(key).await
     }
+    #[cfg(feature = "sync")]
+    pub(crate) fn get_block(&self, key: &BlockCacheKey) -> Option<Block> {
+        self.block_cache.as_ref()?.get(key)
+    }
+    #[cfg(not(feature = "sync"))]
     pub(crate) async fn insert_block(&self, key: BlockCacheKey, block: Block) {
         if let Some(block_cache) = self.block_cache.as_ref() {
             block_cache.insert(key, block).await;
         }
     }
+    #[cfg(feature = "sync")]
+    pub(crate) fn insert_block(&self, key: BlockCacheKey, block: Block) {
+        if let Some(block_cache) = self.block_cache.as_ref() {
+            block_cache.insert(key, block);
+        }
+    }
+    #[cfg(not(feature = "sync"))]
     pub(crate) async fn get_index(
         &self,
         key: SSTableId,
     ) -> Option<TableIndexBuf> {
         self.index_cache.get(&key).await
     }
+    #[cfg(feature = "sync")]
+    pub(crate) fn get_index(&self, key: SSTableId) -> Option<TableIndexBuf> {
+        self.index_cache.get(&key)
+    }
+    #[cfg(not(feature = "sync"))]
     pub(crate) async fn insert_index(
         &self,
         key: SSTableId,
         index: TableIndexBuf,
     ) {
         self.index_cache.insert(key, index).await;
+    }
+    #[cfg(feature = "sync")]
+    pub(crate) fn insert_index(&self, key: SSTableId, index: TableIndexBuf) {
+        self.index_cache.insert(key, index);
     }
 }
 impl CacheTrait for Cache {

@@ -9,7 +9,7 @@ use mors_traits::{
 
 use super::Result;
 use crate::ctl::LevelCtl;
-#[derive(Debug, Default)]
+#[derive(Debug, Default,Clone)]
 pub(crate) struct CompactPriority {
     level: Level,
     score: f64,
@@ -34,6 +34,9 @@ impl CompactPriority {
     pub(crate) fn target(&self) -> &CompactTarget {
         &self.target
     }
+    pub(crate) fn target_mut(&mut self) -> &mut CompactTarget {
+        &mut self.target
+    }
     pub(crate) fn set_target(&mut self, target: CompactTarget) {
         self.target = target;
     }
@@ -56,6 +59,12 @@ impl CompactTarget {
     }
     pub(crate) fn file_size(&self, level: Level) -> usize {
         self.file_size[level.to_usize()]
+    }
+    pub(crate) fn is_empty(&self) -> bool {
+        self.target_size.is_empty() || self.file_size.is_empty()
+    }
+    pub(crate) fn set_file_size(&mut self, level: Level, size: usize) {
+        self.file_size[level.to_usize()] = size;
     }
     pub(crate) fn base_level(&self) -> Level {
         self.base_level

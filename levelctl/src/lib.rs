@@ -1,4 +1,4 @@
-mod compact;
+mod compaction;
 pub mod ctl;
 mod error;
 mod handler;

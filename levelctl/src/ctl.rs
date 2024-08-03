@@ -26,7 +26,7 @@ type Result<T> = std::result::Result<T, MorsLevelCtlError>;
 use tokio::{select, task::JoinHandle};
 
 use crate::{
-    compact::status::CompactStatus,
+    compaction::status::CompactStatus,
     error::MorsLevelCtlError,
     handler::LevelHandler,
     manifest::{Manifest, ManifestBuilder},

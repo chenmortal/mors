@@ -15,6 +15,7 @@ use tokio::{
 
 use crate::{ctl::LevelCtl, error::MorsLevelCtlError, manifest::Manifest};
 
+mod compact;
 mod plan;
 mod priority;
 pub mod status;
@@ -129,13 +130,15 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         task_id: usize,
         mut priority: CompactPriority,
         context: CompactContext<T, K, D>,
-    ) {
+    ) -> Result<()> {
         debug_assert!(priority.level() < self.max_level());
         // base level can't be LEVEL0 , update it
         if priority.target().base_level() == LEVEL0 {
             priority.set_target(self.target())
         };
-        self.gen_plan(task_id, priority);
+        let mut plan = self.gen_plan(task_id, priority)?;
+        self.compact(task_id,  &mut plan);
         // let this_level = self.handler(priority.level());
+        Ok(())
     }
 }

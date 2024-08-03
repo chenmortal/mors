@@ -1,8 +1,12 @@
 use bytes::{Buf, BufMut};
 use mors_common::{kv::ValueMeta, ts::KeyTsBorrow};
-use mors_traits::iter::{
-    CacheIter, CacheIterator, DoubleEndedCacheIter, DoubleEndedCacheIterator,
-    IterError, KvCacheIter, KvDoubleEndedCacheIter, KvSeekIter,
+use mors_traits::{
+    iter::{
+        CacheIter, CacheIterator, DoubleEndedCacheIter,
+        DoubleEndedCacheIterator, IterError, KvCacheIter,
+        KvDoubleEndedCacheIter, KvSeekIter,
+    },
+    sstable::BlockIndex,
 };
 
 use crate::block::Block;
@@ -30,7 +34,7 @@ impl BlockEntryHeader {
     }
 }
 #[derive(Default)]
-pub(crate) struct CacheBlockIter {
+pub struct CacheBlockIter {
     inner: Block,
     base_key: Vec<u8>,
     key: Vec<u8>,
@@ -70,6 +74,9 @@ impl CacheBlockIter {
                 ..BlockEntryHeader::HEADER_SIZE + next_header.diff as usize],
         );
         self.header = next_header;
+    }
+    pub(crate) fn block_index(&self) -> BlockIndex {
+        self.inner.block_index()
     }
 }
 impl CacheIter for CacheBlockIter {
@@ -259,10 +266,7 @@ impl KvDoubleEndedCacheIter<ValueMeta> for CacheBlockIter {
     }
 }
 impl KvSeekIter for CacheBlockIter {
-    fn seek(
-        &mut self,
-        k: KeyTsBorrow<'_>,
-    ) -> Result<bool, IterError> {
+    fn seek(&mut self, k: KeyTsBorrow<'_>) -> Result<bool, IterError> {
         if self.entry_index.is_none() && !self.next()? {
             return Ok(false);
         }
