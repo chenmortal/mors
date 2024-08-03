@@ -3,12 +3,7 @@ use crate::{
     kms::Kms,
 };
 use mors_common::kv::{Entry, ValuePointer};
-use std::{
-    error::Error,
-    fmt::Display,
-    slice::IterMut,
-    sync::{Arc, RwLock},
-};
+use std::{error::Error, fmt::Display, slice::IterMut};
 use thiserror::Error;
 
 pub trait VlogCtlTrait<K: Kms>: Sized + Send + Sync + 'static {

@@ -2,7 +2,7 @@ use mors_common::{kv::ValueMeta, ts::KeyTsBorrow};
 use mors_traits::{
     iter::{
         CacheIter, CacheIterator, DoubleEndedCacheIter, IterError, KvCacheIter,
-        KvCacheIterator, KvDoubleEndedCacheIter,
+        KvCacheIterator, KvDoubleEndedCacheIter, KvSeekIter,
     },
     kms::KmsCipher,
 };
@@ -101,6 +101,26 @@ impl<K: KmsCipher> CacheIterator for CacheTableIter<K> {
         } else {
             Ok(false)
         }
+    }
+}
+impl<K: KmsCipher> KvSeekIter for CacheTableIter<K> {
+    fn seek(&mut self, k: KeyTsBorrow<'_>) -> Result<bool, IterError> {
+        let indexbuf = self.inner.get_index()?;
+        let index = match indexbuf
+            .offsets()
+            .binary_search_by(|b| b.key_ts().partial_cmp(&k).unwrap())
+        {
+            Ok(index) => index,
+            Err(index) => {
+                if index >= indexbuf.offsets().len() {
+                    return Ok(false);
+                }
+                index - 1
+            }
+        };
+        let next_block = self.inner.get_block(index.into(), self.use_cache)?;
+        self.block_iter = next_block.iter().into();
+        self.block_iter.as_mut().unwrap().seek(k)
     }
 }
 impl<K: KmsCipher> KvCacheIterator<ValueMeta> for CacheTableIter<K> {}

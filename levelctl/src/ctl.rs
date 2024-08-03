@@ -95,7 +95,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             return None;
         }
         let handler = &self.inner.handlers[level.to_usize()];
-        debug_assert_eq!(handler.level(), &level);
+        debug_assert_eq!(handler.level(), level);
         Some(handler)
     }
     pub(crate) fn max_level(&self) -> Level {

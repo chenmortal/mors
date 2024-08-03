@@ -82,8 +82,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
             level,
         }))
     }
-    pub(crate) fn level(&self) -> &Level {
-        &self.0.level
+    pub(crate) fn level(&self) -> Level {
+        self.0.level
     }
     pub(crate) fn tables_len(&self) -> usize {
         self.read().tables.len()

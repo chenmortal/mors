@@ -8,7 +8,8 @@ members = [
     "skip_list",
     "sstable",
     "traits",
-    "txn", "vlog",
+    "txn",
+    "vlog",
     "wal",
 ]
 resolver = "2"
@@ -39,7 +40,7 @@ mors-encrypt = { path = "encrypt", version = "0.1" }
 mors-wal = { path = "wal", version = "0.1" }
 mors-levelctl = { path = "levelctl", version = "0.1" }
 mors-txn = { path = "txn", version = "0.1" }
-mors-vlog={path="vlog",version="0.1"}
+mors-vlog = { path = "vlog", version = "0.1" }
 aes-gcm = { version = "0.10" }
 aes-gcm-siv = { version = "0.11.1" }
 ahash = "*"
@@ -64,6 +65,7 @@ num_cpus = "1.16.0"
 parking_lot = "0.12.1"
 prost = "0.13"
 prost-build = "0.13"
+proc-macro2 = "1.0"
 rand = "0.8.5"
 rayon = "1.8.0"
 rustix = "0.38"
@@ -77,5 +79,3 @@ tokio-util = "0.7"
 tracing = "0.1.37"
 xxhash-rust = { version = "0.8.7", features = ["xxh64", "xxh3"] }
 zstd = "0.13"
-
-

@@ -164,7 +164,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         &self,
         plan: &mut CompactPlan<T, K>,
     ) -> Result<bool> {
-        if *plan.next_level.level() == LEVEL0 {
+        if plan.next_level.level() == LEVEL0 {
             unreachable!("Base level can't be zero")
         }
 
@@ -229,8 +229,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         // the read lock twice, because it can result in a deadlock. So, we don't
         // call compactDef.lockLevels, instead locking the level only once and
         // directly here.
-        debug_assert!(*plan.this_level.level() == LEVEL0);
-        debug_assert!(*plan.next_level.level() == LEVEL0);
+        debug_assert!(plan.this_level.level() == LEVEL0);
+        debug_assert!(plan.next_level.level() == LEVEL0);
 
         let this_level = plan.this_level.read();
         let mut status = self.compact_status().write()?;
@@ -280,14 +280,14 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         if plan.this_level.tables_len() == 0 {
             return Ok(false);
         }
-        if *plan.this_level.level() == self.max_level() {
+        if plan.this_level.level() == self.max_level() {
             return self.fill_tables_max_level(&lock, plan);
         }
 
         let mut this_tables = lock.this_level.tables().to_vec();
         this_tables.sort_by_key(|a| a.max_version());
 
-        let this_level = *plan.this_level.level();
+        let this_level = plan.this_level.level();
         for t in this_tables {
             plan.this_size = t.size();
             plan.this_range = KeyTsRange::from::<T, K>(&t);
@@ -317,7 +317,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
 
             if self
                 .compact_status()
-                .intersects(*plan.next_level.level(), plan.next_range())?
+                .intersects(plan.next_level.level(), plan.next_range())?
             {
                 continue;
             };
@@ -334,7 +334,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         lock: &CompactPlanReadGuard<T, K>,
         plan: &mut CompactPlan<T, K>,
     ) -> Result<bool> {
-        let this_level = *plan.this_level().level();
+        let this_level = plan.this_level().level();
         let mut top = lock.this_level.tables().to_vec();
         top.sort_by_key(|t| std::cmp::Reverse(t.stale_data_size()));
 
@@ -416,6 +416,12 @@ pub(crate) struct KeyTsRange {
 impl KeyTsRange {
     pub(crate) fn is_empty(&self) -> bool {
         self.left.is_empty() && self.right.is_empty() && !self.inf
+    }
+    pub(crate) fn left(&self) -> &KeyTs {
+        &self.left
+    }
+    pub(crate) fn right(&self) -> &KeyTs {
+        &self.right
     }
     pub(crate) fn intersects(&self, other: &Self) -> bool {
         if self.is_empty() || other.is_empty() {

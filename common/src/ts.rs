@@ -241,6 +241,7 @@ impl PartialEq<KeyTs> for KeyTsBorrow<'_> {
         self.key() == other.key() && self.txn_ts() == other.txn_ts()
     }
 }
+
 impl PartialOrd<KeyTs> for KeyTsBorrow<'_> {
     fn partial_cmp(&self, other: &KeyTs) -> Option<Ordering> {
         match self.key().partial_cmp(other.key()) {
