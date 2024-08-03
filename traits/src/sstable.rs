@@ -1,13 +1,14 @@
 use crate::default::{WithDir, WithReadOnly};
 use crate::iter::{
     CacheIter, CacheIterator, DoubleEndedCacheIter, IterError, KvCacheIter,
-    KvCacheIterator, KvDoubleEndedCacheIter,
+    KvCacheIterator, KvDoubleEndedCacheIter, KvSeekIter,
 };
 use crate::{cache::CacheTrait, kms::KmsCipher};
 use mors_common::compress::CompressionType;
 use mors_common::file_id::SSTableId;
 use mors_common::kv::ValueMeta;
 use mors_common::ts::{KeyTs, TxnTs};
+use std::borrow::Borrow;
 use std::error::Error;
 use std::fmt::Display;
 use std::marker::PhantomData;
@@ -134,6 +135,34 @@ impl<T: TableTrait<K>, K: KmsCipher> CacheIterator
         }
         self.iters[new_index] = Some(Box::new(iter));
         Ok(!self.double_ended_eq())
+    }
+}
+impl<T: TableTrait<K>, K: KmsCipher> KvSeekIter for CacheTableConcatIter<T, K> {
+    fn seek(
+        &mut self,
+        k: mors_common::ts::KeyTsBorrow<'_>,
+    ) -> Result<bool, IterError> {
+        let index = self
+            .tables
+            .binary_search_by(|t| t.biggest().partial_cmp(&k).unwrap())
+            .unwrap_or_else(|i| i);
+
+        if index == self.tables.len() {
+            return Ok(false);
+        }
+        if let Some(current) = self.iters[index].as_mut() {
+            current.seek(k)
+        } else {
+            let mut iter = self.tables[index].iter(self.use_cache);
+            if iter.seek(k)? {
+                self.index = Some(index);
+                self.iters[index] = Some(Box::new(iter));
+                Ok(true)
+            }else{
+                Ok(false)
+            }
+
+        }
     }
 }
 

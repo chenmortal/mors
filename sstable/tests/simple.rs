@@ -3,15 +3,16 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 
+use mors_common::kv::ValueMeta;
+use mors_common::ts::{KeyTs, KeyTsBorrow};
 use mors_encrypt::cipher::AesCipher;
 use mors_sstable::table::TableBuilder;
 use mors_traits::default::WithDir;
 use mors_traits::iter::{
     CacheIter, CacheIterator, IterError, KvCacheIter, KvCacheIterator,
+    KvSeekIter,
 };
-use mors_common::kv::ValueMeta;
 use mors_traits::sstable::TableBuilderTrait;
-use mors_common::ts::{KeyTs, KeyTsBorrow};
 use rand::Rng;
 use rand::{rngs::StdRng, SeedableRng};
 use sha2::Digest;
@@ -122,4 +123,14 @@ impl KvCacheIter<ValueMeta> for RngIter {
         self.value.clone()
     }
 }
+impl KvSeekIter for RngIter {
+    fn seek(&mut self, k: KeyTsBorrow<'_>) -> Result<bool, IterError> {
+        let key = k.as_ref().to_vec();
+        let txn_ts = k.txn_ts().to_u64();
+        let key_ts = KeyTs::new(key.into(), txn_ts.into()).encode();
+        self.key = Some(key_ts);
+        Ok(true)
+    }
+}
+
 impl KvCacheIterator<ValueMeta> for RngIter {}

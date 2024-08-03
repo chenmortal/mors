@@ -1,10 +1,15 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use log::debug;
 use mors_common::kv::ValueMeta;
-use mors_traits::iter::{KvCacheIterator, KvCacheMergeIterator};
-use mors_traits::levelctl::{Level, LEVEL0};
+use mors_common::ts::KeyTs;
+use mors_traits::iter::{
+    CacheIterator, KvCacheIter, KvCacheIterator, KvCacheMergeIterator,
+    KvSeekIter,
+};
+use mors_traits::levelctl::{Level, LevelCtlTrait, LEVEL0};
 use mors_traits::sstable::CacheTableConcatIter;
 use mors_traits::{kms::Kms, sstable::TableTrait};
 
@@ -90,10 +95,32 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         mut merge_iter: KvCacheMergeIterator,
         kr: KeyTsRange,
         plan: Arc<CompactPlan<T, K>>,
-    ) {
+    ) -> Result<()> {
         let mut all_tables = plan.top().to_vec();
         all_tables.extend_from_slice(plan.bottom());
 
+        let is_intersect =
+            self.check_intersect(&all_tables, *plan.next_level().level());
+
+        let context = AddKeyContext::default();
+
+        if kr.left().is_empty() {
+            merge_iter.next()?;
+        } else {
+            let left = kr.left().encode();
+            let left_borrow = left.as_slice();
+            merge_iter.seek(left_borrow.into())?;
+        }
+        // let mut table_task = Vec::new();
+        while merge_iter.valid() {
+            if !kr.right().is_empty()
+                && merge_iter.key().unwrap() == *kr.right()
+            {
+                break;
+            }
+            let table_builder = self.table_builder().clone();
+        }
+        Ok(())
         // let mut new_table = self.new_table();
         // let mut writer = new_table.writer();
         // while let Some((key, value)) = merge_iter.next() {
@@ -101,7 +128,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
 
         // writer.finish();
     }
-    fn check_overlap(&self, tables: &[T], level: Level) -> bool {
+    fn check_intersect(&self, tables: &[T], level: Level) -> bool {
         let kr = KeyTsRange::from_slice::<T, K>(tables);
         for level in level.to_usize()..=self.max_level().to_usize() {
             let handler = self.handler(level.into()).unwrap();
@@ -116,4 +143,12 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         }
         false
     }
+}
+#[derive(Debug, Default)]
+struct AddKeyContext {
+    last_key: KeyTs,
+    skip_key: KeyTs,
+    num_versions: usize,
+    discard_stats: HashMap<u32, u64>,
+    first_key_has_discard_set: bool,
 }

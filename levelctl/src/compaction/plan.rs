@@ -417,6 +417,12 @@ impl KeyTsRange {
     pub(crate) fn is_empty(&self) -> bool {
         self.left.is_empty() && self.right.is_empty() && !self.inf
     }
+    pub(crate) fn left(&self) -> &KeyTs {
+        &self.left
+    }
+    pub(crate) fn right(&self) -> &KeyTs {
+        &self.right
+    }
     pub(crate) fn intersects(&self, other: &Self) -> bool {
         if self.is_empty() || other.is_empty() {
             return false;

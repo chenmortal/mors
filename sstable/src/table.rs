@@ -552,6 +552,28 @@ impl<K: KmsCipher> Table<K> {
         }
         Ok(block)
     }
+    pub(crate) fn get_index(&self) -> Result<TableIndexBuf> {
+        if let Some(c) = self.0.cache.as_ref() {
+            if let Some(t) = c.get_index(self.id()) {
+                return Ok(t);
+            };
+        }
+
+        let raw_data_ref =
+            self.0.mmap.pread_ref(self.0.index_start, self.0.index_len);
+        let data = self
+            .0
+            .cipher
+            .as_ref()
+            .map(|c| c.decrypt(raw_data_ref))
+            .transpose()?
+            .unwrap_or_else(|| raw_data_ref.to_vec());
+        let index_buf = TableIndexBuf::from_vec(data)?;
+        if let Some(c) = self.0.cache.as_ref() {
+            c.insert_index(self.id(), index_buf.clone())
+        }
+        Ok(index_buf)
+    }
     pub(crate) fn block_offsets_len(&self) -> usize {
         self.0.cheap_index.offsets_len
     }
