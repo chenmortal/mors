@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -201,10 +202,11 @@ impl<'a, T: TableTrait<K::Cipher>, K: Kms> AddKeyContext<'a, T, K> {
 
             if key.key() != self.last_key.key() {
                 self.first_key_has_discard_set = false;
-                if !self.kr.right().is_empty() && iter.key().unwrap() == *self.kr.right() {
+                if !self.kr.right().is_empty()
+                    && iter.key().unwrap() == *self.kr.right()
+                {
                     break;
                 }
-
             }
         }
         Ok(())

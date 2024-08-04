@@ -8,6 +8,7 @@ use mors_common::compress::CompressionType;
 use mors_common::file_id::SSTableId;
 use mors_common::kv::ValueMeta;
 use mors_common::ts::{KeyTs, TxnTs};
+use std::borrow::Borrow;
 use std::error::Error;
 use std::fmt::Display;
 use std::marker::PhantomData;
