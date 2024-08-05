@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -11,19 +10,23 @@ use mors_traits::iter::{
     KvSeekIter,
 };
 use mors_traits::levelctl::{Level, LevelCtlTrait, LEVEL0};
-use mors_traits::sstable::{CacheTableConcatIter, TableBuilderTrait};
+use mors_traits::sstable::{
+    CacheTableConcatIter, TableBuilderTrait, TableWriterTrait,
+};
+use mors_traits::vlog::DiscardTrait;
 use mors_traits::{kms::Kms, sstable::TableTrait};
 
 use crate::{ctl::LevelCtl, error::MorsLevelCtlError};
 
 use super::plan::{CompactPlan, CompactPlanReadGuard, KeyTsRange};
-use super::Result;
+use super::{CompactContext, Result};
 
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
-    pub(crate) fn compact(
+    pub(crate) fn compact<D: DiscardTrait>(
         &self,
         task_id: usize,
         plan: &mut CompactPlan<T, K>,
+        context: CompactContext<T, K, D>,
     ) -> Result<()> {
         let priority = plan.priority();
         let target = priority.target();
@@ -91,11 +94,12 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             // compact_task.push(new_table);
         }
     }
-    fn sub_compact(
+    fn sub_compact<D: DiscardTrait>(
         self,
         mut merge_iter: KvCacheMergeIterator,
         kr: KeyTsRange,
         plan: Arc<CompactPlan<T, K>>,
+        context: CompactContext<T, K, D>,
     ) -> Result<()> {
         let mut all_tables = plan.top().to_vec();
         all_tables.extend_from_slice(plan.bottom());
@@ -113,27 +117,30 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             merge_iter.seek(left_borrow.into())?;
         }
 
-        let mut context = AddKeyContext {
-            last_key: Default::default(),
-            skip_key: Default::default(),
-            num_versions: Default::default(),
-            discard_stats: Default::default(),
-            first_key_has_discard_set: Default::default(),
-            ctl: &self,
-            kr: &kr,
-            is_intersect,
-            table_builder: self.table_builder().clone(),
-            plan: &plan,
-        };
         while merge_iter.valid() {
             if !kr.right().is_empty()
                 && merge_iter.key().unwrap() == *kr.right()
             {
                 break;
             }
-            context.table_builder = self.table_builder().clone();
+            let mut builder = self.table_builder().clone();
             let target_size = target.file_size(plan.next_level().level());
-            context.table_builder.set_table_size(target_size);
+            builder.set_table_size(target_size);
+            let cipher = context.kms.latest_cipher()?;
+            let writer = T::new_writer(builder, cipher);
+
+            let mut context = AddKeyContext {
+                last_key: Default::default(),
+                skip_key: Default::default(),
+                num_versions: Default::default(),
+                discard_stats: Default::default(),
+                first_key_has_discard_set: Default::default(),
+                ctl: &self,
+                kr: &kr,
+                is_intersect,
+                writer,
+                plan: &plan,
+            };
         }
         Ok(())
         // let mut new_table = self.new_table();
@@ -170,7 +177,7 @@ struct AddKeyContext<'a, T: TableTrait<K::Cipher>, K: Kms> {
     plan: &'a CompactPlan<T, K>,
     kr: &'a KeyTsRange,
     is_intersect: bool,
-    table_builder: T::TableBuilder,
+    writer: T::TableWriter,
 }
 impl<'a, T: TableTrait<K::Cipher>, K: Kms> AddKeyContext<'a, T, K> {
     fn push(&mut self, iter: &mut KvCacheMergeIterator) -> Result<()> {
@@ -207,8 +214,83 @@ impl<'a, T: TableTrait<K::Cipher>, K: Kms> AddKeyContext<'a, T, K> {
                 {
                     break;
                 }
+                if self.writer.reached_capacity() {
+                    break;
+                }
+                self.last_key = key.into();
+                self.num_versions = 0;
+                self.first_key_has_discard_set =
+                    value.meta().contains(Meta::DISCARD_EARLIER_VERSIONS);
+                if table_key_range.left().is_empty() {
+                    table_key_range.set_left(key.into());
+                }
+
+                table_key_range.set_right(self.last_key.clone());
+                range_check += 1;
+
+                if range_check % 5000 == 0 {
+                    let exceeds_allowed_overlap = {
+                        let level = self.plan.next_level().level() + 1;
+                        if level.to_u8() <= 1 || level > self.ctl.max_level() {
+                            false
+                        } else {
+                            let handler = self.ctl.handler(level).unwrap();
+                            // let table = handler.read();;
+                            let lock = CompactPlanReadGuard {
+                                this_level: handler.read(),
+                                next_level: handler.read(),
+                            };
+                            let range = lock
+                                .this_level
+                                .table_index_by_range(&lock, self.kr);
+                            range.count() >= 10
+                        }
+                    };
+                    if exceeds_allowed_overlap {
+                        break;
+                    }
+                }
+            }
+
+            let is_delete = value.is_deleted_or_expired();
+            if !value.meta().contains(Meta::MERGE_ENTRY) {
+                self.num_versions += 1;
+                let last_valid_version =
+                    value.meta().contains(Meta::DISCARD_EARLIER_VERSIONS)
+                        || self.num_versions
+                            == self.ctl.config().num_versions_to_keep();
+
+                if is_delete || last_valid_version {
+                    self.skip_key = key.into();
+
+                    if (is_delete || !last_valid_version) && !self.is_intersect
+                    {
+                        num_skips += 1;
+                        self.update_discard(&value);
+                        iter.next()?;
+                        continue;
+                    }
+                }
+            }
+            num_keys += 1;
+
+            let mut vptr_len = None;
+            if value.meta().contains(Meta::VALUE_POINTER) {
+                vptr_len =
+                    Some(ValuePointer::decode(value.value()).unwrap().size());
+            }
+            if self.first_key_has_discard_set || is_delete {
+                self.writer.push_stale(&key, &value, vptr_len);
+            } else {
+                self.writer.push(&key, &value, vptr_len);
             }
         }
+        debug!(
+            "Pushed {} keys, skipped {} keys, took {:?}",
+            num_keys,
+            num_skips,
+            start.elapsed().unwrap()
+        );
         Ok(())
     }
     fn update_discard(&mut self, value: &ValueMeta) {

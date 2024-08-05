@@ -137,7 +137,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             priority.set_target(self.target())
         };
         let mut plan = self.gen_plan(task_id, priority)?;
-        self.compact(task_id,  &mut plan);
+        self.compact(task_id, &mut plan, context)?;
         // let this_level = self.handler(priority.level());
         Ok(())
     }

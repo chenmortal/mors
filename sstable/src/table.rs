@@ -27,6 +27,7 @@ use crate::cache::Cache;
 use crate::pb::proto::Checksum;
 use crate::read::CacheTableIter;
 use crate::table_index::TableIndexBuf;
+use crate::write::TableWriter;
 use crate::Result;
 use crate::{error::MorsTableError, pb::proto::checksum};
 // ChecksumVerificationMode tells when should DB verify checksum for SSTable blocks.
@@ -164,6 +165,9 @@ impl TableBuilder {
     }
     pub(crate) fn compression(&self) -> CompressionType {
         self.compression
+    }
+    pub(crate) fn table_capacity(&self) -> usize {
+        self.table_capacity
     }
     pub(crate) fn create_bloom(&self, key_hashes: &[u32]) -> Option<Bloom> {
         if self.bloom_false_positive > 0.0 {
@@ -391,6 +395,15 @@ impl<K: KmsCipher> TableTrait<K> for Table<K> {
         use_cache: bool,
     ) -> impl KvCacheIterator<ValueMeta> + 'static {
         CacheTableIter::new(self.clone(), use_cache)
+    }
+
+    type TableWriter = TableWriter<K>;
+
+    fn new_writer(
+        builder: Self::TableBuilder,
+        cipher: Option<K>,
+    ) -> Self::TableWriter {
+        TableWriter::new(builder, cipher)
     }
 }
 

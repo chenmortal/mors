@@ -1,13 +1,13 @@
 use std::{io, path::Path, sync::Arc};
 
+use crate::error::MorsVlogError;
 use bytes::{Buf, BufMut};
 use log::info;
 use memmap2::Advice;
 use mors_common::{mmap::MmapFile, util::search};
 use mors_traits::vlog::DiscardTrait;
 use parking_lot::Mutex;
-
-use crate::error::MorsVlogError;
+use std::mem::size_of;
 
 const DISCARD_FILE_NAME: &str = "DISCARD";
 const DISCARD_FILE_SIZE: usize = 1 << 20; //1MB

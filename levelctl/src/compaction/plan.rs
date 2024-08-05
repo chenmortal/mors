@@ -420,8 +420,14 @@ impl KeyTsRange {
     pub(crate) fn left(&self) -> &KeyTs {
         &self.left
     }
+    pub(crate) fn set_left(&mut self, left: KeyTs) {
+        self.left = left;
+    }
     pub(crate) fn right(&self) -> &KeyTs {
         &self.right
+    }
+    pub(crate) fn set_right(&mut self, right: KeyTs) {
+        self.right = right;
     }
     pub(crate) fn intersects(&self, other: &Self) -> bool {
         if self.is_empty() || other.is_empty() {

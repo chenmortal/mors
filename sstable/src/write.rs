@@ -17,6 +17,7 @@ use mors_common::{kv::ValueMeta, ts::KeyTsBorrow};
 use mors_traits::default::WithDir;
 use mors_traits::iter::KvCacheIterator;
 use mors_traits::kms::KmsCipher;
+use mors_traits::sstable::TableWriterTrait;
 use prost::Message;
 use tokio::task::spawn_blocking;
 
@@ -26,7 +27,7 @@ use crate::fb::table_generated::{
 use crate::pb::proto::{checksum, Checksum};
 use crate::Result;
 use crate::{block::write::BlockWriter, table::TableBuilder};
-struct TableWriter<K: KmsCipher> {
+pub struct TableWriter<K: KmsCipher> {
     tablebuilder: TableBuilder,
     block_writer: BlockWriter,
     stale_data_size: u32,
@@ -39,9 +40,44 @@ struct TableWriter<K: KmsCipher> {
     max_version: TxnTs,
     on_disk_size: u32,
 }
-
+impl<K: KmsCipher> TableWriterTrait for TableWriter<K> {
+    fn reached_capacity(&self) -> bool {
+        let mut sum_block_sizes =
+            self.comressed_size.load(Ordering::Acquire) as u32;
+        if self.tablebuilder.compression() == CompressionType::None
+            && self.cipher.is_none()
+        {
+            sum_block_sizes = self.uncompressed_size.load(Ordering::Acquire);
+        }
+        let blocks_size = sum_block_sizes
+            + (self.block_writer.entry_offsets().len() * 4) as u32
+            + 4
+            + 8
+            + 4;
+        let estimate_size = blocks_size + 4 + self.len_offsets as u32;
+        estimate_size as usize > self.tablebuilder.table_capacity()
+    }
+    fn push(
+        &mut self,
+        key: &KeyTsBorrow,
+        value: &ValueMeta,
+        vptr_len: Option<u32>,
+    ) {
+        self.push_internal(key, value, vptr_len, false);
+    }
+    fn push_stale(
+        &mut self,
+        key: &KeyTsBorrow,
+        value: &ValueMeta,
+        vptr_len: Option<u32>,
+    ) {
+        self.stale_data_size +=
+            key.len() as u32 + value.value().len() as u32 + 4;
+        self.push_internal(key, value, vptr_len, true);
+    }
+}
 impl<K: KmsCipher> TableWriter<K> {
-    fn new(builder: TableBuilder, cipher: Option<K>) -> Self {
+    pub(crate) fn new(builder: TableBuilder, cipher: Option<K>) -> Self {
         let block_writer = BlockWriter::new(builder.block_size());
         Self {
             tablebuilder: builder,
@@ -57,14 +93,7 @@ impl<K: KmsCipher> TableWriter<K> {
             on_disk_size: 0,
         }
     }
-    fn push(
-        &mut self,
-        key: &KeyTsBorrow,
-        value: &ValueMeta,
-        vptr_len: Option<u32>,
-    ) {
-        self.push_internal(key, value, vptr_len, false);
-    }
+
     fn push_internal(
         &mut self,
         key: &KeyTsBorrow,
@@ -178,6 +207,7 @@ impl<K: KmsCipher> TableWriter<K> {
         };
         let table_index = TableIndex::create(&mut builder, &table_index_args);
         builder.finish(table_index, None);
+
         let data = match &self.cipher {
             Some(c) => c.encrypt(builder.finished_data())?,
             None => builder.finished_data().to_vec(),
@@ -240,6 +270,9 @@ impl TableBuilder {
         }
         spawn_blocking(move || write_data(path, build_data)).await??;
         Ok(Some(id))
+    }
+    pub(crate) fn reached_capacity(&self) -> bool {
+        true
     }
 }
 struct TableBuildData {

@@ -118,6 +118,7 @@ pub(crate) struct LevelCtlConfig {
     table_size_multiplier: usize,
     level0_size: usize,
     level0_tables_len: usize,
+    num_versions_to_keep: usize,
 }
 impl LevelCtlConfig {
     pub(crate) fn max_level(&self) -> Level {
@@ -147,6 +148,9 @@ impl LevelCtlConfig {
     pub(crate) fn level0_tables_len(&self) -> usize {
         self.level0_tables_len
     }
+    pub(crate) fn num_versions_to_keep(&self) -> usize {
+        self.num_versions_to_keep
+    }
 }
 impl Default for LevelCtlConfig {
     fn default() -> Self {
@@ -160,6 +164,7 @@ impl Default for LevelCtlConfig {
             table_size_multiplier: 2,
             level0_size: 64 << 20,
             level0_tables_len: 5,
+            num_versions_to_keep: 1,
         }
     }
 }
