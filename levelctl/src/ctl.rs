@@ -87,10 +87,10 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     pub(crate) fn level0_stalls_ms(&self) -> &AtomicU64 {
         &self.inner.level0_stalls_ms
     }
-    pub(crate) fn handler(
-        &self,
-        level: Level,
-    ) -> Option<&LevelHandler<T, K>> {
+    pub(crate) fn next_id(&self) -> &Arc<AtomicU32> {
+        &self.inner.next_id
+    }
+    pub(crate) fn handler(&self, level: Level) -> Option<&LevelHandler<T, K>> {
         if level > self.inner.max_level {
             return None;
         }

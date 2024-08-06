@@ -3,7 +3,7 @@ use crate::{
     kms::Kms,
 };
 use mors_common::kv::{Entry, ValuePointer};
-use std::{error::Error, fmt::Display, slice::IterMut};
+use std::{error::Error, fmt::Display, io, slice::IterMut};
 use thiserror::Error;
 
 pub trait VlogCtlTrait<K: Kms>: Sized + Send + Sync + 'static {
@@ -30,7 +30,9 @@ pub trait VlogCtlBuilderTrait<V: VlogCtlTrait<K>, K: Kms>:
     fn build_discard(&self) -> Result<V::Discard, VlogError>;
 }
 
-pub trait DiscardTrait: Clone + Send + Sync + 'static {}
+pub trait DiscardTrait: Clone + Send + Sync + 'static {
+    fn update(&self, fd: u64, discard: i64) -> io::Result<u64>;
+}
 #[derive(Error, Debug)]
 pub struct VlogError(Box<dyn Error>);
 impl VlogError {

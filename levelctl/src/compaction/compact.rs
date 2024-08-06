@@ -1,20 +1,24 @@
 use std::collections::HashMap;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use log::debug;
+use mors_common::file_id::{FileId, SSTableId};
 use mors_common::kv::{Meta, ValueMeta, ValuePointer};
 use mors_common::ts::KeyTs;
+use mors_traits::default::WithDir;
 use mors_traits::iter::{
     CacheIterator, KvCacheIter, KvCacheIterator, KvCacheMergeIterator,
     KvSeekIter,
 };
 use mors_traits::levelctl::{Level, LevelCtlTrait, LEVEL0};
 use mors_traits::sstable::{
-    CacheTableConcatIter, TableBuilderTrait, TableWriterTrait,
+    CacheTableConcatIter, SSTableError, TableBuilderTrait, TableWriterTrait,
 };
 use mors_traits::vlog::DiscardTrait;
 use mors_traits::{kms::Kms, sstable::TableTrait};
+use tokio::task::JoinHandle;
 
 use crate::{ctl::LevelCtl, error::MorsLevelCtlError};
 
@@ -48,12 +52,13 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         Ok(())
     }
     // compactBuildTables merges topTables and botTables to form a list of new tables.
-    pub(crate) fn compact_build_tables(
+    pub(crate) async fn compact_build_tables<D: DiscardTrait>(
         &self,
         level: Level,
         task_id: usize,
         plan: &mut CompactPlan<T, K>,
-    ) {
+        context: CompactContext<T, K, D>,
+    ) -> Result<()> {
         let top = plan.top();
         let bottom = plan.bottom();
         debug!(
@@ -86,21 +91,35 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             out.push(Box::new(CacheTableConcatIter::new(valid.clone(), false)));
             out
         };
-        // let compact_task = Vec::new();
+        let mut compact_task = Vec::new();
         let plan_clone = Arc::new(plan.clone());
         for kr in plan.splits() {
             let mut iters = new_iter();
-            if let Some(merge) = KvCacheMergeIterator::new(iters) {};
-            // compact_task.push(new_table);
+            if let Some(merge) = KvCacheMergeIterator::new(iters) {
+                compact_task.push(tokio::spawn(self.clone().sub_compact(
+                    merge,
+                    kr.clone(),
+                    plan_clone.clone(),
+                    context.clone(),
+                )));
+            };
         }
+
+        let mut tables = Vec::new();
+        for compact in compact_task {
+            for table_task in compact.await?? {
+                tables.push(table_task.await??);
+            }
+        }
+        Ok(())
     }
-    fn sub_compact<D: DiscardTrait>(
+    async fn sub_compact<D: DiscardTrait>(
         self,
         mut merge_iter: KvCacheMergeIterator,
         kr: KeyTsRange,
         plan: Arc<CompactPlan<T, K>>,
         context: CompactContext<T, K, D>,
-    ) -> Result<()> {
+    ) -> Result<Vec<JoinHandle<std::result::Result<(), SSTableError>>>> {
         let mut all_tables = plan.top().to_vec();
         all_tables.extend_from_slice(plan.bottom());
 
@@ -117,6 +136,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             merge_iter.seek(left_borrow.into())?;
         }
 
+        let mut discard_stats = HashMap::new();
+        let mut table_task = Vec::new();
         while merge_iter.valid() {
             if !kr.right().is_empty()
                 && merge_iter.key().unwrap() == *kr.right()
@@ -133,7 +154,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                 last_key: Default::default(),
                 skip_key: Default::default(),
                 num_versions: Default::default(),
-                discard_stats: Default::default(),
+                discard_stats: &mut discard_stats,
                 first_key_has_discard_set: Default::default(),
                 ctl: &self,
                 kr: &kr,
@@ -141,14 +162,21 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                 writer,
                 plan: &plan,
             };
-        }
-        Ok(())
-        // let mut new_table = self.new_table();
-        // let mut writer = new_table.writer();
-        // while let Some((key, value)) = merge_iter.next() {
-        // writer.put(key, value);
+            context.push(&mut merge_iter)?;
+            let next_id: SSTableId =
+                self.next_id().fetch_add(1, Ordering::AcqRel).into();
 
-        // writer.finish();
+            let path = next_id.join_dir(self.table_builder().dir());
+            let mut writer = context.writer;
+            table_task.push(tokio::spawn(async move {
+                writer.flush_to_disk(path).await
+            }));
+        }
+        for (id, discard) in discard_stats.iter() {
+            context.discard().update(*id as u64, *discard as i64)?;
+        }
+        debug!("Discard stats updated {:?}", discard_stats);
+        Ok(table_task)
     }
     fn check_intersect(&self, tables: &[T], level: Level) -> bool {
         let kr = KeyTsRange::from_slice::<T, K>(tables);
@@ -171,7 +199,7 @@ struct AddKeyContext<'a, T: TableTrait<K::Cipher>, K: Kms> {
     last_key: KeyTs,
     skip_key: KeyTs,
     num_versions: usize,
-    discard_stats: HashMap<u32, u64>,
+    discard_stats: &'a mut HashMap<u32, u64>,
     first_key_has_discard_set: bool,
     ctl: &'a LevelCtl<T, K>,
     plan: &'a CompactPlan<T, K>,

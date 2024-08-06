@@ -22,11 +22,31 @@ pub mod status;
 pub type Result<T> = std::result::Result<T, MorsLevelCtlError>;
 
 #[derive(Debug, Clone)]
-pub struct CompactContext<T: TableTrait<K::Cipher>, K: Kms, D: DiscardTrait> {
+pub(crate) struct CompactContext<
+    T: TableTrait<K::Cipher>,
+    K: Kms,
+    D: DiscardTrait,
+> {
     kms: K,
     cache: T::Cache,
     manifest: Manifest,
     discard: D,
+}
+impl<T: TableTrait<K::Cipher>, K: Kms, D: DiscardTrait>
+    CompactContext<T, K, D>
+{
+    pub fn kms(&self) -> &K {
+        &self.kms
+    }
+    pub fn cache(&self) -> &T::Cache {
+        &self.cache
+    }
+    pub fn manifest(&self) -> &Manifest {
+        &self.manifest
+    }
+    pub fn discard(&self) -> &D {
+        &self.discard
+    }
 }
 /// Implementation of the `LevelCtl` struct.
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {

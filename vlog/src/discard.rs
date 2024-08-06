@@ -109,4 +109,8 @@ impl DiscardInner {
         Ok(())
     }
 }
-impl DiscardTrait for Discard {}
+impl DiscardTrait for Discard {
+    fn update(&self, fd: u64, discard: i64) -> io::Result<u64> {
+        Discard::update(self, fd, discard)
+    }
+}

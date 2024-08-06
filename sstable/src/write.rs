@@ -17,10 +17,11 @@ use mors_common::{kv::ValueMeta, ts::KeyTsBorrow};
 use mors_traits::default::WithDir;
 use mors_traits::iter::KvCacheIterator;
 use mors_traits::kms::KmsCipher;
-use mors_traits::sstable::TableWriterTrait;
+use mors_traits::sstable::{SSTableError, TableWriterTrait};
 use prost::Message;
 use tokio::task::spawn_blocking;
 
+use crate::error::MorsTableError;
 use crate::fb::table_generated::{
     BlockOffset, BlockOffsetArgs, TableIndex, TableIndexArgs,
 };
@@ -74,6 +75,29 @@ impl<K: KmsCipher> TableWriterTrait for TableWriter<K> {
         self.stale_data_size +=
             key.len() as u32 + value.value().len() as u32 + 4;
         self.push_internal(key, value, vptr_len, true);
+    }
+
+    async fn flush_to_disk(
+        &mut self,
+        path: PathBuf,
+    ) -> std::result::Result<(), SSTableError> {
+        let build_data = self.done().await?;
+
+        fn write_data(path: PathBuf, data: TableBuildData) -> Result<()> {
+            let mut builder = MmapFileBuilder::new();
+            builder.advice(Advice::Sequential);
+            builder.create_new(true).append(true).read(true);
+            let mut mmap = builder.build(path, data.size)?;
+            data.write(&mut mmap)?;
+            mmap.flush()?;
+            mmap.set_len(data.size as usize)?;
+            mmap.sync_all()?;
+            Ok(())
+        }
+        spawn_blocking(move || write_data(path, build_data))
+            .await
+            .map_err(MorsTableError::from)??;
+        Ok(())
     }
 }
 impl<K: KmsCipher> TableWriter<K> {
@@ -255,20 +279,8 @@ impl TableBuilder {
         }
         let id: SSTableId = next_id.fetch_add(1, Ordering::SeqCst).into();
         let path = id.join_dir(self.dir());
-        let build_data = writer.done().await?;
 
-        fn write_data(path: PathBuf, data: TableBuildData) -> Result<()> {
-            let mut builder = MmapFileBuilder::new();
-            builder.advice(Advice::Sequential);
-            builder.create_new(true).append(true).read(true);
-            let mut mmap = builder.build(path, data.size)?;
-            data.write(&mut mmap)?;
-            mmap.flush()?;
-            mmap.set_len(data.size as usize)?;
-            mmap.sync_all()?;
-            Ok(())
-        }
-        spawn_blocking(move || write_data(path, build_data)).await??;
+        writer.flush_to_disk(path).await?;
         Ok(Some(id))
     }
     pub(crate) fn reached_capacity(&self) -> bool {
