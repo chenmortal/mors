@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use log::debug;
+use log::{debug, info};
 use mors_common::file_id::{FileId, SSTableId};
 use mors_common::kv::{Meta, ValueMeta, ValuePointer};
 use mors_common::ts::KeyTs;
@@ -56,21 +56,77 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         let new_tables =
             self.compact_build_tables(level, plan, &context).await?;
 
-        self.do_manifest_change(new_tables, plan, context.manifest())
+        self.do_manifest_change(&new_tables, plan, context.manifest())
             .await?;
-        
+
+        let new_tables_size =
+            new_tables.iter().fold(0, |acc, x| acc + x.size());
+        let old_tables_size =
+            plan.top().iter().fold(0, |acc, x| acc + x.size())
+                + plan.bottom().iter().fold(0, |acc, x| acc + x.size());
+
+        plan.next_level().replace(plan.bottom(), &new_tables);
+        plan.this_level().delete(plan.top());
+
+        let table_to_string = |tables: &[T]| {
+            let mut v = Vec::with_capacity(tables.len());
+            tables.iter().for_each(|t| {
+                v.push(format!("{:>5}", Into::<u32>::into(t.id())))
+            });
+            v.join(".")
+        };
+
+        let duration = now.elapsed().unwrap();
+        if duration.as_secs() > 2 {
+            info!(
+                "[{task_id}] LOG Compact {this_level}-{next_level} \
+                took {duration} ms with {new_tables_size} bytes written, {old_tables_size} bytes read, \
+                new tables: {new_tables}, \
+                old tables: \
+                --   top:   {top_tables} \
+                --   bottom:{bottom_tables}",
+                task_id = task_id,
+                this_level = plan.this_level().level(),
+                next_level = plan.next_level().level(),
+                duration = duration.as_millis(),
+                new_tables = table_to_string(&new_tables),
+                top_tables = table_to_string(plan.top()),
+                bottom_tables = table_to_string(plan.bottom()),
+                new_tables_size = new_tables_size,
+                old_tables_size = old_tables_size,
+            );
+        }
+
+        if plan.this_level().level() != LEVEL0
+            && new_tables.len() > 2 * self.config().level_size_multiplier()
+        {
+            info!(
+                "This Range (num tables: {top_len}) \
+                -- Left:{top_left:?} \
+                -- Right:{top_right:?} \
+                Next Range (num tables: {bottom_len}) \
+                -- Left:{bottom_left:?} \
+                -- Right:{bottom_right:?}",
+                top_len = plan.top().len(),
+                top_left = plan.this_range().left(),
+                top_right = plan.this_range().right(),
+                bottom_len = plan.bottom().len(),
+                bottom_left = plan.next_range().left(),
+                bottom_right = plan.next_range().right(),
+            )
+        }
         Ok(())
     }
     async fn do_manifest_change(
         &self,
-        new_tables: Vec<T>,
+        new_tables: &Vec<T>,
         plan: &mut CompactPlan<T, K>,
         manifest: &Manifest,
     ) -> Result<()> {
         let mut changes = Vec::with_capacity(
             new_tables.len() + plan.top().len() + plan.bottom().len(),
         );
-        for table in &new_tables {
+        for table in new_tables {
             let cipher = table.cipher().map(|c| c.cipher_key_id());
             changes.push(ManifestChange::new_create(
                 table.id(),
