@@ -28,6 +28,8 @@ pub enum MorsTableError {
     IterError(#[from] IterError),
     #[error("Tokio JoinError : {0}")]
     JoinError(#[from] tokio::task::JoinError),
+    #[error("SSTableError: {0}")]
+    SSTableError(#[from] SSTableError),
 }
 
 impl From<MorsTableError> for SSTableError {
@@ -40,4 +42,5 @@ impl From<MorsTableError> for IterError {
         IterError::new(value)
     }
 }
+
 unsafe impl Send for MorsTableError {}

@@ -1,11 +1,11 @@
-use mors_common::ts::TxnTs;
+use mors_common::{file_id::SSTableId, ts::TxnTs};
 use mors_traits::{
     kms::Kms,
     levelctl::{Level, LEVEL0},
     sstable::TableTrait,
 };
 use parking_lot::RwLock;
-use std::ops::Deref;
+use std::{collections::HashSet, ops::Deref};
 use std::{marker::PhantomData, sync::Arc};
 
 use crate::error::LevelHandlerError;
@@ -60,36 +60,65 @@ impl<T: TableTrait<K::Cipher>, K: Kms> Default for LevelHandlerTables<T, K> {
     }
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
-    pub(crate) fn new(level: Level, mut tables: Vec<T>) -> Self {
-        let mut total_size = 0;
-        let mut total_stale_size = 0;
-        tables.iter().for_each(|t| {
-            total_size += t.size();
-            total_stale_size += t.stale_data_size();
-        });
-        if level == LEVEL0 {
-            tables.sort_by_key(|a| a.id());
-        } else {
-            tables.sort_by(|a, b| a.smallest().cmp(b.smallest()));
-        }
+    pub(crate) fn new(level: Level, tables: Vec<T>) -> Self {
+        let mut table_handler: LevelHandlerTables<T, K> =
+            LevelHandlerTables::default();
+        table_handler.init(level, tables);
+
         Self(Arc::new(LevelHandlerInner {
-            table_handler: RwLock::new(LevelHandlerTables {
-                tables,
-                total_size,
-                total_stale_size,
-                k: PhantomData,
-            }),
+            table_handler: RwLock::new(table_handler),
             level,
         }))
     }
-    pub(crate) fn level(&self) -> &Level {
-        &self.0.level
+
+    pub(crate) fn level(&self) -> Level {
+        self.0.level
     }
     pub(crate) fn tables_len(&self) -> usize {
         self.read().tables.len()
     }
     pub(crate) fn total_size(&self) -> usize {
         self.read().total_size
+    }
+
+    pub(crate) fn replace(&self, old: &[T], new: &[T]) {
+        let mut inner_w = self.write();
+        let to_delete =
+            old.iter().map(|x| x.id()).collect::<HashSet<SSTableId>>();
+
+        let mut new_tables =
+            Vec::with_capacity(inner_w.tables.len() - to_delete.len());
+
+        inner_w
+            .tables
+            .drain(..)
+            .filter(|t| !to_delete.contains(&t.id()))
+            .for_each(|t| new_tables.push(t));
+        new.iter().for_each(|t| new_tables.push(t.clone()));
+
+        inner_w.init(self.level(), new_tables);
+    }
+    pub(crate) fn delete(&self, delete: &[T]) {
+        let mut inner_w = self.write();
+        let to_delete = delete
+            .iter()
+            .map(|t| t.id())
+            .collect::<HashSet<SSTableId>>();
+        let mut new_tables =
+            Vec::with_capacity(inner_w.tables.len() - to_delete.len());
+        let mut sub_total_size = 0;
+        let mut sub_total_stale_size = 0;
+        for table in inner_w.tables.drain(..) {
+            if to_delete.contains(&table.id()) {
+                sub_total_size -= table.size();
+                sub_total_stale_size -= table.stale_data_size();
+            } else {
+                new_tables.push(table);
+            }
+        }
+        inner_w.tables = new_tables;
+        inner_w.total_size -= sub_total_size;
+        inner_w.total_stale_size -= sub_total_stale_size;
     }
     pub(crate) fn validate(&self) -> Result<()> {
         let inner = self.0.table_handler.read();
@@ -128,6 +157,20 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
     }
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandlerTables<T, K> {
+    pub(crate) fn init(&mut self, level: Level, tables: Vec<T>) {
+        self.tables = tables;
+        let mut total_size = 0;
+        let mut total_stale_size = 0;
+        self.tables.iter().for_each(|t| {
+            total_size += t.size();
+            total_stale_size += t.stale_data_size();
+        });
+        if level == LEVEL0 {
+            self.tables.sort_by_key(|a| a.id());
+        } else {
+            self.tables.sort_by(|a, b| a.smallest().cmp(b.smallest()));
+        }
+    }
     pub(crate) fn tables(&self) -> &[T] {
         &self.tables
     }

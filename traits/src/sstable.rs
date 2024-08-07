@@ -7,11 +7,11 @@ use crate::{cache::CacheTrait, kms::KmsCipher};
 use mors_common::compress::CompressionType;
 use mors_common::file_id::SSTableId;
 use mors_common::kv::ValueMeta;
-use mors_common::ts::{KeyTs, TxnTs};
-use std::borrow::Borrow;
+use mors_common::ts::{KeyTs, KeyTsBorrow, TxnTs};
 use std::error::Error;
 use std::fmt::Display;
 use std::marker::PhantomData;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -25,6 +25,7 @@ pub trait TableTrait<K: KmsCipher>:
     type TableIndexBuf: TableIndexBufTrait;
     type TableBuilder: TableBuilderTrait<Self, K>;
     type Cache: CacheTrait;
+    type TableWriter: TableWriterTrait;
     // type Cache: CacheTrait<Self::Block, Self::TableIndexBuf>;
     fn size(&self) -> usize;
     fn stale_data_size(&self) -> usize;
@@ -35,6 +36,10 @@ pub trait TableTrait<K: KmsCipher>:
     fn create_time(&self) -> SystemTime;
     fn cipher(&self) -> Option<&K>;
     fn compression(&self) -> CompressionType;
+    fn new_writer(
+        builder: Self::TableBuilder,
+        cipher: Option<K>,
+    ) -> Self::TableWriter;
     fn iter(
         &self,
         use_cache: bool,
@@ -52,12 +57,29 @@ pub trait TableBuilderTrait<T: TableTrait<K>, K: KmsCipher>:
         id: SSTableId,
         cipher: Option<K>,
     ) -> impl std::future::Future<Output = Result<Option<T>, SSTableError>> + Send;
+
     fn build_l0<I: KvCacheIterator<V>, V: Into<ValueMeta>>(
         &self,
         iter: I,
         next_id: Arc<AtomicU32>,
         cipher: Option<K>,
     ) -> impl std::future::Future<Output = Result<Option<T>, SSTableError>> + Send;
+}
+pub trait TableWriterTrait:Send + Sync + 'static {
+    fn reached_capacity(&self) -> bool;
+    fn push(
+        &mut self,
+        key: &KeyTsBorrow,
+        value: &ValueMeta,
+        vptr_len: Option<u32>,
+    );
+    fn push_stale(
+        &mut self,
+        key: &KeyTsBorrow,
+        value: &ValueMeta,
+        vptr_len: Option<u32>,
+    );
+    fn flush_to_disk(&mut self, path: PathBuf) -> impl std::future::Future<Output = Result<(), SSTableError>> + Send;
 }
 pub struct CacheTableConcatIter<T: TableTrait<K>, K: KmsCipher> {
     index: Option<usize>,
@@ -158,10 +180,9 @@ impl<T: TableTrait<K>, K: KmsCipher> KvSeekIter for CacheTableConcatIter<T, K> {
                 self.index = Some(index);
                 self.iters[index] = Some(Box::new(iter));
                 Ok(true)
-            }else{
+            } else {
                 Ok(false)
             }
-
         }
     }
 }
