@@ -12,6 +12,7 @@ use mors_traits::iter::{
     CacheIterator, KvCacheIter, KvCacheIterator, KvCacheMergeIterator,
     KvSeekIter,
 };
+use mors_traits::kms::KmsCipher;
 use mors_traits::levelctl::{Level, LevelCtlTrait, LEVEL0};
 use mors_traits::sstable::{
     CacheTableConcatIter, SSTableError, TableBuilderTrait, TableWriterTrait,
@@ -20,15 +21,18 @@ use mors_traits::vlog::DiscardTrait;
 use mors_traits::{kms::Kms, sstable::TableTrait};
 use tokio::task::JoinHandle;
 
+use crate::manifest::manifest_change::ManifestChange;
+use crate::manifest::Manifest;
 use crate::{ctl::LevelCtl, error::MorsLevelCtlError};
 
 use super::plan::{CompactPlan, CompactPlanReadGuard, KeyTsRange};
 use super::{CompactContext, Result};
 
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
-    pub(crate) fn compact<D: DiscardTrait>(
+    pub(crate) async fn compact<D: DiscardTrait>(
         &self,
         task_id: usize,
+        level: Level,
         plan: &mut CompactPlan<T, K>,
         context: CompactContext<T, K, D>,
     ) -> Result<()> {
@@ -49,16 +53,50 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             plan.add_splits();
         }
 
+        let new_tables =
+            self.compact_build_tables(level, plan, &context).await?;
+
+        self.do_manifest_change(new_tables, plan, context.manifest())
+            .await?;
+        
+        Ok(())
+    }
+    async fn do_manifest_change(
+        &self,
+        new_tables: Vec<T>,
+        plan: &mut CompactPlan<T, K>,
+        manifest: &Manifest,
+    ) -> Result<()> {
+        let mut changes = Vec::with_capacity(
+            new_tables.len() + plan.top().len() + plan.bottom().len(),
+        );
+        for table in &new_tables {
+            let cipher = table.cipher().map(|c| c.cipher_key_id());
+            changes.push(ManifestChange::new_create(
+                table.id(),
+                plan.next_level().level(),
+                cipher,
+                table.compression(),
+            ));
+        }
+
+        for table in plan.top() {
+            changes.push(ManifestChange::new_delete(table.id()));
+        }
+        for table in plan.bottom() {
+            changes.push(ManifestChange::new_delete(table.id()));
+        }
+
+        manifest.push_changes(changes).await?;
         Ok(())
     }
     // compactBuildTables merges topTables and botTables to form a list of new tables.
     pub(crate) async fn compact_build_tables<D: DiscardTrait>(
         &self,
         level: Level,
-        task_id: usize,
         plan: &mut CompactPlan<T, K>,
-        context: CompactContext<T, K, D>,
-    ) -> Result<()> {
+        context: &CompactContext<T, K, D>,
+    ) -> Result<Vec<T>> {
         let top = plan.top();
         let bottom = plan.bottom();
         debug!(
@@ -94,7 +132,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         let mut compact_task = Vec::new();
         let plan_clone = Arc::new(plan.clone());
         for kr in plan.splits() {
-            let mut iters = new_iter();
+            let iters = new_iter();
             if let Some(merge) = KvCacheMergeIterator::new(iters) {
                 compact_task.push(tokio::spawn(self.clone().sub_compact(
                     merge,
@@ -108,10 +146,14 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         let mut tables = Vec::new();
         for compact in compact_task {
             for table_task in compact.await?? {
-                tables.push(table_task.await??);
+                if let Some(t) = table_task.await?? {
+                    tables.push(t);
+                }
             }
         }
-        Ok(())
+
+        tables.sort_by(|a, b| a.biggest().cmp(b.biggest()));
+        Ok(tables)
     }
     async fn sub_compact<D: DiscardTrait>(
         self,
@@ -119,7 +161,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         kr: KeyTsRange,
         plan: Arc<CompactPlan<T, K>>,
         context: CompactContext<T, K, D>,
-    ) -> Result<Vec<JoinHandle<std::result::Result<(), SSTableError>>>> {
+    ) -> Result<Vec<JoinHandle<std::result::Result<Option<T>, SSTableError>>>>
+    {
         let mut all_tables = plan.top().to_vec();
         all_tables.extend_from_slice(plan.bottom());
 
@@ -148,7 +191,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             let target_size = target.file_size(plan.next_level().level());
             builder.set_table_size(target_size);
             let cipher = context.kms.latest_cipher()?;
-            let writer = T::new_writer(builder, cipher);
+            let writer = T::new_writer(builder.clone(), cipher.clone());
 
             let mut context = AddKeyContext {
                 last_key: Default::default(),
@@ -169,7 +212,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             let path = next_id.join_dir(self.table_builder().dir());
             let mut writer = context.writer;
             table_task.push(tokio::spawn(async move {
-                writer.flush_to_disk(path).await
+                writer.flush_to_disk(path).await?;
+                builder.open(next_id, cipher).await
             }));
         }
         for (id, discard) in discard_stats.iter() {
