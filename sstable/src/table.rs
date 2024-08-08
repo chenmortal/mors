@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -332,6 +333,7 @@ impl TableBuilder {
 }
 #[derive(Clone)]
 pub struct Table<K: KmsCipher>(Arc<TableInner<K>>);
+
 pub(crate) struct TableInner<K: KmsCipher> {
     id: SSTableId,
     mmap: MmapFile,
@@ -347,6 +349,24 @@ pub(crate) struct TableInner<K: KmsCipher> {
     cipher: Option<K>,
     checksum_verify_mode: ChecksumVerificationMode,
     compression: CompressionType,
+}
+impl<K: KmsCipher> Debug for Table<K> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Table")
+            .field("id", &self.0.id)
+            .field("mmap", &self.0.mmap)
+            .field("table_size", &self.0.table_size)
+            .field("create_at", &self.0.create_at)
+            .field("index_buf", &self.0.index_buf)
+            .field("index_start", &self.0.index_start)
+            .field("index_len", &self.0.index_len)
+            .field("smallest", &self.0.smallest)
+            .field("biggest", &self.0.biggest)
+            .field("cheap_index", &self.0.cheap_index)
+            .field("checksum_verify_mode", &self.0.checksum_verify_mode)
+            .field("compression", &self.0.compression)
+            .finish()
+    }
 }
 impl<K: KmsCipher> TableTrait<K> for Table<K> {
     type Block = Block;
@@ -591,6 +611,7 @@ impl<K: KmsCipher> Table<K> {
         self.0.cheap_index.offsets_len
     }
 }
+#[derive(Debug)]
 struct CheapTableIndex {
     max_version: TxnTs,
     key_count: u32,

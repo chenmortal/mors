@@ -34,7 +34,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         task_id: usize,
         level: Level,
         plan: &mut CompactPlan<T, K>,
-        context: CompactContext<T, K, D>,
+        context: CompactContext<K, D>,
     ) -> Result<()> {
         let priority = plan.priority();
         let target = priority.target();
@@ -151,7 +151,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         &self,
         level: Level,
         plan: &mut CompactPlan<T, K>,
-        context: &CompactContext<T, K, D>,
+        context: &CompactContext<K, D>,
     ) -> Result<Vec<T>> {
         let top = plan.top();
         let bottom = plan.bottom();
@@ -216,7 +216,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         mut merge_iter: KvCacheMergeIterator,
         kr: KeyTsRange,
         plan: Arc<CompactPlan<T, K>>,
-        context: CompactContext<T, K, D>,
+        context: CompactContext< K, D>,
     ) -> Result<Vec<JoinHandle<std::result::Result<Option<T>, SSTableError>>>>
     {
         let mut all_tables = plan.top().to_vec();

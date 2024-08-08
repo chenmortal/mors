@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use log::info;
+use log::{info, warn};
 use mors_common::closer::Closer;
 use mors_traits::{
     kms::Kms, levelctl::LEVEL0, sstable::TableTrait, vlog::DiscardTrait,
@@ -22,25 +22,12 @@ pub mod status;
 pub type Result<T> = std::result::Result<T, MorsLevelCtlError>;
 
 #[derive(Debug, Clone)]
-pub(crate) struct CompactContext<
-    T: TableTrait<K::Cipher>,
-    K: Kms,
-    D: DiscardTrait,
-> {
+pub(crate) struct CompactContext<K: Kms, D: DiscardTrait> {
     kms: K,
-    cache: T::Cache,
     manifest: Manifest,
     discard: D,
 }
-impl<T: TableTrait<K::Cipher>, K: Kms, D: DiscardTrait>
-    CompactContext<T, K, D>
-{
-    pub fn kms(&self) -> &K {
-        &self.kms
-    }
-    pub fn cache(&self) -> &T::Cache {
-        &self.cache
-    }
+impl<K: Kms, D: DiscardTrait> CompactContext<K, D> {
     pub fn manifest(&self) -> &Manifest {
         &self.manifest
     }
@@ -57,11 +44,10 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     /// * `kms` - The key management system.
     /// * `cache` - The cache for table's block.
     /// * `discard` - The  vlog discard stats.
-    pub fn spawn<D: DiscardTrait>(self, kms: K, cache: T::Cache, discard: D) {
+    pub fn spawn<D: DiscardTrait>(self, kms: K, discard: D) {
         let closer = Closer::new("compact");
-        let context = CompactContext::<T, K, D> {
+        let context = CompactContext::<K, D> {
             kms,
-            cache,
             manifest: self.manifest().clone(),
             discard,
         };
@@ -85,7 +71,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         self,
         task_id: usize,
         closer: Closer,
-        context: CompactContext<T, K, D>,
+        context: CompactContext<K, D>,
     ) -> Result<()> {
         let sleep =
             sleep(Duration::from_millis(rand::thread_rng().gen_range(0..1000)));
@@ -112,6 +98,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                     && task_id ==2 && count >= 200 {
                         let priority=CompactPriority::new(self.max_level(), self.target());
                         self.run_compact(task_id,priority,context.clone()).await;
+                        count=0;
                     }else{
                         let mut prios=self.pick_compact_levels()?;
                         if task_id==0{
@@ -124,7 +111,9 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                             if prio.adjusted() <1.0 && !(task_id==0 && prio.level()==LEVEL0)  {
                                 break;
                             }
-                            self.run_compact(task_id,prio,context.clone()).await;
+                            if self.run_compact(task_id,prio,context.clone()).await{
+                                break;
+                            };
                         }
                     }
                 }
@@ -136,31 +125,48 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         }
         Ok(())
     }
+
+    // doCompact picks some table on level l and compacts it away to the next level.
     async fn run_compact<D: DiscardTrait>(
         &self,
         task_id: usize,
-        priority: CompactPriority,
-        context: CompactContext<T, K, D>,
-    ) {
-        self.do_compact(task_id, priority, context).await;
-    }
-    // doCompact picks some table on level l and compacts it away to the next level.
-    async fn do_compact<D: DiscardTrait>(
-        &self,
-        task_id: usize,
         mut priority: CompactPriority,
-        context: CompactContext<T, K, D>,
-    ) -> Result<()> {
+        context: CompactContext<K, D>,
+    ) -> bool {
         debug_assert!(priority.level() < self.max_level());
         let priority_level = priority.level();
         // base level can't be LEVEL0 , update it
         if priority.target().base_level() == LEVEL0 {
             priority.set_target(self.target())
         };
-        let mut plan = self.gen_plan(task_id, priority)?;
-        self.compact(task_id, priority_level, &mut plan, context)
-            .await?;
-        // let this_level = self.handler(priority.level());
-        Ok(())
+        match self.gen_plan(task_id, priority) {
+            Ok(mut plan) => {
+                match self
+                    .compact(task_id, priority_level, &mut plan, context)
+                    .await
+                {
+                    Ok(_) => {
+                        info!(
+                            "[Compactor: {}] compact success for {}",
+                            task_id,
+                            plan.this_level().level()
+                        );
+                        true
+                    }
+                    Err(e) => {
+                        warn!(
+                            "[Compactor: {}] compact error: {} for {:?}",
+                            task_id, e, plan
+                        );
+                        false
+                    }
+                }
+            }
+            Err(MorsLevelCtlError::FillTablesError) => false,
+            Err(e) => {
+                warn!("task {} compact error: {}", task_id, e);
+                false
+            }
+        }
     }
 }
