@@ -1,5 +1,6 @@
 use crate::default::{WithDir, WithReadOnly};
 use std::error::Error;
+use std::fmt::Debug;
 use std::{
     fmt::Display,
     ops::{Add, AddAssign},
@@ -36,7 +37,7 @@ impl AddAssign<u64> for CipherKeyId {
         self.0 += rhs
     }
 }
-pub trait Kms: Clone + Send + Sync + 'static {
+pub trait Kms: Clone + Send + Debug + Sync + 'static {
     type ErrorType: Into<KmsError>;
     type Cipher: KmsCipher;
     type KmsBuilder: KmsBuilder<Self>;

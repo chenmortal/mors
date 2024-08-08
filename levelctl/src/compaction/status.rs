@@ -101,9 +101,6 @@ impl CompactStatusInner {
     pub(crate) fn tables_mut(&mut self) -> &mut HashSet<SSTableId> {
         &mut self.tables
     }
-    pub(crate) fn levels(&self) -> &[LevelCompactStatus] {
-        &self.levels
-    }
     pub(crate) fn levels_mut(&mut self) -> &mut [LevelCompactStatus] {
         &mut self.levels
     }

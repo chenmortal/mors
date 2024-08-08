@@ -16,7 +16,7 @@ use crate::{
 
 use super::priority::CompactPriority;
 use super::Result;
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct CompactPlan<T: TableTrait<K::Cipher>, K: Kms> {
     task_id: usize,
     priority: CompactPriority,
