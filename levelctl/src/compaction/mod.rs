@@ -44,20 +44,30 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     /// * `kms` - The key management system.
     /// * `cache` - The cache for table's block.
     /// * `discard` - The  vlog discard stats.
-    pub fn spawn<D: DiscardTrait>(self, kms: K, discard: D) {
-        let closer = Closer::new("compact");
+    pub async fn spawn_compact_impl<D: DiscardTrait>(
+        self,
+        closer: Closer,
+        kms: K,
+        discard: D,
+    ) -> Result<()> {
+        
         let context = CompactContext::<K, D> {
             kms,
             manifest: self.manifest().clone(),
             discard,
         };
+        let mut tasks = Vec::new();
         for task_id in 0..self.config().num_compactors() {
-            tokio::spawn(self.clone().run_compactor(
+            tasks.push(tokio::spawn(self.clone().run_compactor(
                 task_id,
                 closer.clone(),
                 context.clone(),
-            ));
+            )));
         }
+        for t in tasks {
+            t.await??;
+        }
+        Ok(())
     }
 
     /// Runs the compactor for the `LevelCtl` instance.
@@ -92,8 +102,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             select! {
                 _=ticker.tick() => {
                     count += 1;
-                    info!("task {} count {}", task_id, count);
-
+                    
                     if self.config().levelmax2max_compaction()
                     && task_id ==2 && count >= 200 {
                         let priority=CompactPriority::new(self.max_level(), self.target());

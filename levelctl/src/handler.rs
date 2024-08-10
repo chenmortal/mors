@@ -110,8 +110,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
         let mut sub_total_stale_size = 0;
         for table in inner_w.tables.drain(..) {
             if to_delete.contains(&table.id()) {
-                sub_total_size -= table.size();
-                sub_total_stale_size -= table.stale_data_size();
+                sub_total_size += table.size();
+                sub_total_stale_size += table.stale_data_size();
             } else {
                 new_tables.push(table);
             }

@@ -73,6 +73,17 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlTrait<T, K> for LevelCtl<T, K> {
     ) -> std::result::Result<(), LevelCtlError> {
         Ok(self.push_level0_impl(table).await?)
     }
+
+    async fn spawn_compact<D: mors_traits::vlog::DiscardTrait>(
+        self,
+        closer: Closer,
+        kms: K,
+        discard: D,
+    ) {
+        if let Err(e) = self.spawn_compact_impl(closer, kms, discard).await {
+            panic!("spawn_compact error:{}", e);
+        }
+    }
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     pub(crate) fn manifest(&self) -> &Manifest {

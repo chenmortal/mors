@@ -19,7 +19,7 @@ pub(crate) struct CompactStatusInner {
 impl CompactStatus {
     pub(crate) fn new(max_level: usize) -> Self {
         let mut levels = Vec::new();
-        levels.resize_with(max_level, LevelCompactStatus::default);
+        levels.resize_with(max_level + 1, LevelCompactStatus::default);
         Self(Arc::new(RwLock::new(CompactStatusInner {
             levels,
             tables: HashSet::new(),

@@ -216,7 +216,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         mut merge_iter: KvCacheMergeIterator,
         kr: KeyTsRange,
         plan: Arc<CompactPlan<T, K>>,
-        context: CompactContext< K, D>,
+        context: CompactContext<K, D>,
     ) -> Result<Vec<JoinHandle<std::result::Result<Option<T>, SSTableError>>>>
     {
         let mut all_tables = plan.top().to_vec();
@@ -287,7 +287,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                 next_level: handler.read(),
             };
             let range = guard.this_level.table_index_by_range(&guard, &kr);
-            if range.count() > 0 {
+            if range.is_some() && range.unwrap().count() > 0 {
                 return true;
             }
         }
@@ -371,7 +371,7 @@ impl<'a, T: TableTrait<K::Cipher>, K: Kms> AddKeyContext<'a, T, K> {
                             let range = lock
                                 .this_level
                                 .table_index_by_range(&lock, self.kr);
-                            range.count() >= 10
+                            range.is_some() && range.unwrap().count() >= 10
                         }
                     };
                     if exceeds_allowed_overlap {
