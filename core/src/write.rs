@@ -331,7 +331,7 @@ mod test {
     use std::{fs::create_dir, path::PathBuf};
     use tokio::sync::oneshot;
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_write_impl() -> Result<(), MorsError> {
         console_subscriber::init();
         let mut logger = env_logger::builder();
@@ -351,7 +351,7 @@ mod test {
         let mors = builder.build().await?;
 
         let mut rng = get_rng("abcd");
-        let random = gen_random_entries(&mut rng, 100000, 1000.into());
+        let random = gen_random_entries(&mut rng, 1000000, 1000.into());
 
         let mut entries = Vec::new();
         let mut receivers = Vec::new();

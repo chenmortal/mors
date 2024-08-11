@@ -1,6 +1,10 @@
 use std::{collections::VecDeque, sync::Arc};
 
-use mors_common::{file_id::MemtableId, kv::{Entry, ValueMeta}, ts::{KeyTs, TxnTs}};
+use mors_common::{
+    file_id::MemtableId,
+    kv::{Entry, ValueMeta},
+    ts::{KeyTs, TxnTs},
+};
 use mors_traits::{
     kms::Kms,
     memtable::{MemtableBuilderTrait, MemtableError, MemtableTrait},
@@ -48,10 +52,7 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
         self.skip_list.size()
     }
 
-    fn get(
-        &self,
-        key: &KeyTs,
-    ) -> Result<Option<(TxnTs, Option<ValueMeta>)>> {
+    fn get(&self, key: &KeyTs) -> Result<Option<(TxnTs, Option<ValueMeta>)>> {
         Ok(self.get_impl(key)?)
     }
 
@@ -74,5 +75,8 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
     fn flush(&mut self) -> std::result::Result<(), MemtableError> {
         Ok(self.flush_impl()?)
     }
-    
+
+    fn delete_wal(&self) -> std::result::Result<(), MemtableError> {
+        Ok(self.wal.delete().map_err(MorsMemtableError::Wal)?)
+    }
 }

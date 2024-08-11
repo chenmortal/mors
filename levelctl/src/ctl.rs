@@ -8,12 +8,8 @@ use std::{
     time::Duration,
 };
 
-use log::info;
-use mors_common::{
-    closer::{Closer, Throttle},
-    file_id::SSTableId,
-    ts::TxnTs,
-};
+use log::{debug, info};
+use mors_common::{closer::Closer, file_id::SSTableId, ts::TxnTs};
 use mors_traits::{
     default::{WithDir, WithReadOnly, DEFAULT_DIR},
     kms::Kms,
@@ -284,7 +280,6 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
         manifest.revert(&self.dir).await?;
 
         let num_opened = Arc::new(AtomicUsize::new(0));
-        // let table_len = manifest.table_len();
         let manifest_lock = manifest.lock().await;
         let tables = manifest_lock.tables();
 
@@ -292,13 +287,12 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
             Self::watch_num_opened(num_opened.clone(), tables.len());
 
         let mut max_id: SSTableId = 0.into();
-        let mut throttle = Throttle::<MorsLevelCtlError>::new(3);
 
-        let mut tasks: HashMap<Level, Vec<JoinHandle<Option<T>>>> =
+        let mut tasks: HashMap<Level, Vec<JoinHandle<Result<Option<T>>>>> =
             HashMap::new();
-
+        debug!("opening tables by manifest");
         for (id, table) in tables.iter() {
-            let permit = throttle.acquire().await?;
+            debug!("prepare spawn task for table {}", id);
             let num_opened_clone = num_opened.clone();
             max_id = max_id.max(*id);
 
@@ -312,39 +306,38 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
             table_builder.set_dir(self.dir.clone());
             let kms_clone = kms.clone();
             let table_id = *id;
-            let future = async move {
+            debug!("spawning task for table {}", table_id);
+            let task = tokio::spawn(async move {
+                debug!("opening table {}", table_id);
                 let cipher = cipher_id
                     .map(|id| kms_clone.get_cipher(id))
                     .transpose()?
                     .flatten();
                 let table = table_builder.open(table_id, cipher).await?;
-                Ok::<Option<T>, MorsLevelCtlError>(table)
-            };
-
-            let task = tokio::spawn(async move {
-                let table = permit.do_future(future).await;
                 num_opened_clone.fetch_add(1, Ordering::SeqCst);
-                table.and_then(|x| x)
+                Ok::<Option<T>, MorsLevelCtlError>(table)
             });
             tasks
                 .entry(table.level().min(self.config.max_level))
                 .or_default()
                 .push(task);
         }
+
         drop(manifest_lock);
-        throttle.finish().await?;
-
-        watch_closer.cancel();
-        watch_closer.wait().await?;
-
+        debug!("waiting for tables to open");
         let mut handlers = Vec::new();
-        for level in 0..(self.config.max_level.to_u8() + 1) {
+        for level in 0..=self.config.max_level.to_u8() {
             let level: Level = level.into();
             match tasks.remove(&level) {
                 Some(task_vec) => {
                     let mut tables = Vec::with_capacity(task_vec.len());
                     for handle in task_vec {
-                        if let Some(t) = handle.await? {
+                        if let Some(t) = handle.await?? {
+                            debug!(
+                                "opened table {} for level {}",
+                                t.id(),
+                                level
+                            );
                             tables.push(t);
                         };
                     }
@@ -357,6 +350,9 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
                 }
             }
         }
+        debug!("all tables opened");
+        watch_closer.cancel();
+        watch_closer.wait().await?;
         Ok((max_id, handlers))
     }
     fn watch_num_opened(

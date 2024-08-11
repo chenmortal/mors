@@ -26,7 +26,6 @@ pub trait TableTrait<K: KmsCipher>:
     type TableBuilder: TableBuilderTrait<Self, K>;
     type Cache: CacheTrait;
     type TableWriter: TableWriterTrait;
-    // type Cache: CacheTrait<Self::Block, Self::TableIndexBuf>;
     fn size(&self) -> usize;
     fn stale_data_size(&self) -> usize;
     fn id(&self) -> SSTableId;
@@ -40,6 +39,7 @@ pub trait TableTrait<K: KmsCipher>:
         builder: Self::TableBuilder,
         cipher: Option<K>,
     ) -> Self::TableWriter;
+    fn delete(&self) -> Result<(), SSTableError>;
     fn iter(
         &self,
         use_cache: bool,

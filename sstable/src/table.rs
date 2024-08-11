@@ -425,8 +425,11 @@ impl<K: KmsCipher> TableTrait<K> for Table<K> {
     ) -> Self::TableWriter {
         TableWriter::new(builder, cipher)
     }
-}
 
+    fn delete(&self) -> std::result::Result<(), SSTableError> {
+        Ok(self.0.mmap.delete().map_err(MorsTableError::IoError)?)
+    }
+}
 impl<K: KmsCipher> Table<K> {
     async fn verify(&self) -> Result<()> {
         for i in 0..self.0.cheap_index.offsets_len {

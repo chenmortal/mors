@@ -50,7 +50,6 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         kms: K,
         discard: D,
     ) -> Result<()> {
-        
         let context = CompactContext::<K, D> {
             kms,
             manifest: self.manifest().clone(),
@@ -102,7 +101,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             select! {
                 _=ticker.tick() => {
                     count += 1;
-                    
+
                     if self.config().levelmax2max_compaction()
                     && task_id ==2 && count >= 200 {
                         let priority=CompactPriority::new(self.max_level(), self.target());
@@ -158,15 +157,12 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                         info!(
                             "[Compactor: {}] compact success for {}",
                             task_id,
-                            plan.this_level().level()
+                            plan.this_level().level(),
                         );
                         true
                     }
                     Err(e) => {
-                        warn!(
-                            "[Compactor: {}] compact error: {} for {:?}",
-                            task_id, e, plan
-                        );
+                        warn!("[Compactor: {}] compact error: {}", task_id, e);
                         false
                     }
                 }

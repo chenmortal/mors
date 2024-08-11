@@ -1,8 +1,6 @@
-use std::path::PathBuf;
 use mors_traits::kms::{EncryptError, KmsError};
+use std::path::PathBuf;
 use thiserror::Error;
-
-
 
 #[derive(Error, Debug)]
 pub enum MorsWalError {
@@ -15,3 +13,4 @@ pub enum MorsWalError {
     #[error("Invalid log header {0:?}, you may need to delete the file and try again.")]
     InvalidLogHeader(PathBuf),
 }
+unsafe impl Send for MorsWalError {}

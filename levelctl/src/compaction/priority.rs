@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, fmt::Display};
 
 use bytes::Bytes;
 use mors_traits::{
@@ -65,6 +65,15 @@ impl CompactTarget {
     }
     pub(crate) fn base_level(&self) -> Level {
         self.base_level
+    }
+}
+impl Display for CompactTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "base_level: {}, target_size: {:?}, file_size: {:?}",
+            self.base_level, self.target_size, self.file_size
+        )
     }
 }
 // levelTargets calculates the targets for levels in the LSM tree.

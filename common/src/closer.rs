@@ -1,5 +1,12 @@
-use std::{error::Error, sync::Arc};
+use std::{
+    error::Error,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    }, usize,
+};
 
+use log::{debug, error};
 use parking_lot::Mutex;
 use tokio::{
     select,
@@ -95,15 +102,17 @@ pub struct Closer(Arc<CloserInner>);
 #[derive(Debug)]
 struct CloserInner {
     join_handle: Mutex<Option<JoinHandle<()>>>,
-    notify: Notify,
-    _task: &'static str,
+    sem: Semaphore,
+    // need_permits: AtomicUsize,
+    task: &'static str,
 }
 impl Default for Closer {
     fn default() -> Self {
         Self(Arc::new(CloserInner {
             join_handle: Mutex::new(None),
-            notify: Notify::new(),
-            _task: Default::default(),
+            task: Default::default(),
+            sem: Semaphore::new(0),
+            // need_permits: AtomicUsize::new(0),
         }))
     }
 }
@@ -111,16 +120,25 @@ impl Closer {
     pub fn new(task: &'static str) -> Self {
         Self(Arc::new(CloserInner {
             join_handle: Mutex::new(None),
-            notify: Notify::new(),
-            _task: task,
+            task,
+            sem: Semaphore::new(0),
+            // need_permits: AtomicUsize::new(0),
         }))
     }
     pub fn cancel(&self) {
-        self.0.notify.notify_waiters();
+        debug!("cancelling for {} task",  self.0.task);
+        self.0.sem.add_permits(Semaphore::MAX_PERMITS);
+    }
+    pub fn cancel_one(&self) {
+        self.0.sem.add_permits(1);
     }
 
-    pub fn cancelled(&self) -> Notified<'_> {
-        self.0.notify.notified()
+    pub async fn cancelled(&self) {
+        // self.0.need_permits.fetch_add(1, Ordering::SeqCst);
+        let permit = self.0.sem.acquire().await;
+        if let Err(e) = permit {
+            error!("{}: cancelled: {}", self.0.task, e);
+        }
     }
 
     pub fn set_joinhandle(&self, handle: JoinHandle<()>) {
@@ -135,5 +153,23 @@ impl Closer {
             handle.await?;
         }
         Ok(())
+    }
+}
+#[cfg(test)]
+mod tests {
+    use std::{sync::Arc, time::Duration};
+
+    use tokio::sync::Semaphore;
+    #[tokio::test]
+    async fn test_sempahore() {
+        let sem = Arc::new(Semaphore::new(0));
+        let sem_c = sem.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            sem_c.add_permits(2);
+        });
+        let k = sem.acquire().await;
+
+        assert!(k.is_ok());
     }
 }

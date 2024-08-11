@@ -8,7 +8,8 @@ use mors_traits::{
     memtable::MemtableTrait,
     skip_list::SkipListTrait,
     sstable::{TableBuilderTrait, TableTrait},
-    txn::TxnManagerTrait, vlog::VlogCtlTrait,
+    txn::TxnManagerTrait,
+    vlog::VlogCtlTrait,
 };
 use tokio::{
     select,
@@ -17,7 +18,7 @@ use tokio::{
 
 use crate::core::{CoreBuilder, CoreInner};
 use crate::Result;
-impl<M, K, L, T, S, Txn,V> CoreBuilder<M, K, L, T, S, Txn,V>
+impl<M, K, L, T, S, Txn, V> CoreBuilder<M, K, L, T, S, Txn, V>
 where
     M: MemtableTrait<S, K>,
     K: Kms,
@@ -33,7 +34,7 @@ where
         mpsc::channel::<Arc<M>>(num_memtables)
     }
 }
-impl<M, K, L, T, S,V> CoreInner<M, K, L, T, S,V>
+impl<M, K, L, T, S, V> CoreInner<M, K, L, T, S, V>
 where
     M: MemtableTrait<S, K>,
     K: Kms,
@@ -55,7 +56,7 @@ where
                         if let Err(e)=this.handle_flush(memtable.clone()).await{
                             error!("flushing memtable to disk for {}, retrying",e);
                             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                            continue; 
+                            continue;
                         }
                         info!("flushed memtable {} to disk",memtable.id());
                         match this.immut_memtable().write() {
@@ -63,7 +64,10 @@ where
                                 if let Some(p) = immut_w.front() {
                                     if p.id()==memtable.id(){
                                         info!("removing memtable {} from immut_memtable",memtable.id());
-                                        immut_w.pop_front();
+                                        let memtable=immut_w.pop_front().unwrap();
+                                        if let Err(e) = memtable.delete_wal() {
+                                            error!("deleting wal for memtable {} failed: {}", memtable.id(), e);
+                                        }
                                     }
                                 }
                             }
@@ -83,7 +87,11 @@ where
     pub(crate) async fn handle_flush(&self, memtable: Arc<M>) -> Result<()> {
         let cipher = self.kms().latest_cipher()?;
         let next_id = self.levelctl().next_id();
-        debug!("building table for memtable {} with next_id {:?}", memtable.id(), next_id);
+        debug!(
+            "building table for memtable {} with next_id {:?}",
+            memtable.id(),
+            next_id
+        );
         let skip_list = memtable.skip_list();
         if let Some(t) = self
             .levelctl()
