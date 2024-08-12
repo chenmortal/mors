@@ -5,14 +5,17 @@ use mors_common::{
 };
 use mors_encrypt::cipher::AesCipher;
 use mors_sstable::table::{Table, TableBuilder};
+use mors_traits::sstable::TableTrait;
 use mors_traits::{default::WithDir, sstable::TableBuilderTrait};
 use mors_traits::{
     iter::{CacheIter, CacheIterator, IterError, KvCacheIter},
     sstable::SSTableError,
 };
+use proptest::prelude::ProptestConfig;
+use proptest::proptest;
 use std::{
-    fs::create_dir,
-    path::PathBuf,
+    fs::{create_dir, remove_dir_all},
+    path::{Path, PathBuf},
     result::Result,
     sync::{atomic::AtomicU32, Arc},
 };
@@ -33,14 +36,64 @@ async fn test_build_l0() -> Result<(), SSTableError> {
     builder.set_block_size(4 * 1024);
     let test_dir = "./tests/test_data/";
     let dir = PathBuf::from(test_dir);
-    if !dir.exists() {
-        create_dir(&dir).unwrap();
+    if dir.exists() {
+        remove_dir_all(&dir).unwrap();
     }
+    create_dir(&dir).unwrap();
     builder.set_dir(PathBuf::from(test_dir));
-    let iter = SeqIter::new(10000, "k");
+    let iter = SeqIter::new(9999, "k");
     let next_id = Arc::new(AtomicU32::new(1));
-    let table = builder.build_l0(iter, next_id, None).await?;
+    let table = builder.build_l0(iter, next_id, None).await?.unwrap();
+
+    let mut table_iter = table.iter(false);
+    let mut iter = SeqIter::new(9999, "k");
+    while iter.next().unwrap() {
+        let n = table_iter.next();
+        assert!(n.is_ok());
+        assert!(n.unwrap());
+        assert_eq!(iter.key(), table_iter.key());
+        assert_eq!(iter.value(), table_iter.value());
+    }
+    remove_dir_all(dir).unwrap();
     Ok(())
+}
+async fn build_table(
+    dir: &Path,
+    count: u32,
+    prefix: &str,
+) -> Result<TestTable, SSTableError> {
+    let mut builder = TestTableBuilder::default();
+    builder.set_block_size(4 * 1024);
+    builder.set_dir(dir.to_path_buf());
+    let iter = SeqIter::new(count, prefix);
+    let next_id = Arc::new(AtomicU32::new(1));
+    let table = builder.build_l0(iter, next_id, None).await?.unwrap();
+    Ok(table)
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(999))]
+    #[test]
+    fn test_table_iter(count in 1..1000u32) {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(test_iter(count));
+    }
+}
+
+async fn test_iter(count: u32) {
+    tempfile::tempfile().unwrap();
+    let tempdir = tempfile::tempdir().unwrap();
+    let table = build_table(tempdir.path(), count, "key").await.unwrap();
+    let mut table_iter = table.iter(false);
+    let mut iter = SeqIter::new(count, "key");
+    while iter.next().unwrap() {
+        let n = table_iter.next();
+        assert!(n.is_ok());
+        assert!(n.unwrap());
+        assert_eq!(iter.key(), table_iter.key());
+        assert_eq!(iter.value(), table_iter.value());
+    }
+    tempdir.close().unwrap();
 }
 impl SeqIter {
     pub fn new(count: u32, prefix: &str) -> Self {
@@ -100,7 +153,7 @@ impl KvCacheIter<ValueMeta> for SeqIter {
 fn generate_kv(count: u32, prefix: &str) -> Vec<(KeyTs, ValueMeta)> {
     let mut kv = Vec::with_capacity(count as usize);
     for i in 0..count {
-        let k = prefix.to_string() + &format!("{:04}", i);
+        let k = prefix.to_string() + &format!("{:06}", i);
         let key = KeyTs::new(k.into(), 0.into());
         let v = format!("{}", i);
         let mut value = ValueMeta::default();
@@ -111,4 +164,3 @@ fn generate_kv(count: u32, prefix: &str) -> Vec<(KeyTs, ValueMeta)> {
     }
     kv
 }
-

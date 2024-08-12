@@ -157,23 +157,22 @@ impl<K: KmsCipher> TableBuilderTrait<Table<K>, K> for TableBuilder<K> {
     fn table_size(&self) -> usize {
         self.table_size
     }
-
-    fn set_block_size(&mut self, size: usize) -> &mut Self {
-        self.block_size = size;
-        self
-    }
 }
 impl<K: KmsCipher> TableBuilder<K> {
-    pub(crate) fn block_size(&self) -> usize {
+    pub fn block_size(&self) -> usize {
         self.block_size
     }
-    pub(crate) fn checksum_algo(&self) -> checksum::Algorithm {
+    pub fn set_block_size(&mut self, block_size: usize) -> &mut Self {
+        self.block_size = block_size;
+        self
+    }
+    pub fn checksum_algo(&self) -> checksum::Algorithm {
         self.checksum_algo
     }
-    pub(crate) fn compression(&self) -> CompressionType {
+    pub fn compression(&self) -> CompressionType {
         self.compression
     }
-    pub(crate) fn table_capacity(&self) -> usize {
+    pub fn table_capacity(&self) -> usize {
         self.table_capacity
     }
     pub(crate) fn create_bloom(&self, key_hashes: &[u32]) -> Option<Bloom> {

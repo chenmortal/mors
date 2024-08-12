@@ -51,7 +51,6 @@ pub trait TableBuilderTrait<T: TableTrait<K>, K: KmsCipher>:
     fn set_compression(&mut self, compression: CompressionType) -> &mut Self;
     fn set_cache(&mut self, cache: T::Cache) -> &mut Self;
     fn set_table_size(&mut self, size: usize) -> &mut Self;
-    fn set_block_size(&mut self, size: usize) -> &mut Self;
     fn table_size(&self) -> usize;
     fn open(
         &self,
