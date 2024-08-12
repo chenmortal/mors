@@ -190,7 +190,9 @@ impl ValueMeta {
         }
         None
     }
-
+    pub fn value(&self) -> &Bytes {
+        &self.value
+    }
     pub fn set_value(&mut self, value: Bytes) {
         self.value = value;
     }
@@ -203,17 +205,20 @@ impl ValueMeta {
         }
         self.expires_at <= PhyTs::now().unwrap()
     }
-    pub fn value(&self) -> &Bytes {
-        &self.value
-    }
     pub fn expires_at(&self) -> PhyTs {
         self.expires_at
     }
     pub fn user_meta(&self) -> u8 {
         self.user_meta
     }
+    pub fn set_user_meta(&mut self, user_meta: u8) {
+        self.user_meta = user_meta;
+    }
     pub fn meta(&self) -> Meta {
         self.meta
+    }
+    pub fn set_meta(&mut self, meta: Meta) {
+        self.meta = meta;
     }
 }
 #[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

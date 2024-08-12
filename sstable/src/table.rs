@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -15,7 +16,8 @@ use mors_common::ts::{KeyTs, TxnTs};
 use mors_traits::cache::BlockCacheKey;
 use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
 use mors_traits::iter::{
-    DoubleEndedCacheIterator, KvCacheIterator, KvDoubleEndedCacheIter,
+    CacheIterator, DoubleEndedCacheIterator, KvCacheIter, KvCacheIterator,
+    KvDoubleEndedCacheIter,
 };
 use mors_traits::kms::KmsCipher;
 use mors_traits::sstable::{
@@ -54,7 +56,7 @@ impl Default for ChecksumVerificationMode {
 }
 #[derive(Clone)]
 
-pub struct TableBuilder {
+pub struct TableBuilder<K: KmsCipher> {
     read_only: bool,
     dir: PathBuf,
     table_size: usize,
@@ -73,8 +75,9 @@ pub struct TableBuilder {
 
     zstd_compression_level: i32,
     cache: Option<Cache>,
+    k: PhantomData<K>,
 }
-impl Default for TableBuilder {
+impl<K: KmsCipher> Default for TableBuilder<K> {
     fn default() -> Self {
         Self {
             table_size: 2 << 20,
@@ -88,10 +91,11 @@ impl Default for TableBuilder {
             read_only: false,
             dir: PathBuf::from(DEFAULT_DIR),
             cache: None,
+            k: PhantomData,
         }
     }
 }
-impl WithDir for TableBuilder {
+impl<K: KmsCipher> WithDir for TableBuilder<K> {
     fn set_dir(&mut self, dir: PathBuf) -> &mut Self {
         self.dir = dir;
         self
@@ -101,7 +105,7 @@ impl WithDir for TableBuilder {
         &self.dir
     }
 }
-impl WithReadOnly for TableBuilder {
+impl<K: KmsCipher> WithReadOnly for TableBuilder<K> {
     fn set_read_only(&mut self, read_only: bool) -> &mut Self {
         self.read_only = read_only;
         self
@@ -111,7 +115,7 @@ impl WithReadOnly for TableBuilder {
         self.read_only
     }
 }
-impl<K: KmsCipher> TableBuilderTrait<Table<K>, K> for TableBuilder {
+impl<K: KmsCipher> TableBuilderTrait<Table<K>, K> for TableBuilder<K> {
     fn set_compression(&mut self, compression: CompressionType) -> &mut Self {
         self.compression = compression;
         self
@@ -130,10 +134,7 @@ impl<K: KmsCipher> TableBuilderTrait<Table<K>, K> for TableBuilder {
         Ok(self.open_impl(id, cipher).await?)
     }
 
-    async fn build_l0<
-        I: mors_traits::iter::KvCacheIterator<V>,
-        V: Into<ValueMeta>,
-    >(
+    async fn build_l0<I: KvCacheIter<V> + CacheIterator, V: Into<ValueMeta>>(
         &self,
         iter: I,
         next_id: Arc<std::sync::atomic::AtomicU32>,
@@ -156,8 +157,13 @@ impl<K: KmsCipher> TableBuilderTrait<Table<K>, K> for TableBuilder {
     fn table_size(&self) -> usize {
         self.table_size
     }
+
+    fn set_block_size(&mut self, size: usize) -> &mut Self {
+        self.block_size = size;
+        self
+    }
 }
-impl TableBuilder {
+impl<K: KmsCipher> TableBuilder<K> {
     pub(crate) fn block_size(&self) -> usize {
         self.block_size
     }
@@ -176,7 +182,7 @@ impl TableBuilder {
         }
         None
     }
-    pub(crate) async fn open_impl<K: KmsCipher>(
+    pub(crate) async fn open_impl(
         &self,
         id: SSTableId,
         cipher: Option<K>,
@@ -239,7 +245,7 @@ impl TableBuilder {
         Ok(table.into())
     }
 
-    fn init_index<K: KmsCipher>(
+    fn init_index(
         mmap: &MmapFile,
         cipher: &Option<K>,
     ) -> Result<(TableIndexBuf, usize, usize)> {
@@ -286,7 +292,7 @@ impl TableBuilder {
 
         Ok((index_buf, read_pos, index_len))
     }
-    fn smallest_biggest<K: KmsCipher>(
+    fn smallest_biggest(
         &self,
         index_buf: &TableIndexBuf,
         mmap: &MmapFile,
@@ -373,7 +379,7 @@ impl<K: KmsCipher> TableTrait<K> for Table<K> {
     type TableIndexBuf = TableIndexBuf;
     type ErrorType = MorsTableError;
     type Cache = Cache;
-    type TableBuilder = TableBuilder;
+    type TableBuilder = TableBuilder<K>;
 
     fn size(&self) -> usize {
         self.0.table_size as usize

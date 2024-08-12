@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 use std::fs::create_dir;
 use std::marker::PhantomData;
-use std::mem::needs_drop;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;

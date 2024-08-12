@@ -15,7 +15,7 @@ use mors_common::rayon::{self, AsyncRayonHandle};
 use mors_common::ts::TxnTs;
 use mors_common::{kv::ValueMeta, ts::KeyTsBorrow};
 use mors_traits::default::WithDir;
-use mors_traits::iter::KvCacheIterator;
+use mors_traits::iter::{CacheIterator, KvCacheIter};
 use mors_traits::kms::KmsCipher;
 use mors_traits::sstable::{SSTableError, TableWriterTrait};
 use prost::Message;
@@ -29,7 +29,7 @@ use crate::pb::proto::{checksum, Checksum};
 use crate::Result;
 use crate::{block::write::BlockWriter, table::TableBuilder};
 pub struct TableWriter<K: KmsCipher> {
-    tablebuilder: TableBuilder,
+    tablebuilder: TableBuilder<K>,
     block_writer: BlockWriter,
     stale_data_size: u32,
     len_offsets: usize,
@@ -101,7 +101,7 @@ impl<K: KmsCipher> TableWriterTrait for TableWriter<K> {
     }
 }
 impl<K: KmsCipher> TableWriter<K> {
-    pub(crate) fn new(builder: TableBuilder, cipher: Option<K>) -> Self {
+    pub(crate) fn new(builder: TableBuilder<K>, cipher: Option<K>) -> Self {
         let block_writer = BlockWriter::new(builder.block_size());
         Self {
             tablebuilder: builder,
@@ -251,10 +251,9 @@ impl<K: KmsCipher> TableWriter<K> {
         self.tablebuilder.compression()
     }
 }
-impl TableBuilder {
+impl<K: KmsCipher> TableBuilder<K> {
     pub(crate) async fn build_l0_impl<
-        K: KmsCipher,
-        I: KvCacheIterator<V>,
+        I: KvCacheIter<V> + CacheIterator,
         V: Into<ValueMeta>,
     >(
         &self,

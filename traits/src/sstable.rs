@@ -51,6 +51,7 @@ pub trait TableBuilderTrait<T: TableTrait<K>, K: KmsCipher>:
     fn set_compression(&mut self, compression: CompressionType) -> &mut Self;
     fn set_cache(&mut self, cache: T::Cache) -> &mut Self;
     fn set_table_size(&mut self, size: usize) -> &mut Self;
+    fn set_block_size(&mut self, size: usize) -> &mut Self;
     fn table_size(&self) -> usize;
     fn open(
         &self,
@@ -58,7 +59,7 @@ pub trait TableBuilderTrait<T: TableTrait<K>, K: KmsCipher>:
         cipher: Option<K>,
     ) -> impl std::future::Future<Output = Result<Option<T>, SSTableError>> + Send;
 
-    fn build_l0<I: KvCacheIterator<V>, V: Into<ValueMeta>>(
+    fn build_l0<I: KvCacheIter<V> + CacheIterator + Send, V: Into<ValueMeta>>(
         &self,
         iter: I,
         next_id: Arc<AtomicU32>,
