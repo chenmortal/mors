@@ -162,7 +162,7 @@ impl<K: KmsCipher> TableWriter<K> {
         let cipher = self.cipher.clone();
         let compressed_size = self.comressed_size.clone();
         let handle = rayon::spawn(move || -> Result<BlockWriter> {
-            if let CompressionType::None = compression {
+            if !compression.is_none() {
                 finished_block
                     .set_data(compression.compress(finished_block.data())?);
             }

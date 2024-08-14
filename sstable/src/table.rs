@@ -73,7 +73,6 @@ pub struct TableBuilder<K: KmsCipher> {
     // Compression indicates the compression algorithm used for block compression.
     compression: CompressionType,
 
-    zstd_compression_level: i32,
     cache: Option<Cache>,
     k: PhantomData<K>,
 }
@@ -87,7 +86,6 @@ impl<K: KmsCipher> Default for TableBuilder<K> {
             bloom_false_positive: 0.01,
             block_size: 4 * 1024,
             compression: CompressionType::default(),
-            zstd_compression_level: 1,
             read_only: false,
             dir: PathBuf::from(DEFAULT_DIR),
             cache: None,
@@ -574,10 +572,14 @@ impl<K: KmsCipher> Table<K> {
             .map(|c| c.decrypt(raw_data_ref))
             .transpose()?
             .unwrap_or_else(|| raw_data_ref.to_vec());
-
-        let block =
-            Block::decode(self.0.id, block_index, block.offset(), data)?;
-
+        let uncompress_data = self.compression().decompress(data)?;
+        let block = Block::decode(
+            self.0.id,
+            block_index,
+            block.offset(),
+            uncompress_data,
+        )?;
+        
         match self.0.checksum_verify_mode {
             ChecksumVerificationMode::OnBlockRead
             | ChecksumVerificationMode::OnTableAndBlockRead => {
