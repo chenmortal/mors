@@ -1,17 +1,10 @@
-use std::{
-    error::Error,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    }, usize,
-};
+use std::{error::Error, sync::Arc};
 
 use log::{debug, error};
 use parking_lot::Mutex;
 use tokio::{
     select,
     sync::{
-        futures::Notified,
         mpsc::{Receiver, Sender},
         AcquireError, Notify, OwnedSemaphorePermit, Semaphore,
     },
@@ -126,7 +119,7 @@ impl Closer {
         }))
     }
     pub fn cancel(&self) {
-        debug!("cancelling for {} task",  self.0.task);
+        debug!("cancelling for {} task", self.0.task);
         self.0.sem.add_permits(Semaphore::MAX_PERMITS);
     }
     pub fn cancel_one(&self) {

@@ -282,9 +282,6 @@ impl<K: KmsCipher> TableBuilder<K> {
         writer.flush_to_disk(path).await?;
         Ok(Some(id))
     }
-    pub(crate) fn reached_capacity(&self) -> bool {
-        true
-    }
 }
 struct TableBuildData {
     block_list: Vec<BlockWriter>,
