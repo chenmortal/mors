@@ -13,7 +13,6 @@ pub struct Entry {
     key_ts: KeyTs,
     value_meta: ValueMeta,
     offset: usize,
-    header_len: usize,
     value_threshold: usize,
 }
 
@@ -29,18 +28,12 @@ impl Entry {
         Self {
             key_ts,
             offset: 0,
-            header_len: 0,
             value_meta,
             value_threshold: 0,
         }
     }
     #[inline]
-    pub fn new_ts(
-        key_ts: &[u8],
-        value: &[u8],
-        offset: usize,
-        header_len: usize,
-    ) -> Self {
+    pub fn from_log(key_ts: &[u8], value: &[u8], offset: usize) -> Self {
         let k: KeyTs = key_ts.into();
         let value_meta = ValueMeta {
             value: value.to_vec().into(),
@@ -51,7 +44,6 @@ impl Entry {
         Self {
             key_ts: k,
             offset,
-            header_len,
             value_meta,
             value_threshold: 0,
         }
@@ -79,6 +71,10 @@ impl Entry {
     pub fn meta_mut(&mut self) -> &mut Meta {
         &mut self.value_meta.meta
     }
+    pub fn set_user_meta(&mut self, user_meta: u8) -> &mut Self {
+        self.value_meta.user_meta = user_meta;
+        self
+    }
     pub fn user_meta(&self) -> u8 {
         self.value_meta.user_meta()
     }
@@ -94,9 +90,6 @@ impl Entry {
     }
     pub fn offset(&self) -> usize {
         self.offset
-    }
-    pub fn header_len(&self) -> usize {
-        self.header_len
     }
     pub fn value_threshold(&self) -> usize {
         self.value_threshold

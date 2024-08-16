@@ -9,8 +9,8 @@ version.workspace = true
 [dependencies]
 mors-traits = { workspace = true }
 mors-common = { workspace = true }
-# mors-encrypt = { workspace = true }
 thiserror = { workspace = true }
 bytes = { workspace = true }
-log = "0.4.21"
-crc32fast = "1.4.2"
+integer-encoding = { workspace = true }
+log = { workspace = true }
+crc32fast = { workspace = true }

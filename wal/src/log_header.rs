@@ -62,12 +62,12 @@ impl LogEntryHeader {
         (e, index)
     }
     pub fn decode_from<R: Read>(reader: &mut R) -> std::io::Result<Self> {
-        let meta: u8 = 0;
-        reader.read_exact(&mut [meta])?;
-        let meta = Meta::from_bits_retain(meta);
-        let user_meta: u8 = 0;
-        reader.read_exact(&mut [user_meta])?;
-
+        let mut buf = [0; 2];
+        reader.read_exact(&mut buf)?;
+        dbg!(buf[0]);
+        dbg!(buf[1]);
+        let meta = Meta::from_bits_retain(buf[0]);
+        let user_meta = buf[1];
         let key_len = reader.read_varint::<u32>()?;
         let value_len = reader.read_varint::<u32>()?;
         let expires_at = reader.read_varint::<u64>()?;

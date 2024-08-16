@@ -1,15 +1,14 @@
+use bytes::BufMut;
+use mors_common::{file_id::FileId, kv::Entry};
+use mors_traits::kms::Kms;
 use std::{
     hash::Hasher,
     io::{self, Write},
     mem,
 };
 
-use bytes::BufMut;
-use mors_common::{file_id::FileId, kv::Entry};
-use mors_traits::{kms::Kms, log_header::LogEntryHeader};
-
-use crate::LogFile;
 use crate::Result;
+use crate::{log_header::LogEntryHeader, LogFile};
 impl<F: FileId, K: Kms> LogFile<F, K> {
     pub fn set_len(&mut self, end_offset: usize) -> io::Result<()> {
         let file_size = self.mmap.file_len()? as usize;
@@ -50,6 +49,7 @@ impl<F: FileId, K: Kms> LogFile<F, K> {
             hasher: crc32fast::Hasher::new(),
         };
         let header_encode = header.encode();
+        dbg!(&header_encode);
         let header_len = hash_writer.write(&header_encode)?;
         let mut kv_buf = entry.key_ts().encode();
         kv_buf.extend_from_slice(entry.value_meta().value());

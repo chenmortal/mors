@@ -14,5 +14,9 @@ memmap2 = { workspace = true }
 thiserror = { workspace = true }
 log = "0.4.21"
 
+[dev-dependencies]
+tempfile = { workspace = true }
+mors-skip_list = { workspace = true }
+mors-encrypt = { workspace = true }
 [lints]
 workspace = true

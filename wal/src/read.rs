@@ -1,18 +1,15 @@
-use std::hash::Hasher;
-use std::io;
-use std::io::{BufRead, BufReader, Read};
-
+use crate::error::MorsWalError::{self};
+use crate::log_header::LogEntryHeader;
+use crate::LogFile;
+use crate::Result;
 use bytes::Buf;
-
 use mors_common::file_id::FileId;
 use mors_common::kv::{Entry, Meta, ValuePointer};
 use mors_common::ts::TxnTs;
 use mors_traits::kms::Kms;
-use mors_traits::log_header::LogEntryHeader;
-
-use crate::error::MorsWalError::{self};
-use crate::LogFile;
-use crate::Result;
+use std::hash::Hasher;
+use std::io;
+use std::io::{BufRead, BufReader, Read};
 pub struct LogFileIter<'a, F: FileId, K: Kms> {
     log_file: &'a LogFile<F, K>,
     record_offset: usize,
@@ -63,11 +60,10 @@ impl<'a, F: FileId, K: Kms> LogFileIter<'a, F, K> {
             .decrypt(&kv_buf, self.record_offset)?
             .unwrap_or(kv_buf);
 
-        let entry = Entry::new_ts(
+        let entry = Entry::from_log(
             &kv_buf[..key_len],
             &kv_buf[key_len..],
             self.record_offset,
-            header_len,
         );
 
         let hash = hash_reader.hasher.finalize();
@@ -123,6 +119,7 @@ impl<'a, F: FileId, K: Kms> LogFileIter<'a, F, K> {
                         if last_commit != TxnTs::default() {
                             break;
                         }
+                        dbg!(entry);
                         self.valid_end_offset = self.record_offset;
                         return Ok(Some(&self.entries_vptrs));
                     }
