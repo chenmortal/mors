@@ -18,5 +18,6 @@ log = "0.4.21"
 tempfile = { workspace = true }
 mors-skip_list = { workspace = true }
 mors-encrypt = { workspace = true }
+proptest = { workspace = true }
 [lints]
 workspace = true

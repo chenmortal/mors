@@ -64,8 +64,6 @@ impl LogEntryHeader {
     pub fn decode_from<R: Read>(reader: &mut R) -> std::io::Result<Self> {
         let mut buf = [0; 2];
         reader.read_exact(&mut buf)?;
-        dbg!(buf[0]);
-        dbg!(buf[1]);
         let meta = Meta::from_bits_retain(buf[0]);
         let user_meta = buf[1];
         let key_len = reader.read_varint::<u32>()?;

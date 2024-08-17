@@ -1,5 +1,5 @@
 use crate::error::MorsWalError::{self};
-use crate::log_header::LogEntryHeader;
+use crate::header::LogEntryHeader;
 use crate::LogFile;
 use crate::Result;
 use bytes::Buf;
@@ -60,11 +60,15 @@ impl<'a, F: FileId, K: Kms> LogFileIter<'a, F, K> {
             .decrypt(&kv_buf, self.record_offset)?
             .unwrap_or(kv_buf);
 
-        let entry = Entry::from_log(
+        let mut entry = Entry::from_log(
             &kv_buf[..key_len],
             &kv_buf[key_len..],
             self.record_offset,
         );
+        let value_meta = entry.value_meta_mut();
+        value_meta.set_meta(entry_header.meta());
+        value_meta.set_user_meta(entry_header.user_meta());
+        value_meta.set_expires_at(entry_header.expires_at());
 
         let hash = hash_reader.hasher.finalize();
         let mut crc_buf = 0_u32.to_be_bytes();
@@ -119,7 +123,7 @@ impl<'a, F: FileId, K: Kms> LogFileIter<'a, F, K> {
                         if last_commit != TxnTs::default() {
                             break;
                         }
-                        dbg!(entry);
+                        self.entries_vptrs.push((entry, v_ptr));
                         self.valid_end_offset = self.record_offset;
                         return Ok(Some(&self.entries_vptrs));
                     }

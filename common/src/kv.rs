@@ -54,6 +54,9 @@ impl Entry {
     pub fn value_meta(&self) -> &ValueMeta {
         &self.value_meta
     }
+    pub fn value_meta_mut(&mut self) -> &mut ValueMeta {
+        &mut self.value_meta
+    }
     pub fn value(&self) -> &Bytes {
         &self.value_meta.value
     }
@@ -197,6 +200,9 @@ impl ValueMeta {
             return false;
         }
         self.expires_at <= PhyTs::now().unwrap()
+    }
+    pub fn set_expires_at(&mut self, expires_at: PhyTs) {
+        self.expires_at = expires_at;
     }
     pub fn expires_at(&self) -> PhyTs {
         self.expires_at

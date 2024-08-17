@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub mod error;
-pub mod log_header;
+pub mod header;
 pub mod read;
 pub mod write;
 
