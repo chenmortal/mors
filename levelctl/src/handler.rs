@@ -174,6 +174,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandlerTables<T, K> {
             total_size += t.size();
             total_stale_size += t.stale_data_size();
         });
+        self.total_size = total_size;
+        self.total_stale_size = total_stale_size;
         if level == LEVEL0 {
             self.tables.sort_by_key(|a| a.id());
         } else {

@@ -59,22 +59,7 @@ where
                             continue;
                         }
                         info!("flushed memtable {} to disk",memtable.id());
-                        match this.immut_memtable().write() {
-                            Ok(mut immut_w) => {
-                                if let Some(p) = immut_w.front() {
-                                    if p.id()==memtable.id(){
-                                        info!("removing memtable {} from immut_memtable",memtable.id());
-                                        let memtable=immut_w.pop_front().unwrap();
-                                        if let Err(e) = memtable.delete_wal() {
-                                            error!("deleting wal for memtable {} failed: {}", memtable.id(), e);
-                                        }
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                error!("getting write lock for immut_memtable failed: {}", e);
-                            }
-                        };
+                        Self::immut_memtable_pop_front(&this).await;
                         break 'b;
                     }
                 },
@@ -83,6 +68,34 @@ where
                 }
             }
         }
+    }
+    async fn immut_memtable_pop_front(this: &Arc<Self>) {
+        match this.immut_memtable().write() {
+            Ok(mut immut_w) => {
+                if let Some(memtable) = immut_w.front() {
+                    info!(
+                        "removing memtable {} from immut_memtable",
+                        memtable.id()
+                    );
+                    let memtable = immut_w.pop_front().unwrap();
+                    drop(immut_w);
+                    if let Err(e) = memtable.delete_wal() {
+                        error!(
+                            "deleting wal for memtable {} failed: {}",
+                            memtable.id(),
+                            e
+                        );
+                    }
+                    info!(
+                        "memtable {} removed from immut_memtable",
+                        memtable.id()
+                    );
+                }
+            }
+            Err(e) => {
+                error!("getting write lock for immut_memtable failed: {}", e);
+            }
+        };
     }
     pub(crate) async fn handle_flush(&self, memtable: Arc<M>) -> Result<()> {
         let cipher = self.kms().latest_cipher()?;
