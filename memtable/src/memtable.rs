@@ -64,8 +64,6 @@ impl<T: SkipListTrait> Clone for MemtableBuilder<T> {
 // opt.maxBatchSize = (15 * opt.MemTableSize) / 100
 // opt.maxBatchCount = opt.maxBatchSize / int64(skl.MaxNodeSize)
 impl<T: SkipListTrait> MemtableBuilder<T>
-// where
-//     MorsMemtableError: From<<T as SkipListTrait>::ErrorType>,
 {
     fn arena_size(&self) -> usize {
         self.memtable_size + 2 * self.max_batch_size()
@@ -73,6 +71,7 @@ impl<T: SkipListTrait> MemtableBuilder<T>
     fn max_batch_size(&self) -> usize {
         (15 * self.memtable_size) / 100
     }
+    #[allow(dead_code)]
     fn max_batch_count(&self) -> usize {
         self.max_batch_size() / T::MAX_NODE_SIZE
     }

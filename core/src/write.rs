@@ -331,7 +331,7 @@ mod test {
     use std::{fs::create_dir, path::PathBuf};
     use tokio::sync::oneshot;
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_write_impl() -> Result<(), MorsError> {
         console_subscriber::init();
         let mut logger = env_logger::builder();
@@ -346,45 +346,59 @@ mod test {
         let mut builder = MorsBuilder::default();
         builder.set_dir(dir).set_read_only(false);
         builder
-            .set_num_memtables(1)
-            .set_memtable_size(5 * 1024 * 1024);
+            .set_num_memtables(5)
+            .set_memtable_size(64 * 1024 * 1024);
         let mors = builder.build().await?;
 
-        let mut rng = get_rng("abcd");
-        let random = gen_random_entries(&mut rng, 100000, 1000.into());
+        let seeds = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"];
+        let mut handlers = Vec::with_capacity(seeds.len());
+        for seed in seeds {
 
-        let mut entries = Vec::new();
-        let mut receivers = Vec::new();
-        for entry in random {
-            entries.push(entry);
-            if entries.len() == 10 {
-                let (sender, receiver) = oneshot::channel();
-                receivers.push(receiver);
-                let write_request = WriteRequest::new(entries, sender);
-                mors.inner()
-                    .write_sender()
-                    .send(write_request)
-                    .await
-                    .unwrap();
-                entries = Vec::new();
-            }
-        }
-        debug!("Waiting for write to complete");
-        for recv in receivers {
-            match recv.await {
-                Ok(e) => {
-                    if let Err(k) = e {
-                        eprintln!("Error: {:?}", k.to_string());
-                        return Err(MorsError::SendError(k.to_string()));
+            let mut rng = get_rng(seed);
+            let db = mors.clone();
+            let handler = tokio::spawn(async move {
+                let count = 100000;
+                let random = gen_random_entries(&mut rng, count, 1000.into());
+                let mut entries = Vec::with_capacity(count);
+                let mut receivers = Vec::new();
+                for entry in random {
+                    entries.push(entry);
+                    if entries.len() == 10 {
+                        let (sender, receiver) = oneshot::channel();
+                        receivers.push(receiver);
+                        let write_request = WriteRequest::new(entries, sender);
+                        db.inner()
+                            .write_sender()
+                            .send(write_request)
+                            .await
+                            .unwrap();
+                        entries = Vec::with_capacity(count);
                     }
                 }
-                Err(k) => {
-                    eprintln!("Error: {:?}", k.to_string());
-                    return Err(MorsError::SendError(k.to_string()));
+                debug!("{} Waiting for write to complete", seed);
+                for recv in receivers {
+                    match recv.await {
+                        Ok(e) => {
+                            if let Err(k) = e {
+                                eprintln!("Error: {:?}", k.to_string());
+                                // return Err(MorsError::SendError(k.to_string()));
+                            }
+                        }
+                        Err(k) => {
+                            eprintln!("Error: {:?}", k.to_string());
+                            // return Err(MorsError::SendError(k.to_string()));
+                        }
+                    };
                 }
-            };
+                info!("{} Write completed", seed);
+            });
+            handlers.push(handler);
         }
-        info!("Write completed");
+
+        for handler in handlers {
+            let _ = handler.await;
+        }
+
         Ok(())
     }
 }

@@ -28,9 +28,13 @@ prost-build = { workspace = true }
 flatc-rust = { workspace = true }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["full", "tracing"] }
+tempfile = { workspace = true }
 rand = { workspace = true }
 sha2 = { workspace = true }
 mors-encrypt = { workspace = true }
+env_logger = { workspace = true }
+proptest = { workspace = true }
 [lints]
 workspace = true
 

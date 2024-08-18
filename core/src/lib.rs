@@ -23,6 +23,7 @@ type MorsLevelCtl = LevelCtl<Table<AesCipher>, MorsKms>;
 type MorsTable = Table<AesCipher>;
 type MorsLevelCtlType = LevelCtl<MorsTable, MorsKms>;
 type MorsVlog = VlogCtl<MorsKms>;
+#[derive(Clone)]
 pub struct Mors {
     core: Core<
         MorsMemtable,

@@ -340,6 +340,7 @@ mod test {
     use super::*;
 
     #[derive(Debug)]
+    #[allow(dead_code)]
     pub(crate) enum TestIterError {
         TestError,
     }
@@ -351,6 +352,7 @@ mod test {
     }
 
     impl TestIter {
+        #[allow(dead_code)]
         pub(crate) fn new(len: usize) -> Self {
             Self {
                 data: None,

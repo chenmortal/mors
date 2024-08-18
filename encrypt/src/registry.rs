@@ -56,9 +56,6 @@ impl Kms for MorsKms {
         };
         Ok(None)
     }
-
-    
-
     type KmsBuilder = MorsKmsBuilder;
 }
 

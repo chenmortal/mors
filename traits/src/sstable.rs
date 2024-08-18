@@ -26,7 +26,6 @@ pub trait TableTrait<K: KmsCipher>:
     type TableBuilder: TableBuilderTrait<Self, K>;
     type Cache: CacheTrait;
     type TableWriter: TableWriterTrait;
-    // type Cache: CacheTrait<Self::Block, Self::TableIndexBuf>;
     fn size(&self) -> usize;
     fn stale_data_size(&self) -> usize;
     fn id(&self) -> SSTableId;
@@ -40,6 +39,7 @@ pub trait TableTrait<K: KmsCipher>:
         builder: Self::TableBuilder,
         cipher: Option<K>,
     ) -> Self::TableWriter;
+    fn delete(&self) -> Result<(), SSTableError>;
     fn iter(
         &self,
         use_cache: bool,
@@ -58,7 +58,7 @@ pub trait TableBuilderTrait<T: TableTrait<K>, K: KmsCipher>:
         cipher: Option<K>,
     ) -> impl std::future::Future<Output = Result<Option<T>, SSTableError>> + Send;
 
-    fn build_l0<I: KvCacheIterator<V>, V: Into<ValueMeta>>(
+    fn build_l0<I: KvCacheIter<V> + CacheIterator + Send, V: Into<ValueMeta>>(
         &self,
         iter: I,
         next_id: Arc<AtomicU32>,

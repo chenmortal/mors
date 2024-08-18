@@ -1,5 +1,7 @@
 use crate::default::{WithDir, WithReadOnly};
+use crate::vlog::DiscardTrait;
 use crate::{kms::Kms, sstable::TableTrait};
+use mors_common::closer::Closer;
 use mors_common::ts::TxnTs;
 use std::error::Error;
 use std::sync::atomic::AtomicU32;
@@ -11,7 +13,7 @@ use std::{
 use thiserror::Error;
 
 pub trait LevelCtlTrait<T: TableTrait<K::Cipher>, K: Kms>:
-    Sized + Send + Sync + 'static
+    Sized + Send + Sync + Clone + 'static
 {
     type ErrorType: Into<LevelCtlError>;
     type LevelCtlBuilder: LevelCtlBuilderTrait<Self, T, K>;
@@ -22,6 +24,12 @@ pub trait LevelCtlTrait<T: TableTrait<K::Cipher>, K: Kms>:
         &self,
         table: T,
     ) -> impl std::future::Future<Output = Result<(), LevelCtlError>> + Send;
+    fn spawn_compact<D: DiscardTrait>(
+        self,
+        closer: Closer,
+        kms: K,
+        discard: D,
+    ) -> impl std::future::Future<Output = ()> + Send;
 }
 pub trait LevelCtlBuilderTrait<
     L: LevelCtlTrait<T, K>,
@@ -48,9 +56,7 @@ impl Display for LevelCtlError {
 }
 unsafe impl Send for LevelCtlError {}
 pub const LEVEL0: Level = Level(0);
-#[derive(
-    Debug,  Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Level(u8);
 impl From<u8> for Level {
     fn from(value: u8) -> Self {

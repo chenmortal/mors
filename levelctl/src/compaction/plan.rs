@@ -204,7 +204,15 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         let index_range = lock
             .next_level
             .table_index_by_range(&lock, &plan.this_range);
-        plan.bottom = lock.next_level.tables()[index_range].to_vec();
+
+        match index_range {
+            Some(range) => {
+                plan.bottom = lock.next_level.tables()[range].to_vec();
+            }
+            None => {
+                plan.bottom.clear();
+            }
+        }
 
         if plan.bottom.is_empty() {
             plan.next_range = plan.this_range.clone();
@@ -304,7 +312,14 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             let index_range = lock
                 .next_level
                 .table_index_by_range(&lock, &plan.this_range);
-            plan.bottom = lock.next_level.tables()[index_range].to_vec();
+            match index_range {
+                Some(range) => {
+                    plan.bottom = lock.next_level.tables()[range].to_vec();
+                }
+                None => {
+                    plan.bottom.clear();
+                }
+            }
 
             if plan.bottom.is_empty() {
                 plan.next_range = plan.this_range.clone();
@@ -494,18 +509,26 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandlerTables<T, K> {
         &self,
         _lock: &CompactPlanReadGuard<T, K>,
         kr: &KeyTsRange,
-    ) -> RangeInclusive<usize> {
+    ) -> Option<RangeInclusive<usize>> {
         if kr.left.is_empty() || kr.right.is_empty() {
-            return 0..=0;
+            return None;
         }
+        let table_len = self.tables().len();
         let left_index = self
             .tables()
             .binary_search_by(|t| t.biggest().cmp(&kr.left))
             .unwrap_or_else(|i| i);
+        if left_index >= table_len {
+            return None;
+        }
+
         let right_index = self
             .tables()
             .binary_search_by(|t| t.smallest().cmp(&kr.right))
             .unwrap_or_else(|i| i); // if t.smallest==kr.right, so need this table.
-        left_index..=right_index
+        if right_index >= table_len {
+            return None;
+        }
+        Some(left_index..=right_index)
     }
 }

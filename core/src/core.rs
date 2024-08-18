@@ -7,6 +7,7 @@ use std::sync::RwLock;
 
 use crate::write::WriteRequest;
 use crate::Result;
+use log::info;
 use mors_common::closer::Closer;
 use mors_common::lock::DBLockGuard;
 use mors_common::lock::DBLockGuardBuilder;
@@ -225,13 +226,24 @@ impl<
 
         let kms = self.kms.build()?;
         let immut_memtable = self.memtable.open_exist(kms.clone())?;
-
+        info!("open {} immut_memtable", immut_memtable.len());
+        
         let mut memtable = None;
         if !self.memtable.read_only() {
             memtable =
                 Arc::new(RwLock::new(self.memtable.build(kms.clone())?)).into();
         }
+        let discard = self.vlogctl.build_discard()?;
         let levelctl = self.levelctl.build(kms.clone()).await?;
+
+        let compact_task = Closer::new("levectl compact");
+        compact_task.set_joinhandle(tokio::spawn(
+            levelctl.clone().spawn_compact(
+                compact_task.clone(),
+                kms.clone(),
+                discard,
+            ),
+        ));
 
         let mut max_version = levelctl.max_version();
         immut_memtable.iter().for_each(|m| {

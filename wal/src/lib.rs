@@ -1,21 +1,15 @@
+use crate::error::MorsWalError;
+use bytes::{Buf, BufMut};
+use mors_common::file_id::FileId;
+use mors_common::mmap::{MmapFile, MmapFileBuilder};
+use mors_traits::kms::{CipherKeyId, Kms, KmsCipher};
 use std::fs::remove_file;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use bytes::{Buf, BufMut};
-
-use mors_common::mmap::{MmapFile, MmapFileBuilder};
-// use mors_encrypt::cipher::AesCipher;
-// use mors_encrypt::registry::MorsKms;
-
-// use mors_encrypt::NONCE_SIZE;
-use mors_common::file_id::FileId;
-use mors_traits::kms::{CipherKeyId, Kms, KmsCipher};
-
-use crate::error::MorsWalError;
-
 pub mod error;
+pub mod header;
 pub mod read;
 pub mod write;
 

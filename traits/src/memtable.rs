@@ -1,13 +1,13 @@
 use crate::default::{WithDir, WithReadOnly};
 use crate::kms::Kms;
 use crate::skip_list::SkipListTrait;
+use mors_common::file_id::MemtableId;
+use mors_common::kv::{Entry, ValueMeta};
+use mors_common::ts::{KeyTs, TxnTs};
 use std::collections::VecDeque;
 use std::error::Error;
 use std::fmt::Display;
 use std::sync::Arc;
-use mors_common::file_id::MemtableId;
-use mors_common::kv::{Entry, ValueMeta};
-use mors_common::ts::{KeyTs, TxnTs};
 use thiserror::Error;
 
 pub trait MemtableTrait<T: SkipListTrait, K: Kms>:
@@ -26,6 +26,7 @@ pub trait MemtableTrait<T: SkipListTrait, K: Kms>:
     fn max_version(&self) -> TxnTs;
     fn skip_list(&self) -> T;
     fn flush(&mut self) -> Result<(), MemtableError>;
+    fn delete_wal(&self) -> Result<(), MemtableError>;
 }
 pub trait MemtableBuilderTrait<
     M: MemtableTrait<T, K> + Sized,

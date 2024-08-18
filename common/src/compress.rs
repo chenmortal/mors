@@ -61,5 +61,5 @@ pub enum CompressError {
     #[error("Snappy Error: {0}")]
     SnappyError(#[from] snap::Error),
     #[error("ZSTD Error: {0}")]
-    IoError(#[from] std::io::Error),
+    ZstdError(#[from] std::io::Error),
 }
