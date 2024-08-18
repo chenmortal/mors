@@ -2,5 +2,5 @@ mod compaction;
 pub mod ctl;
 mod error;
 mod handler;
-mod manifest;
+pub mod manifest;
 mod write;

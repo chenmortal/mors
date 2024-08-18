@@ -328,6 +328,7 @@ mod test {
     use log::LevelFilter;
     use log::{debug, info};
     use mors_common::test::{gen_random_entries, get_rng};
+    use mors_traits::default::DEFAULT_DIR;
     use std::{fs::create_dir, path::PathBuf};
     use tokio::sync::oneshot;
 
@@ -338,7 +339,7 @@ mod test {
         logger.filter_level(LevelFilter::Trace);
         logger.init();
 
-        let path = "../data/";
+        let path = DEFAULT_DIR;
         let dir = PathBuf::from(path);
         if !dir.exists() {
             create_dir(&dir).unwrap();
@@ -353,7 +354,6 @@ mod test {
         let seeds = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"];
         let mut handlers = Vec::with_capacity(seeds.len());
         for seed in seeds {
-
             let mut rng = get_rng(seed);
             let db = mors.clone();
             let handler = tokio::spawn(async move {

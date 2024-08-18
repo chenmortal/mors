@@ -1,9 +1,8 @@
-use core::MorsBuilder;
 use std::{fs::create_dir, path::PathBuf};
 
 use log::LevelFilter;
-
-use core::Result;
+use morsdb::MorsBuilder;
+use morsdb::Result;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() {

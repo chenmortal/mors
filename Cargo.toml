@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "cmd",
     "common",
     "core",
     "encrypt",
@@ -30,7 +31,7 @@ large_futures = "warn"
 unused_imports = "deny"
 
 [workspace.dependencies]
-mors-core = { path = "core", version = "0.1" }
+morsdb = { path = "core", version = "0.1" }
 mors-memtable = { path = "memtable", version = "0.1" }
 mors-sstable = { path = "sstable", version = "0.1" }
 mors-common = { path = "common", version = "0.1" }
@@ -74,6 +75,7 @@ scopeguard = "1.2.0"
 smallvec = "1.11.1"
 snap = "1.1.0"
 sha2 = "0.10"
+tabled = "0.16.0"
 tempfile = "3.12.0"
 thiserror = "1"
 tokio = { version = "1", features = ["full"] }
