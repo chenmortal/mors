@@ -44,6 +44,7 @@ pub trait TableTrait<K: KmsCipher>:
         &self,
         use_cache: bool,
     ) -> impl KvCacheIterator<ValueMeta> + 'static;
+    fn may_contain(&self, key: &[u8]) -> bool;
 }
 pub trait TableBuilderTrait<T: TableTrait<K>, K: KmsCipher>:
     Default + Clone + Send + Sync + 'static + WithDir + WithReadOnly

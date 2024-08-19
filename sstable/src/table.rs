@@ -7,7 +7,7 @@ use std::time::SystemTime;
 use bytes::Buf;
 use log::error;
 use memmap2::Advice;
-use mors_common::bloom::Bloom;
+use mors_common::bloom::{Bloom, BloomBorrow};
 use mors_common::compress::CompressionType;
 use mors_common::file_id::{FileId, SSTableId};
 use mors_common::kv::ValueMeta;
@@ -432,6 +432,23 @@ impl<K: KmsCipher> TableTrait<K> for Table<K> {
     fn delete(&self) -> std::result::Result<(), SSTableError> {
         Ok(self.0.mmap.delete().map_err(MorsTableError::IoError)?)
     }
+
+    fn may_contain(&self, key: &[u8]) -> bool {
+        if self.0.cheap_index.bloom_filter_len == 0 {
+            return true;
+        }
+        match self.get_index() {
+            Ok(index) => {
+                let bloom = index.bloom_filter().unwrap();
+                let bloom: BloomBorrow = bloom.as_ref().into();
+                bloom.may_contain_key(key)
+            }
+            Err(e) => {
+                error!("{} can't get index {}", self.id(), e);
+                true
+            }
+        }
+    }
 }
 impl<K: KmsCipher> Table<K> {
     async fn verify(&self) -> Result<()> {
@@ -579,7 +596,7 @@ impl<K: KmsCipher> Table<K> {
             block.offset(),
             uncompress_data,
         )?;
-        
+
         match self.0.checksum_verify_mode {
             ChecksumVerificationMode::OnBlockRead
             | ChecksumVerificationMode::OnTableAndBlockRead => {
