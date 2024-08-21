@@ -11,13 +11,31 @@ use crate::error::MorsLevelCtlError;
 use crate::handler::LevelHandler;
 type Result<T> = std::result::Result<T, MorsLevelCtlError>;
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
-    pub(crate) fn get_impl(&self, key: &KeyTs) {
+    pub(crate) async fn get_impl(
+        &self,
+        key: &KeyTs,
+    ) -> Result<Option<(TxnTs, ValueMeta)>> {
         let mut max_txn = TxnTs::default();
-        // let mut max_value = None;
+        let mut max_value = None;
         for level in 0..=self.max_level().to_u8() {
             let level: Level = level.into();
             let handler = self.handler(level).unwrap();
+            if let Some((txn, value)) = handler.get(key).await? {
+                if txn == key.txn_ts() {
+                    return Ok(Some((txn, value)));
+                }
+                if txn > max_txn {
+                    max_txn = txn;
+                    max_value = value.into();
+                }
+            };
         }
+        if let Some(value) = max_value {
+            if max_txn != TxnTs::default() {
+                return Ok(Some((max_txn, value)));
+            }
+        }
+        Ok(None)
     }
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
@@ -60,9 +78,10 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
                     }
                 };
             }
-            if max_txn != TxnTs::default() && max_value.is_some() {
-                let value = max_value.unwrap();
-                return Ok(Some((max_txn, value)));
+            if let Some(value) = max_value {
+                if max_txn != TxnTs::default() {
+                    return Ok(Some((max_txn, value)));
+                }
             }
         };
         Ok(None)

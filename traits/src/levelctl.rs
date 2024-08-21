@@ -2,7 +2,8 @@ use crate::default::{WithDir, WithReadOnly};
 use crate::vlog::DiscardTrait;
 use crate::{kms::Kms, sstable::TableTrait};
 use mors_common::closer::Closer;
-use mors_common::ts::TxnTs;
+use mors_common::kv::ValueMeta;
+use mors_common::ts::{KeyTs, TxnTs};
 use std::error::Error;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
@@ -24,6 +25,12 @@ pub trait LevelCtlTrait<T: TableTrait<K::Cipher>, K: Kms>:
         &self,
         table: T,
     ) -> impl std::future::Future<Output = Result<(), LevelCtlError>> + Send;
+    fn get(
+        &self,
+        key: &KeyTs,
+    ) -> impl std::future::Future<
+        Output = Result<Option<(TxnTs, ValueMeta)>, LevelCtlError>,
+    > + Send;
     fn spawn_compact<D: DiscardTrait>(
         self,
         closer: Closer,

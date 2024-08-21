@@ -9,7 +9,12 @@ use std::{
 };
 
 use log::{debug, info};
-use mors_common::{closer::Closer, file_id::SSTableId, ts::TxnTs};
+use mors_common::{
+    closer::Closer,
+    file_id::SSTableId,
+    kv::ValueMeta,
+    ts::{KeyTs, TxnTs},
+};
 use mors_traits::{
     default::{WithDir, WithReadOnly, DEFAULT_DIR},
     kms::Kms,
@@ -69,7 +74,12 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlTrait<T, K> for LevelCtl<T, K> {
     ) -> std::result::Result<(), LevelCtlError> {
         Ok(self.push_level0_impl(table).await?)
     }
-
+    async fn get(
+        &self,
+        key: &KeyTs,
+    ) -> std::result::Result<Option<(TxnTs, ValueMeta)>, LevelCtlError> {
+        Ok(self.get_impl(key).await?)
+    }
     async fn spawn_compact<D: mors_traits::vlog::DiscardTrait>(
         self,
         closer: Closer,
