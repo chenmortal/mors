@@ -29,7 +29,7 @@ pub trait LevelCtlTrait<T: TableTrait<K::Cipher>, K: Kms>:
         &self,
         key: &KeyTs,
     ) -> impl std::future::Future<
-        Output = Result<Option<(TxnTs, ValueMeta)>, LevelCtlError>,
+        Output = Result<Option<(TxnTs, Option<ValueMeta>)>, LevelCtlError>,
     > + Send;
     fn spawn_compact<D: DiscardTrait>(
         self,

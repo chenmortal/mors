@@ -77,7 +77,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlTrait<T, K> for LevelCtl<T, K> {
     async fn get(
         &self,
         key: &KeyTs,
-    ) -> std::result::Result<Option<(TxnTs, ValueMeta)>, LevelCtlError> {
+    ) -> std::result::Result<Option<(TxnTs, Option<ValueMeta>)>, LevelCtlError>
+    {
         Ok(self.get_impl(key).await?)
     }
     async fn spawn_compact<D: mors_traits::vlog::DiscardTrait>(

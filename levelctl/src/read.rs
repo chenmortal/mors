@@ -14,7 +14,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     pub(crate) async fn get_impl(
         &self,
         key: &KeyTs,
-    ) -> Result<Option<(TxnTs, ValueMeta)>> {
+    ) -> Result<Option<(TxnTs, Option<ValueMeta>)>> {
         let mut max_txn = TxnTs::default();
         let mut max_value = None;
         for level in 0..=self.max_level().to_u8() {
@@ -26,20 +26,21 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                 }
                 if txn > max_txn {
                     max_txn = txn;
-                    max_value = value.into();
+                    max_value = value;
                 }
             };
         }
-        if let Some(value) = max_value {
-            if max_txn != TxnTs::default() {
-                return Ok(Some((max_txn, value)));
-            }
+        if max_txn != TxnTs::default() {
+            return Ok(Some((max_txn, max_value)));
         }
         Ok(None)
     }
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
-    async fn get(&self, key: &KeyTs) -> Result<Option<(TxnTs, ValueMeta)>> {
+    async fn get(
+        &self,
+        key: &KeyTs,
+    ) -> Result<Option<(TxnTs, Option<ValueMeta>)>> {
         if let Some(tables) = self.seek_table(key) {
             let mut tasks = Vec::with_capacity(tables.len());
             for table in tables {
@@ -52,10 +53,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
                             if seek {
                                 if let Some(seek_key) = iter.key() {
                                     if k.key() == seek_key.key() {
-                                        if let Some(v) = iter.value() {
-                                            let txn = seek_key.txn_ts();
-                                            return Some((txn, v));
-                                        }
+                                        let txn = seek_key.txn_ts();
+                                        return Some((txn, iter.value()));
                                     }
                                 }
                             }
@@ -74,14 +73,12 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
                 if let Some((txn, value)) = task.await? {
                     if txn > max_txn {
                         max_txn = txn;
-                        max_value = value.into();
+                        max_value = value;
                     }
                 };
             }
-            if let Some(value) = max_value {
-                if max_txn != TxnTs::default() {
-                    return Ok(Some((max_txn, value)));
-                }
+            if max_txn != TxnTs::default() {
+                return Ok(Some((max_txn, max_value)));
             }
         };
         Ok(None)
