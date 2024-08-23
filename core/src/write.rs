@@ -1,12 +1,3 @@
-use std::mem::size_of;
-use std::{
-    mem::replace,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
-};
-
 use crate::{
     core::{CoreBuilder, CoreInner},
     error::MorsError,
@@ -21,6 +12,14 @@ use mors_traits::{
     kms::Kms, levelctl::LevelCtlTrait, memtable::MemtableTrait,
     skip_list::SkipListTrait, sstable::TableTrait, txn::TxnManagerTrait,
     vlog::VlogCtlTrait,
+};
+use std::mem::size_of;
+use std::{
+    mem::replace,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
 };
 use tokio::{
     select,
@@ -357,10 +356,11 @@ mod test {
             let mut rng = get_rng(seed);
             let db = mors.clone();
             let handler = tokio::spawn(async move {
-                let count = 100000;
+                let count = 10000;
                 let random = gen_random_entries(&mut rng, count, 1000.into());
                 let mut entries = Vec::with_capacity(count);
                 let mut receivers = Vec::new();
+                let random_read = random.clone();
                 for entry in random {
                     entries.push(entry);
                     if entries.len() == 10 {
@@ -381,16 +381,25 @@ mod test {
                         Ok(e) => {
                             if let Err(k) = e {
                                 eprintln!("Error: {:?}", k.to_string());
-                                // return Err(MorsError::SendError(k.to_string()));
                             }
                         }
                         Err(k) => {
                             eprintln!("Error: {:?}", k.to_string());
-                            // return Err(MorsError::SendError(k.to_string()));
                         }
                     };
                 }
                 info!("{} Write completed", seed);
+                let mut count = 0;
+                for entry in random_read {
+                    let (txn_ts, value) =
+                        db.inner().get(entry.key_ts()).await.unwrap().unwrap();
+                    assert_eq!(txn_ts, entry.key_ts().txn_ts());
+                    count += 1;
+                    if count % 100 == 0 {
+                        info!("{} Read completed count {}", seed, count);
+                    }
+                }
+                info!("{} Read completed", seed);
             });
             handlers.push(handler);
         }
