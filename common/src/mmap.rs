@@ -31,16 +31,18 @@ pub struct MmapFile {
 
 impl MmapFile {
     #[inline(always)]
-    unsafe fn raw_write(
+    pub fn raw_write(
         raw: &MmapRaw,
         offset: usize,
         data: &[u8],
     ) -> io::Result<()> {
-        std::ptr::copy_nonoverlapping(
-            data.as_ptr(),
-            raw.as_mut_ptr().add(offset),
-            data.len(),
-        );
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                data.as_ptr(),
+                raw.as_mut_ptr().add(offset),
+                data.len(),
+            )
+        };
         raw.flush_async_range(offset, data.len())?;
         Ok(())
     }
@@ -58,6 +60,19 @@ impl MmapFile {
         buf_len
     }
 
+    pub fn append(&self, offset: usize, buf: &[u8]) -> io::Result<usize> {
+        if offset + buf.len() >= self.raw.len() {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "append out of range",
+            ));
+        }
+        { Self::raw_write(&self.raw, offset, buf) }?;
+        Ok(buf.len())
+    }
+    pub fn flush_range(&self, offset: usize, len: usize) -> io::Result<()> {
+        self.raw.flush_range(offset, len)
+    }
     fn check_len_satisfied(
         &mut self,
         write_at: usize,
@@ -84,7 +99,7 @@ impl Write for MmapFile {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let buf_len = buf.len();
         self.check_len_satisfied(self.w_pos, buf_len)?;
-        unsafe { Self::raw_write(&self.raw, self.w_pos, buf) }?;
+        { Self::raw_write(&self.raw, self.w_pos, buf) }?;
         self.w_pos += buf_len;
         Ok(buf_len)
     }
@@ -226,7 +241,7 @@ impl MmapFile {
         offset: usize,
     ) -> Result<usize, Error> {
         self.check_len_satisfied(offset, buf.len())?;
-        unsafe { Self::raw_write(&self.raw, offset, buf) }?;
+        { Self::raw_write(&self.raw, offset, buf) }?;
         Ok(buf.len())
     }
 }

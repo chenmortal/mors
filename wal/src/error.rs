@@ -12,5 +12,7 @@ pub enum MorsWalError {
     IoError(#[from] std::io::Error),
     #[error("Invalid log header {0:?}, you may need to delete the file and try again.")]
     InvalidLogHeader(PathBuf),
+    #[error("Log file is full")]
+    StorageFull,
 }
 unsafe impl Send for MorsWalError {}

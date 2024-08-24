@@ -25,19 +25,16 @@ where
         let mut max_txn_ts = TxnTs::default();
         let mut max_value = None;
 
-        if let Some(mem) = self.memtable() {
-            {
-                let mem_r = mem.read()?;
-                if let Some((txn_ts, value)) = mem_r.get(key)? {
-                    if txn_ts == key.txn_ts() {
-                        return Ok(Some((txn_ts, value)));
-                    }
-                    if txn_ts > max_txn_ts {
-                        max_txn_ts = txn_ts;
-                        max_value = value;
-                    }
-                };
-            }
+        if let Some(mem) = self.read_memtable()? {
+            if let Some((txn_ts, value)) = mem.get(key)? {
+                if txn_ts == key.txn_ts() {
+                    return Ok(Some((txn_ts, value)));
+                }
+                if txn_ts > max_txn_ts {
+                    max_txn_ts = txn_ts;
+                    max_value = value;
+                }
+            };
         }
         {
             let immut_r = self.immut_memtable().read()?;

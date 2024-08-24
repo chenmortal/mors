@@ -240,7 +240,7 @@ where
             );
             let new_memtable = self.build_memtable()?;
             debug!("New memtable {} created", new_memtable.id());
-            new_memtable
+            Arc::new(new_memtable)
         };
 
         let old_memtable = {
@@ -249,7 +249,8 @@ where
                 .map_err(|e| MorsError::RwLockPoisoned(e.to_string()))?;
 
             let old_memtable = replace(&mut *memtable_w, new_memtable);
-            Arc::new(old_memtable)
+            // Arc::new(old_memtable)
+            old_memtable
         };
 
         self.flush_sender()
@@ -391,7 +392,7 @@ mod test {
                 info!("{} Write completed", seed);
                 let mut count = 0;
                 for entry in random_read {
-                    let (txn_ts, value) =
+                    let (txn_ts, _value) =
                         db.inner().get(entry.key_ts()).await.unwrap().unwrap();
                     assert_eq!(txn_ts, entry.key_ts().txn_ts());
                     count += 1;

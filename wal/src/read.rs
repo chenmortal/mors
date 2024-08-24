@@ -57,7 +57,7 @@ impl<'a, F: FileId, K: Kms> LogFileIter<'a, F, K> {
 
         kv_buf = self
             .log_file
-            .decrypt(&kv_buf, self.record_offset)?
+            .decrypt(&kv_buf)?
             .unwrap_or(kv_buf);
 
         let mut entry = Entry::from_log(

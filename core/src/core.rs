@@ -71,8 +71,14 @@ impl<
         V: VlogCtlTrait<K>,
     > CoreInner<M, K, L, T, S, V>
 {
-    pub(crate) fn memtable(&self) -> Option<&Arc<RwLock<M>>> {
+    pub(crate) fn memtable(&self) -> Option<&RwLock<Arc<M>>> {
         self.memtable.as_ref()
+    }
+    pub(crate) fn read_memtable(&self) -> Result<Option<Arc<M>>> {
+        if let Some(mem) = self.memtable.as_ref() {
+            return Ok(Some(mem.read()?.clone()));
+        }
+        Ok(None)
     }
     pub(crate) fn immut_memtable(&self) -> &RwLock<VecDeque<Arc<M>>> {
         &self.immut_memtable
@@ -108,7 +114,7 @@ where
     lock_guard: DBLockGuard,
     kms: K,
     immut_memtable: RwLock<VecDeque<Arc<M>>>,
-    memtable: Option<Arc<RwLock<M>>>,
+    memtable: Option<RwLock<Arc<M>>>,
     memtable_builder: M::MemtableBuilder,
     levelctl: L,
     vlogctl: V,
@@ -227,11 +233,11 @@ impl<
         let kms = self.kms.build()?;
         let immut_memtable = self.memtable.open_exist(kms.clone())?;
         info!("open {} immut_memtable", immut_memtable.len());
-        
+
         let mut memtable = None;
         if !self.memtable.read_only() {
             memtable =
-                Arc::new(RwLock::new(self.memtable.build(kms.clone())?)).into();
+                RwLock::new(Arc::new(self.memtable.build(kms.clone())?)).into();
         }
         let discard = self.vlogctl.build_discard()?;
         let levelctl = self.levelctl.build(kms.clone()).await?;

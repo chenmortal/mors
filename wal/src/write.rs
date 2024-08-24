@@ -4,10 +4,9 @@ use mors_traits::kms::Kms;
 use std::{
     hash::Hasher,
     io::{self, Write},
-    mem,
 };
 
-use crate::Result;
+use crate::{error::MorsWalError, Result};
 use crate::{header::LogEntryHeader, LogFile};
 impl<F: FileId, K: Kms> LogFile<F, K> {
     pub fn set_len(&mut self, end_offset: usize) -> io::Result<()> {
@@ -25,40 +24,55 @@ impl<F: FileId, K: Kms> LogFile<F, K> {
         entry: &Entry,
     ) -> Result<()> {
         buf.clear();
-
-        let offset = self.mmap.write_at();
-        let size = self.encode_entry(buf, entry, offset)?;
-        self.mmap.write_all(&buf[..size])?;
+        let buf = self.encode_entry(entry)?;
+        self.mmap.write_all(&buf)?;
         Ok(())
+    }
+    pub fn append_entry(&self, entry: &Entry) -> Result<usize> {
+        let encode = self.encode_entry(entry)?;
+        let write_at = self
+            .append_pos()
+            .fetch_add(encode.len(), std::sync::atomic::Ordering::Relaxed);
+        if let Err(e) = self.mmap.append(write_at, &encode) {
+            if e.kind() == io::ErrorKind::Other {
+                return Err(MorsWalError::StorageFull);
+            }
+        };
+        Ok(encode.len())
     }
     pub fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
         self.mmap.write_all(buf)
     }
-    pub fn flush(&mut self) -> Result<()> {
-        Ok(self.mmap.flush()?)
+    pub fn flush(&self) -> Result<()> {
+        Ok(self.mmap.flush_range(
+            0,
+            self.append_pos().load(std::sync::atomic::Ordering::SeqCst),
+        )?)
     }
-    pub fn encode_entry(
-        &self,
-        buf: &mut Vec<u8>,
-        entry: &Entry,
-        offset: usize,
-    ) -> Result<usize> {
+    pub fn encode_entry(&self, entry: &Entry) -> Result<Vec<u8>> {
         let header = LogEntryHeader::new(entry);
-        let mut hash_writer = HashWriter {
-            writer: buf,
-            hasher: crc32fast::Hasher::new(),
-        };
         let header_encode = header.encode();
-        let header_len = hash_writer.write(&header_encode)?;
+
         let mut kv_buf = entry.key_ts().encode();
         kv_buf.extend_from_slice(entry.value_meta().value());
 
-        kv_buf = self.encrypt(&kv_buf, offset)?.unwrap_or(kv_buf);
+        let mut buf = Vec::with_capacity(
+            header_encode.len() + kv_buf.len() + size_of::<u32>(),
+        );
+        let mut hash_writer = HashWriter {
+            writer: &mut buf,
+            hasher: crc32fast::Hasher::new(),
+        };
+
+        let header_len = hash_writer.write(&header_encode)?;
+
+        kv_buf = self.encrypt(&kv_buf)?.unwrap_or(kv_buf);
         let kv_len = hash_writer.write(&kv_buf)?;
         let crc = hash_writer.hasher.finalize();
-        let buf = hash_writer.writer;
+
         buf.put_u32(crc);
-        Ok(header_len + kv_len + mem::size_of::<u32>())
+        debug_assert_eq!(buf.len(), header_len + kv_len + size_of::<u32>());
+        Ok(buf)
     }
 }
 pub(crate) struct HashWriter<'a, T: Hasher> {
