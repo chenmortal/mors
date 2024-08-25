@@ -1,5 +1,6 @@
 use core::{Core, CoreBuilder};
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 
 use error::MorsError;
 use mors_encrypt::{cipher::AesCipher, registry::MorsKms};
@@ -10,6 +11,7 @@ use mors_skip_list::skip_list::SkipList;
 use mors_sstable::table::Table;
 use mors_txn::manager::TxnManager;
 use mors_vlog::vlogctl::VlogCtl;
+use tokio::runtime::Builder;
 pub mod core;
 mod error;
 mod flush;
@@ -25,6 +27,9 @@ type MorsLevelCtlType = LevelCtl<MorsTable, MorsKms>;
 type MorsVlog = VlogCtl<MorsKms>;
 #[derive(Clone)]
 pub struct Mors {
+    inner: Arc<MorsInner>,
+}
+struct MorsInner {
     core: Core<
         MorsMemtable,
         MorsKms,
@@ -33,9 +38,10 @@ pub struct Mors {
         SkipList,
         MorsVlog,
     >,
+    #[cfg(feature = "sync")]
+    runtime: tokio::runtime::Runtime,
 }
 
-#[derive(Default)]
 pub struct MorsBuilder {
     builder: CoreBuilder<
         MorsMemtable,
@@ -46,6 +52,21 @@ pub struct MorsBuilder {
         TxnManager,
         MorsVlog,
     >,
+    #[cfg(feature = "sync")]
+    tokio_builder: tokio::runtime::Builder,
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for MorsBuilder {
+    fn default() -> Self {
+        let mut tokio_builder = Builder::new_multi_thread();
+        tokio_builder.enable_all();
+        Self {
+            builder: Default::default(),
+            #[cfg(feature = "sync")]
+            tokio_builder,
+        }
+    }
 }
 impl Deref for Mors {
     type Target = Core<
@@ -58,7 +79,7 @@ impl Deref for Mors {
     >;
 
     fn deref(&self) -> &Self::Target {
-        &self.core
+        &self.inner.core
     }
 }
 impl Deref for MorsBuilder {
@@ -82,8 +103,26 @@ impl DerefMut for MorsBuilder {
     }
 }
 impl MorsBuilder {
+    #[cfg(feature = "sync")]
+    pub fn tokio_builder(&mut self) -> &mut Builder {
+        &mut self.tokio_builder
+    }
+
+    #[cfg(feature = "sync")]
+    pub fn build(&mut self) -> Result<Mors> {
+        let runtime = self.tokio_builder.build()?;
+        let k = runtime.block_on(self.builder.build())?;
+        let inner = MorsInner { core: k, runtime };
+        Ok(Mors {
+            inner: Arc::new(inner),
+        })
+    }
+    #[cfg(not(feature = "sync"))]
     pub async fn build(&mut self) -> Result<Mors> {
         let core = self.builder.build().await?;
-        Ok(Mors { core })
+        let inner = MorsInner { core };
+        Ok(Mors {
+            inner: Arc::new(inner),
+        })
     }
 }

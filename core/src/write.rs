@@ -320,6 +320,7 @@ async fn test_notify() {
     handle_notify.await.unwrap();
     handle_notified.await.unwrap();
 }
+#[cfg(not(feature = "sync"))]
 #[cfg(test)]
 mod test {
     use crate::error::MorsError;
@@ -349,6 +350,7 @@ mod test {
         builder
             .set_num_memtables(5)
             .set_memtable_size(64 * 1024 * 1024);
+
         let mors = builder.build().await?;
 
         let seeds = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"];
