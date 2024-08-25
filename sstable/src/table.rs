@@ -1,38 +1,40 @@
-use std::fmt::Debug;
-use std::marker::PhantomData;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::SystemTime;
+use std::{
+    fmt::Debug, marker::PhantomData, path::PathBuf, sync::Arc, time::SystemTime,
+};
 
 use bytes::Buf;
 use log::error;
 use memmap2::Advice;
-use mors_common::bloom::{Bloom, BloomBorrow};
-use mors_common::compress::CompressionType;
-use mors_common::file_id::{FileId, SSTableId};
-use mors_common::kv::ValueMeta;
-use mors_common::mmap::{MmapFile, MmapFileBuilder};
-use mors_common::ts::{KeyTs, TxnTs};
-use mors_traits::cache::BlockCacheKey;
-use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
-use mors_traits::iter::{
-    CacheIterator, DoubleEndedCacheIterator, KvCacheIter, KvCacheIterator,
-    KvDoubleEndedCacheIter,
+use mors_common::{
+    bloom::{Bloom, BloomBorrow},
+    compress::CompressionType,
+    file_id::{FileId, SSTableId},
+    kv::ValueMeta,
+    mmap::{MmapFile, MmapFileBuilder},
+    ts::{KeyTs, TxnTs},
 };
-use mors_traits::kms::KmsCipher;
-use mors_traits::sstable::{
-    BlockIndex, SSTableError, TableBuilderTrait, TableTrait,
+use mors_traits::{
+    cache::BlockCacheKey,
+    default::{WithDir, WithReadOnly, DEFAULT_DIR},
+    iter::{
+        CacheIterator, DoubleEndedCacheIterator, KvCacheIter, KvCacheIterator,
+        KvDoubleEndedCacheIter,
+    },
+    kms::KmsCipher,
+    sstable::{BlockIndex, SSTableError, TableBuilderTrait, TableTrait},
 };
 use prost::Message;
 
-use crate::block::Block;
-use crate::cache::Cache;
-use crate::pb::proto::Checksum;
-use crate::read::CacheTableIter;
-use crate::table_index::TableIndexBuf;
-use crate::write::TableWriter;
-use crate::Result;
-use crate::{error::MorsTableError, pb::proto::checksum};
+use crate::{
+    block::Block,
+    cache::Cache,
+    error::MorsTableError,
+    pb::proto::{checksum, Checksum},
+    read::CacheTableIter,
+    table_index::TableIndexBuf,
+    write::TableWriter,
+    Result,
+};
 // ChecksumVerificationMode tells when should DB verify checksum for SSTable blocks.
 #[derive(Debug, Clone, Copy)]
 pub enum ChecksumVerificationMode {

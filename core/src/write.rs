@@ -13,9 +13,8 @@ use mors_traits::{
     skip_list::SkipListTrait, sstable::TableTrait, txn::TxnManagerTrait,
     vlog::VlogCtlTrait,
 };
-use std::mem::size_of;
 use std::{
-    mem::replace,
+    mem::{replace, size_of},
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,

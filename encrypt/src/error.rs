@@ -1,9 +1,5 @@
-use mors_traits::kms::CipherKeyId;
-use mors_traits::kms::EncryptError;
-use mors_traits::kms::KmsError;
+use mors_traits::kms::{CipherKeyId, EncryptError, KmsError};
 use thiserror::Error;
-
-
 
 #[derive(Error, Debug)]
 pub enum MorsKmsError {
@@ -35,13 +31,11 @@ impl From<MorsEncryptError> for EncryptError {
     fn from(err: MorsEncryptError) -> EncryptError {
         EncryptError::new(err)
     }
-    
 }
 impl From<MorsEncryptError> for KmsError {
     fn from(err: MorsEncryptError) -> KmsError {
         KmsError::new(err)
     }
-    
 }
 impl From<MorsKmsError> for KmsError {
     fn from(val: MorsKmsError) -> Self {

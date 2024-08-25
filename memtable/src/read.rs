@@ -1,7 +1,10 @@
-use mors_common::kv::ValueMeta;
-use mors_common::ts::{KeyTs, KeyTsBorrow, TxnTs};
-use mors_traits::memtable::MemtableTrait;
-use mors_traits::{kms::Kms, skip_list::SkipListTrait};
+use mors_common::{
+    kv::ValueMeta,
+    ts::{KeyTs, KeyTsBorrow, TxnTs},
+};
+use mors_traits::{
+    kms::Kms, memtable::MemtableTrait, skip_list::SkipListTrait,
+};
 
 use crate::memtable::Memtable;
 use crate::Result;

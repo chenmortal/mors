@@ -1,11 +1,11 @@
 use std::sync::atomic::Ordering;
 
-use mors_common::file_id::MemtableId;
-use mors_common::kv::{Entry, Meta};
-use mors_traits::kms::Kms;
-use mors_traits::skip_list::SkipListTrait;
-use mors_wal::read::LogFileIter;
-use mors_wal::LogFile;
+use mors_common::{
+    file_id::MemtableId,
+    kv::{Entry, Meta},
+};
+use mors_traits::{kms::Kms, skip_list::SkipListTrait};
+use mors_wal::{read::LogFileIter, LogFile};
 
 use crate::error::MorsMemtableError;
 use crate::memtable::Memtable;

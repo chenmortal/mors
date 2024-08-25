@@ -1,12 +1,16 @@
 use crate::error::MorsWalError;
 use bytes::{Buf, BufMut};
-use mors_common::file_id::FileId;
-use mors_common::mmap::{MmapFile, MmapFileBuilder};
+use mors_common::{
+    file_id::FileId,
+    mmap::{MmapFile, MmapFileBuilder},
+};
 use mors_traits::kms::{CipherKeyId, Kms, KmsCipher};
-use std::fs::remove_file;
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::{
+    fs::remove_file,
+    io::{Read, Write},
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, AtomicUsize, Ordering},
+};
 
 pub mod error;
 pub mod header;

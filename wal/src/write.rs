@@ -6,8 +6,7 @@ use std::{
     io::{self, Write},
 };
 
-use crate::{error::MorsWalError, Result};
-use crate::{header::LogEntryHeader, LogFile};
+use crate::{error::MorsWalError, header::LogEntryHeader, LogFile, Result};
 impl<F: FileId, K: Kms> LogFile<F, K> {
     pub fn set_len(&mut self, end_offset: usize) -> io::Result<()> {
         let file_size = self.mmap.file_len()? as usize;

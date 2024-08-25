@@ -7,14 +7,18 @@ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 
 use memmap2::Advice;
-use mors_common::file_id::{FileId, MemtableId};
-use mors_common::mmap::MmapFileBuilder;
+use mors_common::{
+    file_id::{FileId, MemtableId},
+    mmap::MmapFileBuilder,
+};
 // use mors_common::page_size;
 use mors_common::ts::KeyTsBorrow;
-use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
-use mors_traits::kms::Kms;
-use mors_traits::memtable::MemtableBuilderTrait;
-use mors_traits::skip_list::SkipListTrait;
+use mors_traits::{
+    default::{WithDir, WithReadOnly, DEFAULT_DIR},
+    kms::Kms,
+    memtable::MemtableBuilderTrait,
+    skip_list::SkipListTrait,
+};
 
 use mors_wal::LogFile;
 
