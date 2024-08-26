@@ -7,6 +7,7 @@ use std::{
     },
 };
 
+use crate::{error::MorsTxnError, Result};
 use mors_common::closer::Closer;
 use mors_common::ts::TxnTs;
 use tokio::{
@@ -20,7 +21,6 @@ use tokio::{
 pub(crate) struct WaterMark(Arc<WaterMarkInner>);
 pub(crate) struct WaterMarkInner {
     done_until: AtomicU64,
-    last_index: AtomicU64,
     sender: Sender<Mark>,
     name: &'static str,
     closer: Closer,
@@ -31,23 +31,12 @@ pub(crate) struct Mark {
     indices: Vec<TxnTs>,
     done: bool,
 }
-impl Mark {
-    pub(crate) fn new(txn: TxnTs, done: bool) -> Self {
-        Self {
-            txn,
-            waiter: None,
-            indices: Vec::new(),
-            done,
-        }
-    }
-}
 impl WaterMark {
     pub(crate) fn new(name: &'static str, done_until: TxnTs) -> Self {
         let (sender, receiver) = tokio::sync::mpsc::channel::<Mark>(100);
         let closer = Closer::new(name);
         let water = Self(Arc::new(WaterMarkInner {
             done_until: AtomicU64::new(done_until.into()),
-            last_index: AtomicU64::new(0),
             sender,
             name,
             closer,
@@ -59,10 +48,36 @@ impl WaterMark {
             .set_joinhandle(tokio::spawn(water.clone().process(receiver)));
         water
     }
-    pub(crate) async fn begin(&self, txn: TxnTs) {
-        if let Err(e) = self.0.sender.send(Mark::new(txn, false)).await {
-            eprintln!("Error: {:?}", e.to_string());
+    pub(crate) async fn begin(&self, txn: TxnTs) -> Result<()> {
+        self.0
+            .sender
+            .send(Mark {
+                txn,
+                waiter: None,
+                indices: Vec::new(),
+                done: false,
+            })
+            .await
+            .map_err(|e| MorsTxnError::SendError(e.to_string()))
+    }
+    //just only use for txn_mark
+    pub(crate) async fn wait_for_mark(&self, txn: TxnTs) -> Result<()> {
+        if self.0.done_until.load(Ordering::Acquire) >= txn.into() {
+            return Ok(());
         };
+        let notify = Arc::new(Notify::new());
+        self.0
+            .sender
+            .send(Mark {
+                txn,
+                waiter: notify.clone().into(),
+                indices: Vec::new(),
+                done: false,
+            })
+            .await
+            .map_err(|e| MorsTxnError::SendError(e.to_string()))?;
+        notify.notified().await;
+        Ok(())
     }
     async fn process(self, mut receiver: Receiver<Mark>) {
         let mut waiters = HashMap::<TxnTs, Vec<Arc<Notify>>>::new();
@@ -85,7 +100,7 @@ impl WaterMark {
                 }
             };
 
-            let done_until = self.0.done_until.load(Ordering::SeqCst).into();
+            let done_until = self.0.done_until.load(Ordering::Acquire).into();
             assert!(
                 done_until <= txn_ts,
                 "Name: {} done_util: {done_until}. txn_ts:{txn_ts}",
@@ -151,7 +166,7 @@ impl WaterMark {
                 Some(mark)=receiver.recv()=>{
                     match mark.waiter {
                         Some(notify) => {
-                            if self.0.done_until.load(Ordering::SeqCst) >= mark.txn.into() {
+                            if self.0.done_until.load(Ordering::Acquire) >= mark.txn.into() {
                                 notify.notify_one();
                             } else {
                                 match waiters.get_mut(&mark.txn) {
