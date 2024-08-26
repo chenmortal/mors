@@ -59,6 +59,11 @@ impl WaterMark {
             .set_joinhandle(tokio::spawn(water.clone().process(receiver)));
         water
     }
+    pub(crate) async fn begin(&self, txn: TxnTs) {
+        if let Err(e) = self.0.sender.send(Mark::new(txn, false)).await {
+            eprintln!("Error: {:?}", e.to_string());
+        };
+    }
     async fn process(self, mut receiver: Receiver<Mark>) {
         let mut waiters = HashMap::<TxnTs, Vec<Arc<Notify>>>::new();
         let mut min_heap = BinaryHeap::<Reverse<TxnTs>>::new();

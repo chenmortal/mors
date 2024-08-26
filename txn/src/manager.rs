@@ -71,3 +71,14 @@ impl TxnManagerBuilderTrait<TxnManager> for TxnManagerBuilder {
         })))
     }
 }
+impl TxnManager {
+    pub async fn generate_read_ts(&self) -> TxnTs {
+        let read_ts = {
+            let core_lock = self.0.core.lock();
+            let read_ts = core_lock.next - 1;
+            self.0.read_mark.begin(read_ts).await;
+            read_ts
+        };
+        read_ts
+    }
+}
