@@ -8,20 +8,21 @@ use std::sync::RwLock;
 use crate::write::WriteRequest;
 use crate::Result;
 use log::info;
-use mors_common::closer::Closer;
-use mors_common::lock::DBLockGuard;
-use mors_common::lock::DBLockGuardBuilder;
-use mors_common::rayon::init_global_rayon_pool;
-use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
-use mors_traits::kms::{Kms, KmsBuilder};
-use mors_traits::levelctl::{LevelCtlBuilderTrait, LevelCtlTrait};
-use mors_traits::memtable::{MemtableBuilderTrait, MemtableTrait};
-use mors_traits::skip_list::SkipListTrait;
-use mors_traits::sstable::TableTrait;
-use mors_traits::txn::TxnManagerBuilderTrait;
-use mors_traits::txn::TxnManagerTrait;
-use mors_traits::vlog::VlogCtlBuilderTrait;
-use mors_traits::vlog::VlogCtlTrait;
+use mors_common::{
+    closer::Closer,
+    lock::{DBLockGuard, DBLockGuardBuilder},
+    rayon::init_global_rayon_pool,
+};
+use mors_traits::{
+    default::{WithDir, WithReadOnly, DEFAULT_DIR},
+    kms::{Kms, KmsBuilder},
+    levelctl::{LevelCtlBuilderTrait, LevelCtlTrait},
+    memtable::{MemtableBuilderTrait, MemtableTrait},
+    skip_list::SkipListTrait,
+    sstable::TableTrait,
+    txn::{TxnManagerBuilderTrait, TxnManagerTrait},
+    vlog::{VlogCtlBuilderTrait, VlogCtlTrait},
+};
 use tokio::sync::mpsc::Sender;
 
 pub struct Core<
@@ -71,8 +72,14 @@ impl<
         V: VlogCtlTrait<K>,
     > CoreInner<M, K, L, T, S, V>
 {
-    pub(crate) fn memtable(&self) -> Option<&Arc<RwLock<M>>> {
+    pub(crate) fn memtable(&self) -> Option<&RwLock<Arc<M>>> {
         self.memtable.as_ref()
+    }
+    pub(crate) fn read_memtable(&self) -> Result<Option<Arc<M>>> {
+        if let Some(mem) = self.memtable.as_ref() {
+            return Ok(Some(mem.read()?.clone()));
+        }
+        Ok(None)
     }
     pub(crate) fn immut_memtable(&self) -> &RwLock<VecDeque<Arc<M>>> {
         &self.immut_memtable
@@ -108,7 +115,7 @@ where
     lock_guard: DBLockGuard,
     kms: K,
     immut_memtable: RwLock<VecDeque<Arc<M>>>,
-    memtable: Option<Arc<RwLock<M>>>,
+    memtable: Option<RwLock<Arc<M>>>,
     memtable_builder: M::MemtableBuilder,
     levelctl: L,
     vlogctl: V,
@@ -227,11 +234,11 @@ impl<
         let kms = self.kms.build()?;
         let immut_memtable = self.memtable.open_exist(kms.clone())?;
         info!("open {} immut_memtable", immut_memtable.len());
-        
+
         let mut memtable = None;
         if !self.memtable.read_only() {
             memtable =
-                Arc::new(RwLock::new(self.memtable.build(kms.clone())?)).into();
+                RwLock::new(Arc::new(self.memtable.build(kms.clone())?)).into();
         }
         let discard = self.vlogctl.build_discard()?;
         let levelctl = self.levelctl.build(kms.clone()).await?;

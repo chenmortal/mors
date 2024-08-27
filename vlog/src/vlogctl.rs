@@ -27,7 +27,7 @@ use crate::{
     error::MorsVlogError,
     threshold::{VlogThreshold, VlogThresholdConfig},
 };
-type LogFileWrapper<K> = Arc<RwLock<LogFile<VlogId, K>>>;
+type LogFileWrapper<K> = Arc<LogFile<VlogId, K>>;
 pub struct VlogCtl<K: Kms> {
     inner: Arc<VlogCtlInner<K>>,
 }
@@ -69,16 +69,21 @@ impl<K: Kms> VlogCtlTrait<K> for VlogCtl<K> {
         Ok(self.write_impl(iter_mut).await?)
     }
 }
-impl<K: Kms> VlogCtl<K> {
-    pub fn latest_logfile(&self) -> Result<Arc<RwLock<LogFile<VlogId, K>>>> {
-        let id_r = self.inner.max_id.read()?;
+impl<K: Kms> VlogCtlInner<K> {
+    fn latest_logfile(&self) -> Result<LogFileWrapper<K>> {
+        let id_r = self.max_id.read()?;
 
-        let id_logfile = self.inner.id_logfile.read()?;
+        let id_logfile = self.id_logfile.read()?;
         let id = *id_r;
         if let Some(log) = id_logfile.get(&id) {
             return Ok(log.clone());
         };
         Err(MorsVlogError::LogNotFound(id))
+    }
+}
+impl<K: Kms> VlogCtl<K> {
+    pub fn latest_logfile(&self) -> Result<LogFileWrapper<K>> {
+        self.inner.latest_logfile()
     }
     pub(crate) fn create_new(&self) -> Result<LogFileWrapper<K>> {
         let mut max_id_w = self.inner.max_id.write()?;
@@ -92,7 +97,7 @@ impl<K: Kms> VlogCtl<K> {
 
         let mut id_logfile = self.inner.id_logfile.write()?;
 
-        let log = Arc::new(RwLock::new(log));
+        let log = Arc::new(log);
         id_logfile.insert(id, log.clone());
         debug_assert!(id > *max_id_w);
         *max_id_w = id;
@@ -178,15 +183,18 @@ impl<K: Kms> VlogCtlBuilder<K> {
         let vlog_threshold = VlogThreshold::new(self.vlog_threshold);
         let mut id_logfile = BTreeMap::new();
         let ids = VlogId::parse_set_from_dir(&self.vlog_dir);
-        let mut max_id: VlogId = 0.into();
+
+        let max_id = ids.iter().max().copied().unwrap_or_default();
         for id in ids {
             let log = self.open_logfile(id, kms.clone())?;
             if log.is_empty() {
                 info!("Empty log file: {:?}", &id.join_dir(&self.vlog_dir));
                 log.delete()?;
             }
-            id_logfile.insert(id, Arc::new(RwLock::new(log)));
-            max_id = max_id.max(id);
+            if id == max_id {
+                reset_valid_len(&log)?;
+            }
+            id_logfile.insert(id, Arc::new(log));
         }
 
         let id_len = id_logfile.len();
@@ -209,17 +217,6 @@ impl<K: Kms> VlogCtlBuilder<K> {
             return Ok(vlog_ctl);
         }
 
-        let latest = vlog_ctl.latest_logfile()?;
-        let mut latest_w = latest.write()?;
-        let mut logfile_iter =
-            LogFileIter::new(&latest_w, LogFile::<VlogId, K>::LOG_HEADER_SIZE);
-        loop {
-            if logfile_iter.next_entry()?.is_none() {
-                break;
-            };
-        }
-        let end_offset = logfile_iter.valid_end_offset();
-        latest_w.set_len(end_offset)?;
         vlog_ctl.create_new()?;
         Ok(vlog_ctl)
     }
@@ -239,5 +236,33 @@ impl<K: Kms> VlogCtlBuilder<K> {
             kms,
         )?;
         Ok(log)
+    }
+}
+pub(crate) fn reset_valid_len<F: FileId, K: Kms>(
+    log: &LogFile<F, K>,
+) -> Result<()> {
+    let mut logfile_iter =
+        LogFileIter::new(log, LogFile::<VlogId, K>::LOG_HEADER_SIZE);
+    loop {
+        if logfile_iter.next_entry()?.is_none() {
+            break;
+        };
+    }
+    let valid_len = logfile_iter.valid_end_offset();
+    log.set_valid_len(valid_len as u64);
+    Ok(())
+}
+impl<K: Kms> Drop for VlogCtlInner<K> {
+    fn drop(&mut self) {
+        match self.latest_logfile() {
+            Ok(latest) => {
+                if let Err(e) = reset_valid_len(&latest) {
+                    eprintln!("Error: {:?}", e);
+                };
+            }
+            Err(e) => {
+                eprintln!("Error: {:?}", e);
+            }
+        }
     }
 }

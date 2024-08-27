@@ -1,9 +1,11 @@
-use mors_common::file_id::MemtableId;
-use mors_common::kv::{Entry, Meta};
-use mors_traits::kms::Kms;
-use mors_traits::skip_list::SkipListTrait;
-use mors_wal::read::LogFileIter;
-use mors_wal::LogFile;
+use std::sync::atomic::Ordering;
+
+use mors_common::{
+    file_id::MemtableId,
+    kv::{Entry, Meta},
+};
+use mors_traits::{kms::Kms, skip_list::SkipListTrait};
+use mors_wal::{read::LogFileIter, LogFile};
 
 use crate::error::MorsMemtableError;
 use crate::memtable::Memtable;
@@ -18,7 +20,9 @@ impl<T: SkipListTrait, K: Kms> Memtable<T, K> {
 
         while let Some(next) = wal_iter.next_entry()? {
             for (entry, _vptr) in next {
-                self.max_version = self.max_version.max(entry.version());
+                self.max_txn_ts
+                    .fetch_max(entry.version().to_u64(), Ordering::Relaxed);
+                // self.max_version = self.max_version.max(entry.version());
                 self.skip_list.push(
                     &entry.key_ts().encode(),
                     &entry.value_meta().encode(),
@@ -37,17 +41,20 @@ impl<T: SkipListTrait, K: Kms> Memtable<T, K> {
         self.wal.set_len(end_offset)?;
         Ok(())
     }
-    pub fn push_impl(&mut self, entry: &Entry) -> Result<()> {
-        self.wal.write_entry(&mut self.buf, entry)?;
+    pub fn push_impl(&self, entry: &Entry) -> Result<()> {
+        self.wal.append_entry(entry)?;
         if entry.meta().contains(Meta::FIN_TXN) {
             return Ok(());
         }
         self.skip_list
             .push(&entry.key_ts().encode(), &entry.value_meta().encode())?;
-        self.max_version = self.max_version.max(entry.version());
+        // let txn_ts = entry.version().to_u64();
+        self.max_txn_ts
+            .fetch_max(entry.version().to_u64(), Ordering::Relaxed);
+        // self.max_version = self.max_version.max(entry.version());
         Ok(())
     }
-    pub fn flush_impl(&mut self) -> Result<()> {
+    pub fn flush_impl(&self) -> Result<()> {
         self.wal.flush()?;
         Ok(())
     }

@@ -3,18 +3,22 @@ use std::collections::VecDeque;
 use std::fs::{read_dir, remove_file};
 use std::marker::PhantomData;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 
 use memmap2::Advice;
-use mors_common::file_id::{FileId, MemtableId};
-use mors_common::mmap::MmapFileBuilder;
-use mors_common::page_size;
-use mors_common::ts::{KeyTsBorrow, TxnTs};
-use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
-use mors_traits::kms::Kms;
-use mors_traits::memtable::MemtableBuilderTrait;
-use mors_traits::skip_list::SkipListTrait;
+use mors_common::{
+    file_id::{FileId, MemtableId},
+    mmap::MmapFileBuilder,
+};
+// use mors_common::page_size;
+use mors_common::ts::KeyTsBorrow;
+use mors_traits::{
+    default::{WithDir, WithReadOnly, DEFAULT_DIR},
+    kms::Kms,
+    memtable::MemtableBuilderTrait,
+    skip_list::SkipListTrait,
+};
 
 use mors_wal::LogFile;
 
@@ -24,8 +28,9 @@ use crate::Result;
 pub struct Memtable<T: SkipListTrait, K: Kms> {
     pub(crate) skip_list: T,
     pub(crate) wal: LogFile<MemtableId, K>,
-    pub(crate) max_version: TxnTs,
-    pub(crate) buf: Vec<u8>,
+    // pub(crate) max_version: TxnTs,
+    pub(crate) max_txn_ts: AtomicU64,
+    // pub(crate) buf: Vec<u8>,
     pub(crate) memtable_size: usize,
     pub(crate) read_only: bool,
 }
@@ -63,8 +68,7 @@ impl<T: SkipListTrait> Clone for MemtableBuilder<T> {
 }
 // opt.maxBatchSize = (15 * opt.MemTableSize) / 100
 // opt.maxBatchCount = opt.maxBatchSize / int64(skl.MaxNodeSize)
-impl<T: SkipListTrait> MemtableBuilder<T>
-{
+impl<T: SkipListTrait> MemtableBuilder<T> {
     fn arena_size(&self) -> usize {
         self.memtable_size + 2 * self.max_batch_size()
     }
@@ -110,10 +114,11 @@ impl<T: SkipListTrait> MemtableBuilder<T> {
         let memtable = Memtable {
             skip_list,
             wal,
-            max_version: TxnTs::default(),
-            buf: Vec::with_capacity(page_size()),
+            // max_version: TxnTs::default(),
+            // buf: Vec::with_capacity(page_size()),
             memtable_size: self.memtable_size,
             read_only: self.read_only,
+            max_txn_ts: AtomicU64::new(0),
         };
         Ok(memtable)
     }

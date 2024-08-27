@@ -1,0 +1,17 @@
+[package]
+name = "morscli"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+version.workspace = true
+
+[dependencies]
+clap = { version = "4.5.16", features = ["derive"] }
+morsdb = { path = "../core" }
+mors-traits = { path = "../traits" }
+mors-levelctl = { path = "../levelctl" }
+tokio = { workspace = true }
+tabled = { version = "0.16.0" }
+[lints]
+workspace = true

@@ -1,18 +1,24 @@
-use std::collections::HashMap;
-use std::fs::{rename, File, OpenOptions};
-use std::io::{BufReader, Read, Seek, Write};
-use std::ops::Deref;
-use std::os::unix::fs::OpenOptionsExt;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
-use std::time::{Duration, SystemTime};
+use std::{
+    collections::HashMap,
+    fs::{rename, File, OpenOptions},
+    io::{BufReader, Read, Seek, Write},
+    ops::Deref,
+    os::unix::fs::OpenOptionsExt,
+    path::{Path, PathBuf},
+    sync::{Arc, RwLock},
+    time::{Duration, SystemTime},
+};
 
 use log::error;
-use mors_traits::kms::{CipherKeyId, Kms, KmsBuilder, KmsCipher, KmsError};
-use prost::bytes::{Buf, BufMut};
-use prost::Message;
+use mors_traits::{
+    default::{WithDir, WithReadOnly, DEFAULT_DIR},
+    kms::{CipherKeyId, Kms, KmsBuilder, KmsCipher, KmsError},
+};
+use prost::{
+    bytes::{Buf, BufMut},
+    Message,
+};
 
-use mors_traits::default::{WithDir, WithReadOnly, DEFAULT_DIR};
 use mors_common::ts::PhyTs;
 
 use crate::cipher::{AesCipher, Nonce};
@@ -146,7 +152,7 @@ impl KmsBuilder<MorsKms> for MorsKmsBuilder {
         Ok(self.build_impl()?)
     }
 }
-impl WithDir for MorsKmsBuilder{
+impl WithDir for MorsKmsBuilder {
     fn set_dir(&mut self, dir: PathBuf) -> &mut Self {
         self.dir = dir;
         self
@@ -165,7 +171,6 @@ impl WithReadOnly for MorsKmsBuilder {
     fn read_only(&self) -> bool {
         self.read_only
     }
-    
 }
 impl KmsInner {
     //     Structure of Key Registry.

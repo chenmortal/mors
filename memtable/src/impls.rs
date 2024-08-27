@@ -44,7 +44,7 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
     type ErrorType = MorsMemtableError;
     type MemtableBuilder = MemtableBuilder<T>;
 
-    fn push(&mut self, entry: &Entry) -> Result<()> {
+    fn push(&self, entry: &Entry) -> Result<()> {
         Ok(self.push_impl(entry)?)
     }
 
@@ -57,7 +57,9 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
     }
 
     fn max_version(&self) -> TxnTs {
-        self.max_version
+        self.max_txn_ts
+            .load(std::sync::atomic::Ordering::SeqCst)
+            .into()
     }
 
     fn is_full(&self) -> bool {
@@ -72,7 +74,7 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
         self.skip_list.clone()
     }
 
-    fn flush(&mut self) -> std::result::Result<(), MemtableError> {
+    fn flush(&self) -> std::result::Result<(), MemtableError> {
         Ok(self.flush_impl()?)
     }
 

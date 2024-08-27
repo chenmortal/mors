@@ -1,15 +1,19 @@
-use crate::error::MorsWalError::{self};
-use crate::header::LogEntryHeader;
-use crate::LogFile;
-use crate::Result;
+use crate::{
+    error::MorsWalError::{self},
+    header::LogEntryHeader,
+    LogFile, Result,
+};
 use bytes::Buf;
-use mors_common::file_id::FileId;
-use mors_common::kv::{Entry, Meta, ValuePointer};
-use mors_common::ts::TxnTs;
+use mors_common::{
+    file_id::FileId,
+    kv::{Entry, Meta, ValuePointer},
+    ts::TxnTs,
+};
 use mors_traits::kms::Kms;
-use std::hash::Hasher;
-use std::io;
-use std::io::{BufRead, BufReader, Read};
+use std::{
+    hash::Hasher,
+    io::{self, BufRead, BufReader, Read},
+};
 pub struct LogFileIter<'a, F: FileId, K: Kms> {
     log_file: &'a LogFile<F, K>,
     record_offset: usize,
@@ -55,10 +59,7 @@ impl<'a, F: FileId, K: Kms> LogFileIter<'a, F, K> {
             .into());
         }
 
-        kv_buf = self
-            .log_file
-            .decrypt(&kv_buf, self.record_offset)?
-            .unwrap_or(kv_buf);
+        kv_buf = self.log_file.decrypt(&kv_buf)?.unwrap_or(kv_buf);
 
         let mut entry = Entry::from_log(
             &kv_buf[..key_len],

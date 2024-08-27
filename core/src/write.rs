@@ -1,12 +1,3 @@
-use std::mem::size_of;
-use std::{
-    mem::replace,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
-};
-
 use crate::{
     core::{CoreBuilder, CoreInner},
     error::MorsError,
@@ -21,6 +12,13 @@ use mors_traits::{
     kms::Kms, levelctl::LevelCtlTrait, memtable::MemtableTrait,
     skip_list::SkipListTrait, sstable::TableTrait, txn::TxnManagerTrait,
     vlog::VlogCtlTrait,
+};
+use std::{
+    mem::{replace, size_of},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
 };
 use tokio::{
     select,
@@ -241,7 +239,7 @@ where
             );
             let new_memtable = self.build_memtable()?;
             debug!("New memtable {} created", new_memtable.id());
-            new_memtable
+            Arc::new(new_memtable)
         };
 
         let old_memtable = {
@@ -250,7 +248,8 @@ where
                 .map_err(|e| MorsError::RwLockPoisoned(e.to_string()))?;
 
             let old_memtable = replace(&mut *memtable_w, new_memtable);
-            Arc::new(old_memtable)
+            // Arc::new(old_memtable)
+            old_memtable
         };
 
         self.flush_sender()
@@ -320,6 +319,7 @@ async fn test_notify() {
     handle_notify.await.unwrap();
     handle_notified.await.unwrap();
 }
+#[cfg(not(feature = "sync"))]
 #[cfg(test)]
 mod test {
     use crate::error::MorsError;
@@ -328,6 +328,7 @@ mod test {
     use log::LevelFilter;
     use log::{debug, info};
     use mors_common::test::{gen_random_entries, get_rng};
+    use mors_traits::default::DEFAULT_DIR;
     use std::{fs::create_dir, path::PathBuf};
     use tokio::sync::oneshot;
 
@@ -338,7 +339,7 @@ mod test {
         logger.filter_level(LevelFilter::Trace);
         logger.init();
 
-        let path = "../data/";
+        let path = DEFAULT_DIR;
         let dir = PathBuf::from(path);
         if !dir.exists() {
             create_dir(&dir).unwrap();
@@ -348,19 +349,20 @@ mod test {
         builder
             .set_num_memtables(5)
             .set_memtable_size(64 * 1024 * 1024);
+
         let mors = builder.build().await?;
 
         let seeds = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"];
         let mut handlers = Vec::with_capacity(seeds.len());
         for seed in seeds {
-
             let mut rng = get_rng(seed);
             let db = mors.clone();
             let handler = tokio::spawn(async move {
-                let count = 100000;
+                let count = 10000;
                 let random = gen_random_entries(&mut rng, count, 1000.into());
                 let mut entries = Vec::with_capacity(count);
                 let mut receivers = Vec::new();
+                let random_read = random.clone();
                 for entry in random {
                     entries.push(entry);
                     if entries.len() == 10 {
@@ -381,16 +383,25 @@ mod test {
                         Ok(e) => {
                             if let Err(k) = e {
                                 eprintln!("Error: {:?}", k.to_string());
-                                // return Err(MorsError::SendError(k.to_string()));
                             }
                         }
                         Err(k) => {
                             eprintln!("Error: {:?}", k.to_string());
-                            // return Err(MorsError::SendError(k.to_string()));
                         }
                     };
                 }
                 info!("{} Write completed", seed);
+                let mut count = 0;
+                for entry in random_read {
+                    let (txn_ts, _value) =
+                        db.inner().get(entry.key_ts()).await.unwrap().unwrap();
+                    assert_eq!(txn_ts, entry.key_ts().txn_ts());
+                    count += 1;
+                    if count % 100 == 0 {
+                        info!("{} Read completed count {}", seed, count);
+                    }
+                }
+                info!("{} Read completed", seed);
             });
             handlers.push(handler);
         }

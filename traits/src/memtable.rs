@@ -19,13 +19,13 @@ pub trait MemtableTrait<T: SkipListTrait, K: Kms>:
         &self,
         key: &KeyTs,
     ) -> Result<Option<(TxnTs, Option<ValueMeta>)>, MemtableError>;
-    fn push(&mut self, entry: &Entry) -> Result<(), MemtableError>;
+    fn push(&self, entry: &Entry) -> Result<(), MemtableError>;
     fn size(&self) -> usize;
     fn is_full(&self) -> bool;
     fn id(&self) -> MemtableId;
     fn max_version(&self) -> TxnTs;
     fn skip_list(&self) -> T;
-    fn flush(&mut self) -> Result<(), MemtableError>;
+    fn flush(&self) -> Result<(), MemtableError>;
     fn delete_wal(&self) -> Result<(), MemtableError>;
 }
 pub trait MemtableBuilderTrait<

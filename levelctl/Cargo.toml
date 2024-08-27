@@ -15,6 +15,7 @@ crc32fast = { workspace = true }
 prost = { workspace = true }
 parking_lot = { workspace = true }
 log = { workspace = true }
+tabled = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 rand = { workspace = true }

@@ -8,14 +8,17 @@ use mors_common::{
     file_id::{FileId, SSTableId},
 };
 use mors_traits::{kms::CipherKeyId, levelctl::Level};
+use std::fmt::Display;
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Formatter,
     fs::{remove_file, rename, File, OpenOptions},
     io::{BufReader, ErrorKind, Read, Seek, SeekFrom, Write},
     ops::Deref,
     path::PathBuf,
     sync::Arc,
 };
+use tabled::{builder::Builder, settings::Style};
 use tokio::sync::Mutex;
 
 use bytes::{Buf, BufMut};
@@ -36,7 +39,7 @@ const MAGIC_TEXT: &[u8; 4] = b"Mors";
 
 type Result<T> = std::result::Result<T, ManifestError>;
 #[derive(Debug, Clone)]
-pub(crate) struct Manifest(Arc<Mutex<ManifestInner>>);
+pub struct Manifest(Arc<Mutex<ManifestInner>>);
 impl Deref for Manifest {
     type Target = Mutex<ManifestInner>;
 
@@ -45,18 +48,37 @@ impl Deref for Manifest {
     }
 }
 #[derive(Debug)]
-pub(crate) struct ManifestInner {
+pub struct ManifestInner {
     file: File,
     deletions_rewrite_threshold: usize,
     builder: ManifestBuilder,
     info: ManifestInfo,
 }
 #[derive(Debug, Default)]
-pub(crate) struct ManifestInfo {
+pub struct ManifestInfo {
     levels: Vec<LevelManifest>,
     tables: HashMap<SSTableId, TableManifest>,
     creations: usize,
     deletions: usize,
+}
+impl Display for ManifestInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut builder = Builder::default();
+        for (index, level_manifest) in self.levels.iter().enumerate() {
+            let level = format!("Level {}", index);
+            let mut sstables =
+                level_manifest.tables.iter().copied().collect::<Vec<_>>();
+            sstables.sort();
+            let mut record = Vec::with_capacity(sstables.len() + 1);
+            record.push(level);
+            for sstable in sstables {
+                record.push(sstable.to_string());
+            }
+            builder.push_record(record);
+        }
+        let table = builder.build().with(Style::empty()).to_string();
+        write!(f, "{}", table)
+    }
 }
 #[derive(Debug, Default, Clone)]
 pub(crate) struct LevelManifest {
@@ -69,7 +91,7 @@ pub(crate) struct TableManifest {
     compress: CompressionType,
 }
 #[derive(Debug, Clone)]
-pub(crate) struct ManifestBuilder {
+pub struct ManifestBuilder {
     dir: PathBuf,
     read_only: bool,
     // Magic version used by the application using badger to ensure that it doesn't open the DB
@@ -87,10 +109,13 @@ impl Default for ManifestBuilder {
     }
 }
 impl ManifestBuilder {
-    pub(crate) fn set_dir(&mut self, dir: PathBuf) {
+    pub fn set_dir(&mut self, dir: PathBuf) {
         self.dir = dir;
     }
-    pub(crate) fn build(&self) -> Result<Manifest> {
+    pub fn set_read_only(&mut self, read_only: bool) {
+        self.read_only = read_only;
+    }
+    pub fn build(&self) -> Result<Manifest> {
         let path = self.dir.join(MANIFEST_FILE_NAME);
         match OpenOptions::new()
             .read(true)
@@ -403,6 +428,9 @@ impl Manifest {
 impl ManifestInner {
     pub(crate) fn tables(&self) -> &HashMap<SSTableId, TableManifest> {
         &self.info.tables
+    }
+    pub fn info(&self) -> &ManifestInfo {
+        &self.info
     }
 }
 impl TableManifest {

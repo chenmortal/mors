@@ -1,20 +1,26 @@
-use crate::default::{WithDir, WithReadOnly};
-use crate::iter::{
-    CacheIter, CacheIterator, DoubleEndedCacheIter, IterError, KvCacheIter,
-    KvCacheIterator, KvDoubleEndedCacheIter, KvSeekIter,
+use crate::{
+    cache::CacheTrait,
+    default::{WithDir, WithReadOnly},
+    iter::{
+        CacheIter, CacheIterator, DoubleEndedCacheIter, IterError, KvCacheIter,
+        KvCacheIterator, KvDoubleEndedCacheIter, KvSeekIter,
+    },
+    kms::KmsCipher,
 };
-use crate::{cache::CacheTrait, kms::KmsCipher};
-use mors_common::compress::CompressionType;
-use mors_common::file_id::SSTableId;
-use mors_common::kv::ValueMeta;
-use mors_common::ts::{KeyTs, KeyTsBorrow, TxnTs};
-use std::error::Error;
-use std::fmt::{Debug, Display};
-use std::marker::PhantomData;
-use std::path::PathBuf;
-use std::sync::atomic::AtomicU32;
-use std::sync::Arc;
-use std::time::SystemTime;
+use mors_common::{
+    compress::CompressionType,
+    file_id::SSTableId,
+    kv::ValueMeta,
+    ts::{KeyTs, KeyTsBorrow, TxnTs},
+};
+use std::{
+    error::Error,
+    fmt::{Debug, Display},
+    marker::PhantomData,
+    path::PathBuf,
+    sync::{atomic::AtomicU32, Arc},
+    time::SystemTime,
+};
 use thiserror::Error;
 
 pub trait TableTrait<K: KmsCipher>:
@@ -44,6 +50,7 @@ pub trait TableTrait<K: KmsCipher>:
         &self,
         use_cache: bool,
     ) -> impl KvCacheIterator<ValueMeta> + 'static;
+    fn may_contain(&self, key: &[u8]) -> bool;
 }
 pub trait TableBuilderTrait<T: TableTrait<K>, K: KmsCipher>:
     Default + Clone + Send + Sync + 'static + WithDir + WithReadOnly

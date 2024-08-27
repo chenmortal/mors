@@ -1,4 +1,5 @@
 pub mod cache;
+pub mod core;
 pub mod default;
 pub mod iter;
 pub mod kms;

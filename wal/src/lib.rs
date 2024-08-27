@@ -1,12 +1,16 @@
 use crate::error::MorsWalError;
 use bytes::{Buf, BufMut};
-use mors_common::file_id::FileId;
-use mors_common::mmap::{MmapFile, MmapFileBuilder};
+use mors_common::{
+    file_id::FileId,
+    mmap::{MmapFile, MmapFileBuilder},
+};
 use mors_traits::kms::{CipherKeyId, Kms, KmsCipher};
-use std::fs::remove_file;
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    fs::remove_file,
+    io::{Read, Write},
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, AtomicUsize, Ordering},
+};
 
 pub mod error;
 pub mod header;
@@ -20,8 +24,10 @@ pub struct LogFile<F: FileId, K: Kms> {
     cipher: Option<K::Cipher>,
     mmap: MmapFile,
     size: AtomicUsize,
+    append_pos: AtomicUsize,
     path_buf: PathBuf,
     base_nonce: Vec<u8>,
+    valid_len: AtomicU64,
 }
 impl<F: FileId, K: Kms> LogFile<F, K> {
     pub fn id(&self) -> F {
@@ -49,6 +55,8 @@ impl<F: FileId, K: Kms> LogFile<F, K>
             path_buf: path_buf.as_ref().to_owned(),
             size: AtomicUsize::new(0),
             base_nonce: Vec::new(),
+            append_pos: AtomicUsize::new(0),
+            valid_len: AtomicU64::new(max_size),
         };
 
         if !is_exist {
@@ -105,36 +113,39 @@ impl<F: FileId, K: Kms> LogFile<F, K>
             .map(|c| c.cipher_key_id())
             .unwrap_or_default()
     }
-    #[inline]
-    fn generate_nonce(&self, offset: usize) -> Vec<u8> {
-        let mut v = Vec::with_capacity(K::Cipher::NONCE_SIZE);
-        let offset = offset.to_ne_bytes();
-        v.extend_from_slice(
-            &self.base_nonce[..K::Cipher::NONCE_SIZE - offset.len()],
-        );
-        v.extend_from_slice(&offset);
-        v
-    }
-    fn decrypt(&self, buf: &[u8], offset: usize) -> Result<Option<Vec<u8>>> {
+    // #[inline]
+    // fn generate_nonce(&self, offset: usize) -> Vec<u8> {
+    //     let mut v = Vec::with_capacity(K::Cipher::NONCE_SIZE);
+    //     let offset = offset.to_ne_bytes();
+    //     v.extend_from_slice(
+    //         &self.base_nonce[..K::Cipher::NONCE_SIZE - offset.len()],
+    //     );
+    //     v.extend_from_slice(&offset);
+    //     v
+    // }
+    fn decrypt(&self, buf: &[u8]) -> Result<Option<Vec<u8>>> {
         Ok(match self.cipher.as_ref() {
             Some(c) => {
-                let nonce = self.generate_nonce(offset);
-                Some(c.decrypt_with_slice(&nonce, buf)?)
+                // let nonce = self.generate_nonce(offset);
+                Some(c.decrypt_with_slice(&self.base_nonce, buf)?)
             }
             None => None,
         })
     }
-    fn encrypt(&self, buf: &[u8], offset: usize) -> Result<Option<Vec<u8>>> {
+    fn encrypt(&self, buf: &[u8]) -> Result<Option<Vec<u8>>> {
         Ok(match self.cipher.as_ref() {
             Some(c) => {
-                let nonce = self.generate_nonce(offset);
-                Some(c.encrypt_with_slice(&nonce, buf)?)
+                // let nonce = self.generate_nonce(offset);
+                Some(c.encrypt_with_slice(&self.base_nonce, buf)?)
             }
             None => None,
         })
     }
     pub fn len(&self) -> usize {
         self.size.load(Ordering::Relaxed)
+    }
+    pub fn append_pos(&self) -> &AtomicUsize {
+        &self.append_pos
     }
     pub fn max_size(&self) -> usize {
         self.mmap.len().unwrap_or(0)
@@ -147,5 +158,14 @@ impl<F: FileId, K: Kms> LogFile<F, K>
     }
     pub(crate) fn set_size(&self, size: usize) {
         self.size.store(size, Ordering::Relaxed);
+    }
+    pub fn set_valid_len(&self, valid_len: u64) {
+        self.valid_len.store(valid_len, Ordering::SeqCst);
+    }
+}
+impl<F: FileId, K: Kms> Drop for LogFile<F, K> {
+    fn drop(&mut self) {
+        let valid_len = self.valid_len.load(Ordering::SeqCst);
+        self.mmap.set_len(valid_len as usize).unwrap();
     }
 }
