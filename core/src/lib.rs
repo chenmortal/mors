@@ -9,7 +9,7 @@ use mors_memtable::memtable::Memtable;
 
 use mors_skip_list::skip_list::SkipList;
 use mors_sstable::table::Table;
-use mors_txn::manager::TxnManager;
+
 use mors_vlog::vlogctl::VlogCtl;
 use tokio::runtime::Builder;
 pub mod core;
@@ -17,6 +17,7 @@ mod error;
 mod flush;
 mod read;
 mod test;
+mod txn;
 mod write;
 pub type Result<T> = std::result::Result<T, MorsError>;
 
@@ -27,7 +28,10 @@ type MorsLevelCtlType = LevelCtl<MorsTable, MorsKms>;
 type MorsVlog = VlogCtl<MorsKms>;
 #[derive(Clone)]
 pub struct Mors {
+    #[cfg(feature = "sync")]
     inner: Arc<MorsInner>,
+    #[cfg(not(feature = "sync"))]
+    inner: MorsInner,
 }
 struct MorsInner {
     core: Core<
@@ -37,6 +41,7 @@ struct MorsInner {
         Table<AesCipher>,
         SkipList,
         MorsVlog,
+
     >,
     #[cfg(feature = "sync")]
     runtime: tokio::runtime::Runtime,
@@ -49,7 +54,7 @@ pub struct MorsBuilder {
         MorsLevelCtlType,
         MorsTable,
         SkipList,
-        TxnManager,
+
         MorsVlog,
     >,
     #[cfg(feature = "sync")]
@@ -76,6 +81,7 @@ impl Deref for Mors {
         Table<AesCipher>,
         SkipList,
         MorsVlog,
+
     >;
 
     fn deref(&self) -> &Self::Target {
@@ -89,7 +95,7 @@ impl Deref for MorsBuilder {
         LevelCtl<Table<AesCipher>, MorsKms>,
         Table<AesCipher>,
         SkipList,
-        TxnManager,
+
         MorsVlog,
     >;
 

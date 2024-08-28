@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 
+use crate::txn::manager::TxnManager;
+use crate::txn::manager::TxnManagerBuilder;
 use crate::write::WriteRequest;
 use crate::Result;
 use log::info;
@@ -20,7 +22,7 @@ use mors_traits::{
     memtable::{MemtableBuilderTrait, MemtableTrait},
     skip_list::SkipListTrait,
     sstable::TableTrait,
-    txn::{TxnManagerBuilderTrait, TxnManagerTrait},
+
     vlog::{VlogCtlBuilderTrait, VlogCtlTrait},
 };
 use tokio::sync::mpsc::Sender;
@@ -75,6 +77,9 @@ impl<
     pub(crate) fn memtable(&self) -> Option<&RwLock<Arc<M>>> {
         self.memtable.as_ref()
     }
+    pub(crate) fn txn_manager(&self) -> &TxnManager {
+        &self.txn_manager
+    }
     pub(crate) fn read_memtable(&self) -> Result<Option<Arc<M>>> {
         if let Some(mem) = self.memtable.as_ref() {
             return Ok(Some(mem.read()?.clone()));
@@ -119,6 +124,7 @@ where
     memtable_builder: M::MemtableBuilder,
     levelctl: L,
     vlogctl: V,
+    txn_manager: TxnManager,
     write_sender: Sender<WriteRequest>,
     flush_sender: Sender<Arc<M>>,
     t: PhantomData<T>,
@@ -130,7 +136,6 @@ pub struct CoreBuilder<
     L: LevelCtlTrait<T, K>,
     T: TableTrait<K::Cipher>,
     S: SkipListTrait,
-    Txn: TxnManagerTrait,
     V: VlogCtlTrait<K>,
 > {
     read_only: bool,
@@ -140,7 +145,7 @@ pub struct CoreBuilder<
     memtable: M::MemtableBuilder,
     levelctl: L::LevelCtlBuilder,
     vlogctl: V::VlogCtlBuilder,
-    txn_manager: Txn::TxnManagerBuilder,
+    txn_manager: TxnManagerBuilder,
 }
 impl<
         M: MemtableTrait<S, K>,
@@ -148,9 +153,9 @@ impl<
         L: LevelCtlTrait<T, K>,
         T: TableTrait<K::Cipher>,
         S: SkipListTrait,
-        Txn: TxnManagerTrait,
+
         V: VlogCtlTrait<K>,
-    > Default for CoreBuilder<M, K, L, T, S, Txn, V>
+    > Default for CoreBuilder<M, K, L, T, S,  V>
 {
     fn default() -> Self {
         Self {
@@ -160,7 +165,7 @@ impl<
             kms: K::KmsBuilder::default(),
             memtable: M::MemtableBuilder::default(),
             levelctl: L::LevelCtlBuilder::default(),
-            txn_manager: Txn::TxnManagerBuilder::default(),
+            txn_manager: TxnManagerBuilder::default(),
             vlogctl: V::VlogCtlBuilder::default(),
         }
     }
@@ -171,9 +176,9 @@ impl<
         L: LevelCtlTrait<T, K>,
         T: TableTrait<K::Cipher>,
         S: SkipListTrait,
-        Txn: TxnManagerTrait,
+
         V: VlogCtlTrait<K>,
-    > CoreBuilder<M, K, L, T, S, Txn, V>
+    > CoreBuilder<M, K, L, T, S, V>
 {
     fn init_dir(&mut self) {
         let default_dir = PathBuf::from(DEFAULT_DIR);
@@ -216,9 +221,9 @@ impl<
         L: LevelCtlTrait<T, K>,
         T: TableTrait<K::Cipher>,
         S: SkipListTrait,
-        Txn: TxnManagerTrait,
+
         V: VlogCtlTrait<K>,
-    > CoreBuilder<M, K, L, T, S, Txn, V>
+    > CoreBuilder<M, K, L, T, S,  V>
 {
     pub async fn build(&mut self) -> Result<Core<M, K, L, T, S, V>> {
         self.init_dir();
@@ -257,7 +262,7 @@ impl<
             max_version = max_version.max(m.max_version());
         });
 
-        self.txn_manager.build(max_version).await?;
+        let txn_manager = self.txn_manager.build(max_version).await?;
         let immut_memtable = RwLock::new(immut_memtable);
 
         let vlogctl = self.vlogctl.build(kms.clone()).await?;
@@ -276,6 +281,7 @@ impl<
             memtable_builder: self.memtable.clone(),
             flush_sender,
             vlogctl,
+            txn_manager,
         });
 
         let write_task = Closer::new("write request task");

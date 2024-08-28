@@ -9,7 +9,6 @@ members = [
     "skip_list",
     "sstable",
     "traits",
-    "txn",
     "vlog",
     "wal",
 ]
@@ -40,7 +39,6 @@ mors-skip_list = { path = "skip_list", version = "0.1" }
 mors-encrypt = { path = "encrypt", version = "0.1" }
 mors-wal = { path = "wal", version = "0.1" }
 mors-levelctl = { path = "levelctl", version = "0.1" }
-mors-txn = { path = "txn", version = "0.1" }
 mors-vlog = { path = "vlog", version = "0.1" }
 aes-gcm = { version = "0.10" }
 aes-gcm-siv = { version = "0.11.1" }

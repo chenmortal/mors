@@ -1,13 +1,13 @@
 use std::{collections::HashSet, sync::Arc};
 
 use mors_common::ts::TxnTs;
-use mors_traits::txn::{
-    TxnManagerBuilderTrait, TxnManagerError, TxnManagerTrait,
-};
+
 use parking_lot::Mutex;
 
-use crate::{error::MorsTxnError, mark::WaterMark, Result};
+use super::mark::WaterMark;
+use super::Result;
 
+#[derive(Clone)]
 pub struct TxnManager(Arc<TxnManagerInner>);
 pub(crate) struct TxnManagerInner {
     core: tokio::sync::Mutex<TxnManagerCore>,
@@ -49,15 +49,9 @@ impl Default for TxnManagerBuilder {
         }
     }
 }
-impl TxnManagerTrait for TxnManager {
-    type ErrorType = MorsTxnError;
-    type TxnManagerBuilder = TxnManagerBuilder;
-}
-impl TxnManagerBuilderTrait<TxnManager> for TxnManagerBuilder {
-    async fn build(
-        &self,
-        max_version: TxnTs,
-    ) -> std::result::Result<TxnManager, TxnManagerError> {
+
+impl TxnManagerBuilder {
+    pub(crate) async fn build(&self, max_version: TxnTs) -> Result<TxnManager> {
         let core = TxnManagerCore {
             next: max_version + 1,
             ..Default::default()
@@ -75,7 +69,7 @@ impl TxnManagerBuilderTrait<TxnManager> for TxnManagerBuilder {
     }
 }
 impl TxnManager {
-    pub async fn generate_read_ts(&self) -> Result<TxnTs> {
+    pub(super) async fn generate_read_ts(&self) -> Result<TxnTs> {
         let read_ts = {
             let core_lock = self.0.core.lock().await;
             let read_ts = core_lock.next - 1;

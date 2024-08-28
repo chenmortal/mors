@@ -1,14 +1,29 @@
+use error::TxnManageError;
+use manager::TxnManager;
+
+pub mod error;
+pub mod manager;
+mod mark;
+type Result<T> = std::result::Result<T, TxnManageError>;
+
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicI32};
 
 use bytes::Bytes;
 use mors_common::kv::Entry;
 use mors_common::ts::TxnTs;
-use mors_traits::core::CoreTrait;
+use mors_traits::kms::Kms;
+use mors_traits::levelctl::LevelCtlTrait;
+use mors_traits::memtable::MemtableTrait;
+use mors_traits::skip_list::SkipListTrait;
+use mors_traits::sstable::TableTrait;
+
+use mors_traits::vlog::VlogCtlTrait;
+
 use parking_lot::Mutex;
 
-use crate::manager::TxnManager;
-use crate::Result;
+use crate::core::Core;
+
 /// Prefix for internal keys used by badger.
 const MORS_PREFIX: &[u8] = b"!mors!";
 /// For indicating end of entries in txn.
@@ -27,12 +42,19 @@ pub struct TxnConfig {
     // Not recommended for most users.
     managed_txns: bool,
 }
-pub struct WriteTxn<C: CoreTrait> {
+pub struct WriteTxn<
+    M: MemtableTrait<S, K>,
+    K: Kms,
+    L: LevelCtlTrait<T, K>,
+    T: TableTrait<K::Cipher>,
+    S: SkipListTrait,
+    V: VlogCtlTrait<K>,
+> {
+    core: Core<M, K, L, T, S, V>,
     read_ts: TxnTs,
     commit_ts: TxnTs,
     size: usize,
     count: usize,
-    core: C,
     txn: TxnManager,
     conflict_keys: Option<HashSet<u64>>,
     read_key_hash: Mutex<Vec<u64>>,
@@ -42,12 +64,21 @@ pub struct WriteTxn<C: CoreTrait> {
     discard: bool,
     done_read: AtomicBool,
 }
-impl<C: CoreTrait> WriteTxn<C> {
+
+impl<
+        M: MemtableTrait<S, K>,
+        K: Kms,
+        L: LevelCtlTrait<T, K>,
+        T: TableTrait<K::Cipher>,
+        S: SkipListTrait,
+        V: VlogCtlTrait<K>,
+    > WriteTxn<M, K, L, T, S, V>
+{
     pub async fn new(
-        core: C,
-        txn: TxnManager,
+        core: Core<M, K, L, T, S, V>,
         custom_txn: Option<TxnTs>,
-    ) -> Result<WriteTxn<C>> {
+    ) -> Result<Self> {
+        let txn = core.inner().txn_manager().clone();
         let read_ts = match custom_txn {
             Some(txn) => txn,
             None => txn.generate_read_ts().await?,
@@ -58,12 +89,11 @@ impl<C: CoreTrait> WriteTxn<C> {
         } else {
             None
         };
-        let write_txn = WriteTxn {
+        let write_txn = Self {
             read_ts,
             commit_ts: TxnTs::default(),
             size: TXN_KEY.len() + 10,
             count: 1,
-            core,
             txn,
             conflict_keys,
             read_key_hash: Mutex::new(Vec::new()),
@@ -72,7 +102,22 @@ impl<C: CoreTrait> WriteTxn<C> {
             num_iters: AtomicI32::new(0),
             discard: false,
             done_read: AtomicBool::new(false),
+            core,
         };
         Ok(write_txn)
+    }
+    pub async fn modify() {}
+}
+impl<
+        M: MemtableTrait<S, K>,
+        K: Kms,
+        L: LevelCtlTrait<T, K>,
+        T: TableTrait<K::Cipher>,
+        S: SkipListTrait,
+        V: VlogCtlTrait<K>,
+    > Core<M, K, L, T, S, V>
+{
+    pub(crate) async fn begin_write(&self) {
+        // WriteTxn::new(custom_txn);
     }
 }

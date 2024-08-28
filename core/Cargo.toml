@@ -13,6 +13,7 @@ sync = []
 workspace = true
 
 [dependencies]
+bytes = { workspace = true }
 mors-common = { workspace = true }
 mors-traits = { workspace = true }
 mors-encrypt = { workspace = true }
@@ -20,7 +21,6 @@ mors-levelctl = { workspace = true }
 mors-memtable = { workspace = true }
 mors-skip_list = { workspace = true }
 mors-sstable = { workspace = true }
-mors-txn = { workspace = true }
 mors-wal = { workspace = true }
 mors-vlog = { workspace = true }
 thiserror = { workspace = true }

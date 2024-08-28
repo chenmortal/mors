@@ -10,8 +10,7 @@ use mors_common::{
 };
 use mors_traits::{
     kms::Kms, levelctl::LevelCtlTrait, memtable::MemtableTrait,
-    skip_list::SkipListTrait, sstable::TableTrait, txn::TxnManagerTrait,
-    vlog::VlogCtlTrait,
+    skip_list::SkipListTrait, sstable::TableTrait, vlog::VlogCtlTrait,
 };
 use std::{
     mem::{replace, size_of},
@@ -57,14 +56,14 @@ impl Drop for WriteRequest {
         }
     }
 }
-impl<M, K, L, T, S, Txn, V> CoreBuilder<M, K, L, T, S, Txn, V>
+impl<M, K, L, T, S, V> CoreBuilder<M, K, L, T, S, V>
 where
     M: MemtableTrait<S, K>,
     K: Kms,
     L: LevelCtlTrait<T, K>,
     T: TableTrait<K::Cipher>,
     S: SkipListTrait,
-    Txn: TxnManagerTrait,
+
     V: VlogCtlTrait<K>,
 {
     pub(crate) fn init_write_channel(
