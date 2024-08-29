@@ -47,5 +47,7 @@ fn main_impl() -> Result<()> {
     let mut builder = MorsBuilder::default();
     builder.set_dir(dir).set_read_only(false);
     let mors = builder.build()?;
+    let write_txn = mors.begin_write().unwrap();
+    
     Ok(())
 }

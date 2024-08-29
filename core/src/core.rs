@@ -22,7 +22,6 @@ use mors_traits::{
     memtable::{MemtableBuilderTrait, MemtableTrait},
     skip_list::SkipListTrait,
     sstable::TableTrait,
-
     vlog::{VlogCtlBuilderTrait, VlogCtlTrait},
 };
 use tokio::sync::mpsc::Sender;
@@ -76,6 +75,9 @@ impl<
 {
     pub(crate) fn memtable(&self) -> Option<&RwLock<Arc<M>>> {
         self.memtable.as_ref()
+    }
+    pub(crate) fn memtable_builder(&self) -> &M::MemtableBuilder {
+        &self.memtable_builder
     }
     pub(crate) fn txn_manager(&self) -> &TxnManager {
         &self.txn_manager
@@ -153,9 +155,8 @@ impl<
         L: LevelCtlTrait<T, K>,
         T: TableTrait<K::Cipher>,
         S: SkipListTrait,
-
         V: VlogCtlTrait<K>,
-    > Default for CoreBuilder<M, K, L, T, S,  V>
+    > Default for CoreBuilder<M, K, L, T, S, V>
 {
     fn default() -> Self {
         Self {
@@ -176,7 +177,6 @@ impl<
         L: LevelCtlTrait<T, K>,
         T: TableTrait<K::Cipher>,
         S: SkipListTrait,
-
         V: VlogCtlTrait<K>,
     > CoreBuilder<M, K, L, T, S, V>
 {
@@ -221,9 +221,8 @@ impl<
         L: LevelCtlTrait<T, K>,
         T: TableTrait<K::Cipher>,
         S: SkipListTrait,
-
         V: VlogCtlTrait<K>,
-    > CoreBuilder<M, K, L, T, S,  V>
+    > CoreBuilder<M, K, L, T, S, V>
 {
     pub async fn build(&mut self) -> Result<Core<M, K, L, T, S, V>> {
         self.init_dir();

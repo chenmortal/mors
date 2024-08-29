@@ -10,7 +10,7 @@ use mors_traits::{
 };
 use thiserror::Error;
 
-use crate::txn::error::TxnManageError;
+use crate::txn::error::TxnError;
 
 #[derive(Error, Debug)]
 pub enum MorsError {
@@ -23,7 +23,7 @@ pub enum MorsError {
     #[error("LevelCtl Error: {0}")]
     LevelCtlError(#[from] LevelCtlError),
     #[error("TxnManager Error: {0}")]
-    TxnManagerError(#[from] TxnManageError),
+    TxnManagerError(#[from] TxnError),
     #[error("Memtable Error: {0}")]
     MemtableError(#[from] MemtableError),
     #[error("SSTable Error: {0}")]

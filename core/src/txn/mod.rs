@@ -1,12 +1,15 @@
-use error::TxnManageError;
+use ahash::RandomState;
+use error::TxnError;
 use manager::TxnManager;
 
 pub mod error;
 pub mod manager;
 mod mark;
-type Result<T> = std::result::Result<T, TxnManageError>;
+type Result<T> = std::result::Result<T, TxnError>;
 
 use std::collections::{HashMap, HashSet};
+
+use std::str::from_utf8;
 use std::sync::atomic::{AtomicBool, AtomicI32};
 
 use bytes::Bytes;
@@ -14,15 +17,15 @@ use mors_common::kv::Entry;
 use mors_common::ts::TxnTs;
 use mors_traits::kms::Kms;
 use mors_traits::levelctl::LevelCtlTrait;
-use mors_traits::memtable::MemtableTrait;
+use mors_traits::memtable::{MemtableBuilderTrait, MemtableTrait};
 use mors_traits::skip_list::SkipListTrait;
 use mors_traits::sstable::TableTrait;
 
-use mors_traits::vlog::VlogCtlTrait;
-
-use parking_lot::Mutex;
-
 use crate::core::Core;
+use lazy_static::lazy_static;
+use mors_traits::vlog::VlogCtlTrait;
+use parking_lot::Mutex;
+use rand::{thread_rng, Rng};
 
 /// Prefix for internal keys used by badger.
 const MORS_PREFIX: &[u8] = b"!mors!";
@@ -30,6 +33,10 @@ const MORS_PREFIX: &[u8] = b"!mors!";
 const TXN_KEY: &[u8] = b"!mors!txn";
 /// For storing the banned namespaces.
 const BANNED_NAMESPACES_KEY: &[u8] = b"!mors!banned";
+lazy_static! {
+    pub(crate) static ref HASH: RandomState =
+        ahash::RandomState::with_seed(thread_rng().gen());
+}
 #[derive(Debug, Clone, Copy)]
 pub struct TxnConfig {
     read_only: bool,
@@ -106,18 +113,64 @@ impl<
         };
         Ok(write_txn)
     }
-    pub async fn modify() {}
-}
-impl<
-        M: MemtableTrait<S, K>,
-        K: Kms,
-        L: LevelCtlTrait<T, K>,
-        T: TableTrait<K::Cipher>,
-        S: SkipListTrait,
-        V: VlogCtlTrait<K>,
-    > Core<M, K, L, T, S, V>
-{
-    pub(crate) async fn begin_write(&self) {
-        // WriteTxn::new(custom_txn);
+    pub async fn modify(&mut self, entry: &mut Entry) -> Result<()> {
+        const MAX_KEY_SIZE: usize = 65000;
+        let core_inner = self.core.inner();
+        let threshold = core_inner.vlogctl().value_threshold();
+        let vlog_file_size = core_inner.vlogctl().vlog_file_size();
+        let max_batch_count = core_inner.memtable_builder().max_batch_count();
+        let max_batch_size = core_inner.memtable_builder().max_batch_size();
+
+        if self.discard {
+            return Err(TxnError::DiscardTxn);
+        }
+        if entry.key().is_empty() {
+            return Err(TxnError::EmptyKey);
+        }
+        if entry.key().starts_with(MORS_PREFIX) {
+            return Err(TxnError::InvalidKey(from_utf8(MORS_PREFIX).unwrap()));
+        }
+        if entry.key().len() > MAX_KEY_SIZE {
+            return Err(TxnError::ExceedSize(
+                "Key",
+                entry.key().len(),
+                MAX_KEY_SIZE,
+            ));
+        }
+        if entry.value().len() > vlog_file_size {
+            return Err(TxnError::ExceedSize(
+                "Value",
+                entry.value().len(),
+                vlog_file_size,
+            ));
+        }
+
+        self.count += 1;
+        if entry.value_threshold() == 0 {
+            entry.set_value_threshold(threshold);
+        }
+        self.size += entry.estimate_size(entry.value_threshold());
+
+        if self.count >= max_batch_count || self.size >= max_batch_size {
+            return Err(TxnError::TxnTooBig);
+        }
+
+        if let Some(c) = self.conflict_keys.as_mut() {
+            c.insert(HASH.hash_one(entry.key()));
+        }
+        Ok(())
     }
 }
+// impl<
+//         M: MemtableTrait<S, K>,
+//         K: Kms,
+//         L: LevelCtlTrait<T, K>,
+//         T: TableTrait<K::Cipher>,
+//         S: SkipListTrait,
+//         V: VlogCtlTrait<K>,
+//     > Core<M, K, L, T, S, V>
+// {
+//     pub(crate) async fn begin_write(&self) -> WriteTxn<M, K, L, T, S, V> {
+//         WriteTxn::new(self.clone(), None)
+//     }
+// }

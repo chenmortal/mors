@@ -1,4 +1,4 @@
-use super::{error::TxnManageError, Result};
+use super::{error::TxnError, Result};
 use std::{
     cmp::Reverse,
     collections::{BinaryHeap, HashMap},
@@ -58,7 +58,7 @@ impl WaterMark {
                 done: false,
             })
             .await
-            .map_err(|e| TxnManageError::SendError(e.to_string()))
+            .map_err(|e| TxnError::SendError(e.to_string()))
     }
     //just only use for txn_mark
     pub(crate) async fn wait_for_mark(&self, txn: TxnTs) -> Result<()> {
@@ -75,7 +75,7 @@ impl WaterMark {
                 done: false,
             })
             .await
-            .map_err(|e| TxnManageError::SendError(e.to_string()))?;
+            .map_err(|e| TxnError::SendError(e.to_string()))?;
         notify.notified().await;
         Ok(())
     }

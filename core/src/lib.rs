@@ -12,6 +12,7 @@ use mors_sstable::table::Table;
 
 use mors_vlog::vlogctl::VlogCtl;
 use tokio::runtime::Builder;
+use txn::WriteTxn;
 pub mod core;
 mod error;
 mod flush;
@@ -26,6 +27,27 @@ type MorsLevelCtl = LevelCtl<Table<AesCipher>, MorsKms>;
 type MorsTable = Table<AesCipher>;
 type MorsLevelCtlType = LevelCtl<MorsTable, MorsKms>;
 type MorsVlog = VlogCtl<MorsKms>;
+type WriteTxnType = WriteTxn<
+    MorsMemtable,
+    MorsKms,
+    MorsLevelCtlType,
+    MorsTable,
+    SkipList,
+    MorsVlog,
+>;
+pub struct WriteTransaction(WriteTxnType);
+impl From<WriteTxnType> for WriteTransaction {
+    fn from(txn: WriteTxnType) -> Self {
+        Self(txn)
+    }
+}
+impl Deref for WriteTransaction {
+    type Target = WriteTxnType;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 #[derive(Clone)]
 pub struct Mors {
     #[cfg(feature = "sync")]
@@ -41,7 +63,6 @@ struct MorsInner {
         Table<AesCipher>,
         SkipList,
         MorsVlog,
-
     >,
     #[cfg(feature = "sync")]
     runtime: tokio::runtime::Runtime,
@@ -54,7 +75,6 @@ pub struct MorsBuilder {
         MorsLevelCtlType,
         MorsTable,
         SkipList,
-
         MorsVlog,
     >,
     #[cfg(feature = "sync")]
@@ -81,7 +101,6 @@ impl Deref for Mors {
         Table<AesCipher>,
         SkipList,
         MorsVlog,
-
     >;
 
     fn deref(&self) -> &Self::Target {
@@ -95,7 +114,6 @@ impl Deref for MorsBuilder {
         LevelCtl<Table<AesCipher>, MorsKms>,
         Table<AesCipher>,
         SkipList,
-
         MorsVlog,
     >;
 
@@ -130,5 +148,21 @@ impl MorsBuilder {
         Ok(Mors {
             inner: Arc::new(inner),
         })
+    }
+}
+impl Mors {
+    #[cfg(not(feature = "sync"))]
+    pub async fn begin_write(&self) -> Result<WriteTransaction> {
+        Ok(WriteTxnType::new(self.inner.core.clone(), None)
+            .await?
+            .into())
+    }
+    #[cfg(feature = "sync")]
+    pub fn begin_write(&self) -> Result<WriteTransaction> {
+        Ok(self
+            .inner
+            .runtime
+            .block_on(WriteTxnType::new(self.inner.core.clone(), None))?
+            .into())
     }
 }

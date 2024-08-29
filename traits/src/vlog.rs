@@ -13,6 +13,7 @@ pub trait VlogCtlTrait<K: Kms>: Sized + Send + Sync + 'static {
     // fn latest_logfile(&self) -> Result<LogFileWrapper<K>, VlogError>;
     fn writeable_offset(&self) -> usize;
     fn vlog_file_size(&self) -> usize;
+    fn value_threshold(&self) -> usize;
     fn write<'a>(
         &self,
         iter_mut: Vec<IterMut<'a, (Entry, ValuePointer)>>,

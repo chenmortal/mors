@@ -60,6 +60,9 @@ impl Entry {
     pub fn value(&self) -> &Bytes {
         &self.value_meta.value
     }
+    pub fn key(&self)->&Bytes{
+        self.key_ts.key()
+    }
     pub fn set_value<B: Into<Bytes>>(&mut self, value: B) -> &mut Self {
         self.value_meta.set_value(value.into());
         self
@@ -101,6 +104,13 @@ impl Entry {
         self.value_threshold = value_threshold;
         self
     }
+    pub fn estimate_size(&self, threshold: usize) -> usize {
+        if self.value().len() < threshold {
+            self.key_ts().key().len() + self.value().len() + 2
+        } else {
+            self.key_ts().key().len() + ValuePointer::SIZE + 2
+        }
+    }
 }
 
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -110,6 +120,7 @@ pub struct ValuePointer {
     offset: u64,
 }
 impl ValuePointer {
+    const SIZE: usize = size_of::<u32>() + size_of::<u32>() + size_of::<u64>();
     pub fn new<I: FileId>(file_id: I, size: u32, offset: u64) -> Self {
         Self {
             fid: file_id.into(),

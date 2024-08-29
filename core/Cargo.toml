@@ -6,9 +6,9 @@ license.workspace = true
 readme.workspace = true
 
 [features]
-default = ["sync"]
+default = ["sync", "txn"]
 sync = []
-
+txn = []
 [lints]
 workspace = true
 
@@ -26,8 +26,11 @@ mors-vlog = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-util = { workspace = true, features = ["full"] }
+lazy_static = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
+ahash = { workspace = true }
+rand = { workspace = true }
 env_logger = "0.11.3"
 crc32fast = { workspace = true }
 [dev-dependencies]
