@@ -60,7 +60,7 @@ impl Entry {
     pub fn value(&self) -> &Bytes {
         &self.value_meta.value
     }
-    pub fn key(&self)->&Bytes{
+    pub fn key(&self) -> &Bytes {
         self.key_ts.key()
     }
     pub fn set_value<B: Into<Bytes>>(&mut self, value: B) -> &mut Self {
@@ -83,6 +83,10 @@ impl Entry {
     }
     pub fn user_meta(&self) -> u8 {
         self.value_meta.user_meta()
+    }
+    pub fn set_expires_at(&mut self, expires_at: PhyTs) -> &mut Self {
+        self.value_meta.expires_at = expires_at;
+        self
     }
     pub fn expires_at(&self) -> PhyTs {
         self.value_meta.expires_at()

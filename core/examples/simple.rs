@@ -1,8 +1,10 @@
 use std::{fs::create_dir, path::PathBuf};
 
 use log::LevelFilter;
+
 use morsdb::MorsBuilder;
 use morsdb::Result;
+
 #[cfg(not(feature = "sync"))]
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() {
@@ -48,6 +50,6 @@ fn main_impl() -> Result<()> {
     builder.set_dir(dir).set_read_only(false);
     let mors = builder.build()?;
     let write_txn = mors.begin_write().unwrap();
-    
+
     Ok(())
 }

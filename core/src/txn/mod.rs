@@ -81,7 +81,7 @@ impl<
         V: VlogCtlTrait<K>,
     > WriteTxn<M, K, L, T, S, V>
 {
-    pub async fn new(
+    pub(crate) async fn new(
         core: Core<M, K, L, T, S, V>,
         custom_txn: Option<TxnTs>,
     ) -> Result<Self> {
@@ -113,7 +113,7 @@ impl<
         };
         Ok(write_txn)
     }
-    pub async fn modify(&mut self, entry: &mut Entry) -> Result<()> {
+    pub(crate) fn modify(&mut self, mut entry: Entry) -> Result<()> {
         const MAX_KEY_SIZE: usize = 65000;
         let core_inner = self.core.inner();
         let threshold = core_inner.vlogctl().value_threshold();
@@ -158,6 +158,15 @@ impl<
         if let Some(c) = self.conflict_keys.as_mut() {
             c.insert(HASH.hash_one(entry.key()));
         }
+
+        let new_version = entry.version();
+        if let Some(old) =
+            self.pending_writes.insert(entry.key().clone(), entry)
+        {
+            if old.version() != new_version {
+                self.duplicate_writes.push(old);
+            }
+        };
         Ok(())
     }
 }

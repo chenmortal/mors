@@ -1,8 +1,12 @@
 use core::{Core, CoreBuilder};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
+use bytes::Bytes;
 use error::MorsError;
+
+use mors_common::ts::PhyTs;
 use mors_encrypt::{cipher::AesCipher, registry::MorsKms};
 use mors_levelctl::ctl::LevelCtl;
 use mors_memtable::memtable::Memtable;
@@ -20,6 +24,7 @@ mod read;
 mod test;
 mod txn;
 mod write;
+use mors_common::kv::{Entry, Meta};
 pub type Result<T> = std::result::Result<T, MorsError>;
 
 type MorsMemtable = Memtable<SkipList, MorsKms>;
@@ -165,4 +170,56 @@ impl Mors {
             .block_on(WriteTxnType::new(self.inner.core.clone(), None))?
             .into())
     }
+}
+pub struct KvEntry(Entry);
+impl KvEntry {
+    pub fn new(key: Bytes, value: Bytes) -> Self {
+        Self(Entry::new(key, value))
+    }
+    pub fn key(&self) -> &Bytes {
+        self.0.key()
+    }
+    pub fn value(&self) -> &Bytes {
+        self.0.value()
+    }
+    pub fn set_meta(&mut self, meta: u8) {
+        self.0.set_user_meta(meta);
+    }
+    pub fn meta(&self) -> u8 {
+        self.0.user_meta()
+    }
+
+    pub fn set_ttl(&mut self, ttl: Duration) {
+        let expires: PhyTs = SystemTime::now()
+            .checked_add(ttl)
+            .unwrap()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            .into();
+        self.0.set_expires_at(expires);
+    }
+
+    // WithDiscard adds a marker to Entry e. This means all the previous versions of the key (of the
+    // Entry) will be eligible for garbage collection.
+    // This method is only useful if you have set a higher limit for options.NumVersionsToKeep. The
+    // default setting is 1, in which case, this function doesn't add any more benefit. If however, you
+    // have a higher setting for NumVersionsToKeep (in Dgraph, we set it to infinity), you can use this
+    // method to indicate that all the older versions can be discarded and removed during compactions.
+    pub fn set_discard(&mut self) {
+        self.0.meta_mut().insert(Meta::DISCARD_EARLIER_VERSIONS);
+    }
+
+    pub fn set_merge(&mut self) {
+        self.0.meta_mut().insert(Meta::MERGE_ENTRY);
+    }
+}
+impl WriteTransaction {
+    pub fn set(&mut self, key: Bytes, value: Bytes) -> Result<()> {
+        self.set_entry(KvEntry::new(key, value))
+    }
+    pub fn set_entry(&mut self, entry: KvEntry) -> Result<()> {
+        Ok(self.0.modify(entry.0)?)
+    }
+    
 }
