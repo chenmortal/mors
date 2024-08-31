@@ -213,6 +213,9 @@ impl KvEntry {
     pub fn set_merge(&mut self) {
         self.0.meta_mut().insert(Meta::MERGE_ENTRY);
     }
+    fn set_delete(&mut self) {
+        self.0.meta_mut().insert(Meta::DELETE);
+    }
 }
 impl WriteTransaction {
     pub fn set(&mut self, key: Bytes, value: Bytes) -> Result<()> {
@@ -221,5 +224,9 @@ impl WriteTransaction {
     pub fn set_entry(&mut self, entry: KvEntry) -> Result<()> {
         Ok(self.0.modify(entry.0)?)
     }
-    
+    pub fn delete(&mut self, key: Bytes) -> Result<()> {
+        let mut entry = KvEntry::new(key, Bytes::new());
+        entry.set_delete();
+        self.set_entry(entry)
+    }
 }

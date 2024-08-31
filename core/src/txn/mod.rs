@@ -10,7 +10,7 @@ type Result<T> = std::result::Result<T, TxnError>;
 use std::collections::{HashMap, HashSet};
 
 use std::str::from_utf8;
-use std::sync::atomic::{AtomicBool, AtomicI32};
+use std::sync::atomic::AtomicI32;
 
 use bytes::Bytes;
 use mors_common::kv::Entry;
@@ -24,7 +24,7 @@ use mors_traits::sstable::TableTrait;
 use crate::core::Core;
 use lazy_static::lazy_static;
 use mors_traits::vlog::VlogCtlTrait;
-use parking_lot::Mutex;
+
 use rand::{thread_rng, Rng};
 
 /// Prefix for internal keys used by badger.
@@ -58,18 +58,18 @@ pub struct WriteTxn<
     V: VlogCtlTrait<K>,
 > {
     core: Core<M, K, L, T, S, V>,
-    read_ts: TxnTs,
+    pub(super) read_ts: TxnTs,
     commit_ts: TxnTs,
     size: usize,
     count: usize,
     txn: TxnManager,
     conflict_keys: Option<HashSet<u64>>,
-    read_key_hash: Mutex<Vec<u64>>,
+    pub(super) read_key_hash: Vec<u64>,
     pending_writes: HashMap<Bytes, Entry>,
     duplicate_writes: Vec<Entry>,
     num_iters: AtomicI32,
     discard: bool,
-    done_read: AtomicBool,
+    pub(super) done_read: bool,
 }
 
 impl<
@@ -103,12 +103,12 @@ impl<
             count: 1,
             txn,
             conflict_keys,
-            read_key_hash: Mutex::new(Vec::new()),
+            read_key_hash: Vec::new(),
             pending_writes: HashMap::new(),
             duplicate_writes: Default::default(),
             num_iters: AtomicI32::new(0),
             discard: false,
-            done_read: AtomicBool::new(false),
+            done_read: false,
             core,
         };
         Ok(write_txn)
@@ -167,6 +167,16 @@ impl<
                 self.duplicate_writes.push(old);
             }
         };
+        Ok(())
+    }
+    pub(crate) async fn commit(&mut self) -> Result<()> {
+        if self.pending_writes.is_empty() {
+            return Ok(());
+        }
+        if self.discard {
+            return Err(TxnError::DiscardTxn);
+        }
+
         Ok(())
     }
 }

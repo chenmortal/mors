@@ -60,6 +60,21 @@ impl WaterMark {
             .await
             .map_err(|e| TxnError::SendError(e.to_string()))
     }
+    pub(crate) fn done_until(&self) -> &AtomicU64 {
+        &self.0.done_until
+    }
+    pub(crate) async fn done(&self, txn: TxnTs) -> Result<()> {
+        self.0
+            .sender
+            .send(Mark {
+                txn,
+                waiter: None,
+                indices: Vec::new(),
+                done: true,
+            })
+            .await
+            .map_err(|e| TxnError::SendError(e.to_string()))
+    }
     //just only use for txn_mark
     pub(crate) async fn wait_for_mark(&self, txn: TxnTs) -> Result<()> {
         if self.0.done_until.load(Ordering::Acquire) >= txn.into() {

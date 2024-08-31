@@ -13,4 +13,6 @@ pub enum TxnError {
     InvalidKey(&'static str),
     #[error("Txn is too big to fit into one request")]
     TxnTooBig,
+    #[error("Transaction Conflict. Please retry")]
+    Conflict,
 }
