@@ -96,7 +96,7 @@ impl TxnManager {
         V: VlogCtlTrait<K>,
     >(
         &self,
-        txn: &mut WriteTxn<M, K, L, T, S, V>,
+        txn: &WriteTxn<M, K, L, T, S, V>,
     ) -> Result<TxnTs> {
         let mut core = self.0.core.lock();
 
@@ -111,11 +111,7 @@ impl TxnManager {
                 }
             }
         }
-        if !txn.done_read {
-            txn.done_read = true;
-            self.0.read_mark.done(txn.read_ts).await?;
-        };
-
+        self.0.read_mark.done(txn.read_ts).await?;
         if self.0.config.detect_conflicts {
             let max_read_tx: TxnTs =
                 self.0.read_mark.done_until().load(Ordering::Acquire).into();
@@ -140,13 +136,15 @@ impl TxnManager {
         if self.0.config.detect_conflicts {
             core.committed.push(CommittedTxn {
                 ts: commit_ts,
-                conflict_keys: txn.conflict_keys.take().unwrap(),
+                conflict_keys: txn.conflict_keys.clone().unwrap(),
             });
         }
 
         Ok(commit_ts)
     }
-
+    pub async fn done_commit(&self, txn: TxnTs)->Result<()> {
+        self.0.txn_mark.done(txn).await
+    }
     pub fn detect_conflicts(&self) -> bool {
         self.0.config.detect_conflicts
     }

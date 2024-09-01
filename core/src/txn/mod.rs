@@ -1,6 +1,7 @@
 use ahash::RandomState;
 use error::TxnError;
 use manager::TxnManager;
+use tokio::sync::oneshot;
 
 pub mod error;
 pub mod manager;
@@ -13,7 +14,7 @@ use std::str::from_utf8;
 use std::sync::atomic::AtomicI32;
 
 use bytes::Bytes;
-use mors_common::kv::Entry;
+use mors_common::kv::{Entry, Meta};
 use mors_common::ts::TxnTs;
 use mors_traits::kms::Kms;
 use mors_traits::levelctl::LevelCtlTrait;
@@ -22,6 +23,7 @@ use mors_traits::skip_list::SkipListTrait;
 use mors_traits::sstable::TableTrait;
 
 use crate::core::Core;
+use crate::error::MorsError;
 use lazy_static::lazy_static;
 use mors_traits::vlog::VlogCtlTrait;
 
@@ -57,7 +59,7 @@ pub struct WriteTxn<
     S: SkipListTrait,
     V: VlogCtlTrait<K>,
 > {
-    core: Core<M, K, L, T, S, V>,
+    pub(crate) core: Core<M, K, L, T, S, V>,
     pub(super) read_ts: TxnTs,
     commit_ts: TxnTs,
     size: usize,
@@ -69,7 +71,6 @@ pub struct WriteTxn<
     duplicate_writes: Vec<Entry>,
     num_iters: AtomicI32,
     discard: bool,
-    pub(super) done_read: bool,
 }
 
 impl<
@@ -108,7 +109,6 @@ impl<
             duplicate_writes: Default::default(),
             num_iters: AtomicI32::new(0),
             discard: false,
-            done_read: false,
             core,
         };
         Ok(write_txn)
@@ -169,15 +169,89 @@ impl<
         };
         Ok(())
     }
-    pub(crate) async fn commit(&mut self) -> Result<()> {
+    pub(crate) async fn commit(
+        &mut self,
+    ) -> std::result::Result<(), MorsError> {
         if self.pending_writes.is_empty() {
             return Ok(());
         }
         if self.discard {
-            return Err(TxnError::DiscardTxn);
+            return Err(TxnError::DiscardTxn.into());
+        }
+        let (commit_ts, recv) = self.commit_send().await?;
+        let result = recv.await;
+        self.core
+            .inner()
+            .txn_manager()
+            .done_commit(commit_ts)
+            .await?;
+        result.map_err(|e| MorsError::RecvError(e.to_string()))??;
+        Ok(())
+    }
+    pub(crate) async fn commit_send(
+        &mut self,
+    ) -> std::result::Result<
+        (TxnTs, oneshot::Receiver<std::result::Result<(), MorsError>>),
+        MorsError,
+    > {
+        let commit_ts = self
+            .core
+            .inner()
+            .txn_manager()
+            .generate_commit_ts(self)
+            .await?;
+
+        let mut keep_together = true;
+        for entry in self
+            .pending_writes
+            .iter_mut()
+            .map(|x| x.1)
+            .chain(self.duplicate_writes.iter_mut())
+        {
+            if entry.version().is_empty() {
+                entry.set_version(commit_ts);
+            } else {
+                keep_together = false;
+            }
         }
 
-        Ok(())
+        let mut entries = Vec::with_capacity(
+            self.pending_writes.len() + self.duplicate_writes.len() + 1,
+        );
+        for mut entry in self
+            .pending_writes
+            .drain()
+            .map(|x| x.1)
+            .chain(self.duplicate_writes.drain(..))
+        {
+            if keep_together {
+                entry.meta_mut().insert(Meta::TXN);
+            }
+            entries.push(entry);
+        }
+
+        if keep_together {
+            debug_assert!(!commit_ts.is_empty());
+            let mut entry = Entry::new(
+                TXN_KEY.into(),
+                commit_ts.to_u64().to_string().into(),
+            );
+            entry.set_version(commit_ts);
+            entry.set_meta(Meta::FIN_TXN);
+            entries.push(entry);
+        }
+        let r = match self.core.inner().send_to_write_channel(entries).await {
+            Ok(r) => r,
+            Err(e) => {
+                self.core
+                    .inner()
+                    .txn_manager()
+                    .done_commit(commit_ts)
+                    .await?;
+                return Err(e);
+            }
+        };
+        Ok((commit_ts, r))
     }
 }
 // impl<

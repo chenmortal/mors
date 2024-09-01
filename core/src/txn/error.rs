@@ -15,4 +15,6 @@ pub enum TxnError {
     TxnTooBig,
     #[error("Transaction Conflict. Please retry")]
     Conflict,
+    #[error("Core Error: {0}")]
+    CoreError(String),
 }

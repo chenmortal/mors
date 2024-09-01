@@ -80,6 +80,21 @@ where
     S: SkipListTrait,
     V: VlogCtlTrait<K>,
 {
+    pub(crate) async fn send_to_write_channel(
+        &self,
+        entries: Vec<Entry>,
+    ) -> Result<oneshot::Receiver<Result<()>>> {
+        if self.block_write().load(Ordering::Acquire) {
+            return Err(MorsError::BlockedWrites);
+        }
+        let (sender, receiver) = oneshot::channel::<Result<()>>();
+        let write_req = WriteRequest::new(entries, sender);
+        self.write_sender()
+            .send(write_req)
+            .await
+            .map_err(|e| MorsError::SendError(e.to_string()))?;
+        Ok(receiver)
+    }
     pub(crate) async fn do_write_task(
         this: Arc<Self>,
         mut receiver: Receiver<WriteRequest>,

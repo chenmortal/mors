@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 use std::fs::create_dir;
 use std::marker::PhantomData;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -109,6 +110,9 @@ impl<
     pub(crate) fn vlogctl(&self) -> &V {
         &self.vlogctl
     }
+    pub(crate) fn block_write(&self)->&AtomicBool{
+        &self.block_write
+    }
 }
 pub(crate) struct CoreInner<M, K, L, T, S, V>
 where
@@ -129,6 +133,7 @@ where
     txn_manager: TxnManager,
     write_sender: Sender<WriteRequest>,
     flush_sender: Sender<Arc<M>>,
+    block_write: AtomicBool,
     t: PhantomData<T>,
 }
 
@@ -281,6 +286,7 @@ impl<
             flush_sender,
             vlogctl,
             txn_manager,
+            block_write: AtomicBool::new(false),
         });
 
         let write_task = Closer::new("write request task");

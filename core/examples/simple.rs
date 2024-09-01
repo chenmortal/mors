@@ -31,7 +31,7 @@ async fn main_impl() -> Result<()> {
 
     Ok(())
 }
-
+#[cfg(feature = "sync")]
 fn main() {
     let mut logger = env_logger::builder();
     logger.filter_level(LevelFilter::Trace);
@@ -40,6 +40,7 @@ fn main() {
         eprintln!("Error: {:?}", e.to_string());
     };
 }
+#[cfg(feature = "sync")]
 fn main_impl() -> Result<()> {
     let path = "./data/";
     let dir = PathBuf::from(path);

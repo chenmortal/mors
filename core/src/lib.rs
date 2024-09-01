@@ -1,6 +1,6 @@
 use core::{Core, CoreBuilder};
 use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
+
 use std::time::{Duration, SystemTime};
 
 use bytes::Bytes;
@@ -16,6 +16,9 @@ use mors_sstable::table::Table;
 
 use mors_vlog::vlogctl::VlogCtl;
 use tokio::runtime::Builder;
+#[cfg(feature = "sync")]
+use {std::sync::Arc, tokio::runtime::Handle};
+
 use txn::WriteTxn;
 pub mod core;
 mod error;
@@ -40,17 +43,16 @@ type WriteTxnType = WriteTxn<
     SkipList,
     MorsVlog,
 >;
-pub struct WriteTransaction(WriteTxnType);
-impl From<WriteTxnType> for WriteTransaction {
-    fn from(txn: WriteTxnType) -> Self {
-        Self(txn)
-    }
+pub struct WriteTransaction {
+    txn: WriteTxnType,
+    #[cfg(feature = "sync")]
+    handler: Handle,
 }
 impl Deref for WriteTransaction {
     type Target = WriteTxnType;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.txn
     }
 }
 #[derive(Clone)]
@@ -60,6 +62,7 @@ pub struct Mors {
     #[cfg(not(feature = "sync"))]
     inner: MorsInner,
 }
+
 struct MorsInner {
     core: Core<
         MorsMemtable,
@@ -71,6 +74,14 @@ struct MorsInner {
     >,
     #[cfg(feature = "sync")]
     runtime: tokio::runtime::Runtime,
+}
+#[cfg(not(feature = "sync"))]
+impl Clone for MorsInner {
+    fn clone(&self) -> Self {
+        Self {
+            core: self.core.clone(),
+        }
+    }
 }
 
 pub struct MorsBuilder {
@@ -139,6 +150,7 @@ impl MorsBuilder {
 
     #[cfg(feature = "sync")]
     pub fn build(&mut self) -> Result<Mors> {
+        use std::sync::Arc;
         let runtime = self.tokio_builder.build()?;
         let k = runtime.block_on(self.builder.build())?;
         let inner = MorsInner { core: k, runtime };
@@ -150,25 +162,25 @@ impl MorsBuilder {
     pub async fn build(&mut self) -> Result<Mors> {
         let core = self.builder.build().await?;
         let inner = MorsInner { core };
-        Ok(Mors {
-            inner: Arc::new(inner),
-        })
+        Ok(Mors { inner })
     }
 }
 impl Mors {
     #[cfg(not(feature = "sync"))]
     pub async fn begin_write(&self) -> Result<WriteTransaction> {
-        Ok(WriteTxnType::new(self.inner.core.clone(), None)
-            .await?
-            .into())
+        let txn = WriteTxnType::new(self.inner.core.clone(), None).await?;
+        Ok(WriteTransaction { txn })
     }
     #[cfg(feature = "sync")]
     pub fn begin_write(&self) -> Result<WriteTransaction> {
-        Ok(self
+        let txn = self
             .inner
             .runtime
-            .block_on(WriteTxnType::new(self.inner.core.clone(), None))?
-            .into())
+            .block_on(WriteTxnType::new(self.inner.core.clone(), None))?;
+        Ok(WriteTransaction {
+            txn,
+            handler: self.inner.runtime.handle().clone(),
+        })
     }
 }
 pub struct KvEntry(Entry);
@@ -222,11 +234,19 @@ impl WriteTransaction {
         self.set_entry(KvEntry::new(key, value))
     }
     pub fn set_entry(&mut self, entry: KvEntry) -> Result<()> {
-        Ok(self.0.modify(entry.0)?)
+        Ok(self.txn.modify(entry.0)?)
     }
     pub fn delete(&mut self, key: Bytes) -> Result<()> {
         let mut entry = KvEntry::new(key, Bytes::new());
         entry.set_delete();
         self.set_entry(entry)
+    }
+    #[cfg(not(feature = "sync"))]
+    pub async fn commit(&mut self) -> Result<()> {
+        self.txn.commit().await
+    }
+    #[cfg(feature = "sync")]
+    pub fn commit(&mut self) -> Result<()> {
+        self.handler.block_on(self.txn.commit())
     }
 }
