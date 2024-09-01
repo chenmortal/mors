@@ -16,8 +16,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: install
-      run: apt-get install protoc
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
     - name: Build
       run: cargo build --verbose
     - name: Run tests
