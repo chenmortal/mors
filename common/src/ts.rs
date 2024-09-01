@@ -60,6 +60,9 @@ impl TxnTs {
     pub fn to_u64(&self) -> u64 {
         self.0
     }
+    pub fn is_empty(&self) -> bool {
+        self.0 == 0
+    }
 }
 impl Add<u64> for TxnTs {
     type Output = Self;

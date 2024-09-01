@@ -6,13 +6,14 @@ license.workspace = true
 readme.workspace = true
 
 [features]
-default = ["sync"]
+default = ["sync","txn"]
 sync = []
-
+txn = []
 [lints]
 workspace = true
 
 [dependencies]
+bytes = { workspace = true }
 mors-common = { workspace = true }
 mors-traits = { workspace = true }
 mors-encrypt = { workspace = true }
@@ -20,14 +21,16 @@ mors-levelctl = { workspace = true }
 mors-memtable = { workspace = true }
 mors-skip_list = { workspace = true }
 mors-sstable = { workspace = true }
-mors-txn = { workspace = true }
 mors-wal = { workspace = true }
 mors-vlog = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-util = { workspace = true, features = ["full"] }
+lazy_static = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
+ahash = { workspace = true }
+rand = { workspace = true }
 env_logger = "0.11.3"
 crc32fast = { workspace = true }
 [dev-dependencies]

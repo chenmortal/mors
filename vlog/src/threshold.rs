@@ -119,12 +119,12 @@ impl VlogThresholdInner {
     }
     pub(crate) fn value_threshold(&self) -> usize {
         self.value_threshold
-            .load(std::sync::atomic::Ordering::SeqCst)
+            .load(std::sync::atomic::Ordering::Acquire)
     }
 
     pub(crate) fn set_value_threshold(&self, value_threshold: usize) {
         self.value_threshold
-            .store(value_threshold, std::sync::atomic::Ordering::SeqCst);
+            .store(value_threshold, std::sync::atomic::Ordering::Release);
     }
 }
 impl Deref for VlogThreshold {

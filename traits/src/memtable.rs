@@ -39,6 +39,8 @@ pub trait MemtableBuilderTrait<
     fn open_exist(&self, kms: K) -> Result<VecDeque<Arc<M>>, MemtableError>;
 
     fn build(&self, kms: K) -> Result<M, MemtableError>;
+    fn max_batch_size(&self) -> usize;
+    fn max_batch_count(&self) -> usize;
     fn set_num_memtables(&mut self, num_memtables: usize);
     fn set_memtable_size(&mut self, memtable_size: usize);
 }

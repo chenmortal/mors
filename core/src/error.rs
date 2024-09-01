@@ -5,9 +5,11 @@ use mors_traits::{
     levelctl::LevelCtlError,
     memtable::MemtableError,
     sstable::SSTableError,
-    txn::TxnManagerError, vlog::VlogError,
+    vlog::VlogError,
 };
 use thiserror::Error;
+
+use crate::txn::error::TxnError;
 
 #[derive(Error, Debug)]
 pub enum MorsError {
@@ -20,7 +22,7 @@ pub enum MorsError {
     #[error("LevelCtl Error: {0}")]
     LevelCtlError(#[from] LevelCtlError),
     #[error("TxnManager Error: {0}")]
-    TxnManagerError(#[from] TxnManagerError),
+    TxnManagerError(#[from] TxnError),
     #[error("Memtable Error: {0}")]
     MemtableError(#[from] MemtableError),
     #[error("SSTable Error: {0}")]
@@ -31,12 +33,16 @@ pub enum MorsError {
     RwLockPoisoned(String),
     #[error("Send Error: {0}")]
     SendError(String),
+    #[error("Recv Error: {0}")]
+    RecvError(String),
     #[error("Write Request too long: {0} > {1}")]
-    ToLongWriteRequest(usize,usize),
+    ToLongWriteRequest(usize, usize),
     #[error("Write Request Error: {0}")]
     WriteRequestError(String),
     #[error("Poison error: {0}")]
     PoisonError(String),
+    #[error("Writes are blocked, possibly due to DropAll or Close")]
+    BlockedWrites,
 }
 impl<T> From<PoisonError<T>> for MorsError {
     fn from(e: PoisonError<T>) -> MorsError {

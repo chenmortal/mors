@@ -1,3 +1,4 @@
+use super::{error::TxnError, Result};
 use std::{
     cmp::Reverse,
     collections::{BinaryHeap, HashMap},
@@ -7,7 +8,6 @@ use std::{
     },
 };
 
-use crate::{error::MorsTxnError, Result};
 use mors_common::closer::Closer;
 use mors_common::ts::TxnTs;
 use tokio::{
@@ -58,7 +58,22 @@ impl WaterMark {
                 done: false,
             })
             .await
-            .map_err(|e| MorsTxnError::SendError(e.to_string()))
+            .map_err(|e| TxnError::SendError(e.to_string()))
+    }
+    pub(crate) fn done_until(&self) -> &AtomicU64 {
+        &self.0.done_until
+    }
+    pub(crate) async fn done(&self, txn: TxnTs) -> Result<()> {
+        self.0
+            .sender
+            .send(Mark {
+                txn,
+                waiter: None,
+                indices: Vec::new(),
+                done: true,
+            })
+            .await
+            .map_err(|e| TxnError::SendError(e.to_string()))
     }
     //just only use for txn_mark
     pub(crate) async fn wait_for_mark(&self, txn: TxnTs) -> Result<()> {
@@ -75,7 +90,7 @@ impl WaterMark {
                 done: false,
             })
             .await
-            .map_err(|e| MorsTxnError::SendError(e.to_string()))?;
+            .map_err(|e| TxnError::SendError(e.to_string()))?;
         notify.notified().await;
         Ok(())
     }

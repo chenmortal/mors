@@ -10,7 +10,6 @@ use mors_traits::default::DEFAULT_DIR;
 use std::path::PathBuf;
 // use morsdb::MorsBuilder;
 
-
 #[derive(Parser)]
 #[command(name = "morscli")]
 #[command(version = "0.1.0")]

@@ -52,6 +52,9 @@ impl<K: Kms> VlogCtlTrait<K> for VlogCtl<K> {
     fn vlog_file_size(&self) -> usize {
         self.inner.builder.vlog_file_size
     }
+    fn value_threshold(&self) -> usize {
+        self.inner.vlog_threshold.value_threshold()
+    }
 
     const MAX_VLOG_SIZE: usize = 22;
 
@@ -114,9 +117,7 @@ impl<K: Kms> VlogCtl<K> {
             .writeable_offset
             .fetch_add(offset, Ordering::SeqCst)
     }
-    pub fn value_threshold(&self) -> usize {
-        self.inner.vlog_threshold.value_threshold()
-    }
+
     pub(crate) fn threshold(&self) -> &VlogThreshold {
         &self.inner.vlog_threshold
     }

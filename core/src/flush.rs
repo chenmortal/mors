@@ -8,7 +8,6 @@ use mors_traits::{
     memtable::MemtableTrait,
     skip_list::SkipListTrait,
     sstable::{TableBuilderTrait, TableTrait},
-    txn::TxnManagerTrait,
     vlog::VlogCtlTrait,
 };
 use tokio::{
@@ -18,14 +17,14 @@ use tokio::{
 
 use crate::core::{CoreBuilder, CoreInner};
 use crate::Result;
-impl<M, K, L, T, S, Txn, V> CoreBuilder<M, K, L, T, S, Txn, V>
+impl<M, K, L, T, S, V> CoreBuilder<M, K, L, T, S, V>
 where
     M: MemtableTrait<S, K>,
     K: Kms,
     L: LevelCtlTrait<T, K>,
     T: TableTrait<K::Cipher>,
     S: SkipListTrait,
-    Txn: TxnManagerTrait,
+
     V: VlogCtlTrait<K>,
 {
     pub(crate) fn init_flush_channel(
