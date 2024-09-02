@@ -15,7 +15,16 @@ pub struct Entry {
     offset: usize,
     value_threshold: usize,
 }
-
+impl From<(KeyTs, ValueMeta)> for Entry {
+    fn from(value: (KeyTs, ValueMeta)) -> Self {
+        Entry {
+            key_ts: value.0,
+            value_meta: value.1,
+            offset: Default::default(),
+            value_threshold: Default::default(),
+        }
+    }
+}
 impl Entry {
     pub fn new(key: Bytes, value: Bytes) -> Self {
         let key_ts = KeyTs::new(key, TxnTs::default());
@@ -91,6 +100,16 @@ impl Entry {
     pub fn expires_at(&self) -> PhyTs {
         self.value_meta.expires_at()
     }
+    pub fn is_deleted_or_expired(&self) -> bool {
+        if self.meta().contains(Meta::DELETE) {
+            return true;
+        };
+        if self.expires_at() == PhyTs::default() {
+            return false;
+        }
+        self.expires_at() <= PhyTs::now().unwrap()
+    }
+
     pub fn version(&self) -> TxnTs {
         self.key_ts.txn_ts()
     }

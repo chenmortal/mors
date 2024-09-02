@@ -110,7 +110,7 @@ impl<
     pub(crate) fn vlogctl(&self) -> &V {
         &self.vlogctl
     }
-    pub(crate) fn block_write(&self)->&AtomicBool{
+    pub(crate) fn block_write(&self) -> &AtomicBool {
         &self.block_write
     }
 }
@@ -123,7 +123,7 @@ where
     S: SkipListTrait,
     V: VlogCtlTrait<K>,
 {
-    lock_guard: DBLockGuard,
+    _lock_guard: DBLockGuard,
     kms: K,
     immut_memtable: RwLock<VecDeque<Arc<M>>>,
     memtable: Option<RwLock<Arc<M>>>,
@@ -238,7 +238,7 @@ impl<
         guard_builder.add_dir(self.dir.clone());
         guard_builder.read_only(self.read_only);
 
-        let lock_guard = guard_builder.build()?;
+        let _lock_guard = guard_builder.build()?;
 
         let kms = self.kms.build()?;
         let immut_memtable = self.memtable.open_exist(kms.clone())?;
@@ -275,7 +275,7 @@ impl<
             Self::init_flush_channel(self.num_memtables);
 
         let inner = Arc::new(CoreInner {
-            lock_guard,
+            _lock_guard,
             kms,
             immut_memtable,
             memtable,

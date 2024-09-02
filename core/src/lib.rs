@@ -183,22 +183,46 @@ impl Mors {
         })
     }
 }
-pub struct KvEntry(Entry);
+#[derive(Debug)]
+pub(crate) enum PrefetchStatus {
+    Prefetched,
+    NoPrefetched,
+}
+impl Default for PrefetchStatus {
+    fn default() -> Self {
+        Self::NoPrefetched
+    }
+}
+pub struct KvEntry {
+    entry: Entry,
+    status: PrefetchStatus,
+}
+impl From<Entry> for KvEntry {
+    fn from(value: Entry) -> Self {
+        KvEntry {
+            entry: value,
+            status: PrefetchStatus::Prefetched,
+        }
+    }
+}
 impl KvEntry {
     pub fn new(key: Bytes, value: Bytes) -> Self {
-        Self(Entry::new(key, value))
+        Self {
+            entry: Entry::new(key, value),
+            status: PrefetchStatus::default(),
+        }
     }
     pub fn key(&self) -> &Bytes {
-        self.0.key()
+        self.entry.key()
     }
     pub fn value(&self) -> &Bytes {
-        self.0.value()
+        self.entry.value()
     }
     pub fn set_meta(&mut self, meta: u8) {
-        self.0.set_user_meta(meta);
+        self.entry.set_user_meta(meta);
     }
     pub fn meta(&self) -> u8 {
-        self.0.user_meta()
+        self.entry.user_meta()
     }
 
     pub fn set_ttl(&mut self, ttl: Duration) {
@@ -209,7 +233,7 @@ impl KvEntry {
             .unwrap()
             .as_secs()
             .into();
-        self.0.set_expires_at(expires);
+        self.entry.set_expires_at(expires);
     }
 
     // WithDiscard adds a marker to Entry e. This means all the previous versions of the key (of the
@@ -219,14 +243,17 @@ impl KvEntry {
     // have a higher setting for NumVersionsToKeep (in Dgraph, we set it to infinity), you can use this
     // method to indicate that all the older versions can be discarded and removed during compactions.
     pub fn set_discard(&mut self) {
-        self.0.meta_mut().insert(Meta::DISCARD_EARLIER_VERSIONS);
+        self.entry.meta_mut().insert(Meta::DISCARD_EARLIER_VERSIONS);
     }
 
     pub fn set_merge(&mut self) {
-        self.0.meta_mut().insert(Meta::MERGE_ENTRY);
+        self.entry.meta_mut().insert(Meta::MERGE_ENTRY);
     }
     fn set_delete(&mut self) {
-        self.0.meta_mut().insert(Meta::DELETE);
+        self.entry.meta_mut().insert(Meta::DELETE);
+    }
+    pub(crate) fn set_status(&mut self, status: PrefetchStatus) {
+        self.status = status;
     }
 }
 impl WriteTransaction {
@@ -234,7 +261,7 @@ impl WriteTransaction {
         self.set_entry(KvEntry::new(key, value))
     }
     pub fn set_entry(&mut self, entry: KvEntry) -> Result<()> {
-        Ok(self.txn.modify(entry.0)?)
+        Ok(self.txn.modify(entry.entry)?)
     }
     pub fn delete(&mut self, key: Bytes) -> Result<()> {
         let mut entry = KvEntry::new(key, Bytes::new());

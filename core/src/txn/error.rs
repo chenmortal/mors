@@ -7,6 +7,10 @@ pub enum TxnError {
     DiscardTxn,
     #[error("Key cannot be empty")]
     EmptyKey,
+    #[error("Key not found")]
+    KeyNotFound,
+    #[error("Value not found")]
+    ValueNotFound,
     #[error("{0} with size {1} exceeded {2} limit")]
     ExceedSize(&'static str, usize, usize),
     #[error("Key is using a reserved {0} prefix")]

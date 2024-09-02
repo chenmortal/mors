@@ -7,7 +7,7 @@ use bytes::Buf;
 use mors_common::{
     file_id::FileId,
     kv::{Entry, Meta, ValuePointer},
-    ts::{KeyTs, TxnTs},
+    ts::TxnTs,
 };
 use mors_traits::kms::Kms;
 use std::{

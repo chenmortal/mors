@@ -70,14 +70,14 @@ impl<T: SkipListTrait> Clone for MemtableBuilder<T> {
 // opt.maxBatchCount = opt.maxBatchSize / int64(skl.MaxNodeSize)
 impl<T: SkipListTrait> MemtableBuilder<T> {
     fn arena_size(&self) -> usize {
-        self.memtable_size + 2 * self.max_batch_size()
+        self.memtable_size + 2 * self.max_batch_size_impl()
     }
-    fn max_batch_size(&self) -> usize {
+    pub(crate) fn max_batch_size_impl(&self) -> usize {
         (15 * self.memtable_size) / 100
     }
     #[allow(dead_code)]
-    fn max_batch_count(&self) -> usize {
-        self.max_batch_size() / T::MAX_NODE_SIZE
+    pub(crate) fn max_batch_count_impl(&self) -> usize {
+        self.max_batch_size_impl() / T::MAX_NODE_SIZE
     }
     #[inline]
     pub(crate) fn set_num_memtables_impl(&mut self, num_memtables: usize) {

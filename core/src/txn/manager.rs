@@ -98,13 +98,14 @@ impl TxnManager {
         &self,
         txn: &WriteTxn<M, K, L, T, S, V>,
     ) -> Result<TxnTs> {
+        let read_key_hash = txn.read_key_hash.lock();
         let mut core = self.0.core.lock();
 
-        if !txn.read_key_hash.is_empty() {
+        if !read_key_hash.is_empty() {
             for committed_txn in
                 core.committed.iter().filter(|c| c.ts > txn.read_ts)
             {
-                for hash in txn.read_key_hash.iter() {
+                for hash in read_key_hash.iter() {
                     if committed_txn.conflict_keys.contains(hash) {
                         return Err(TxnError::Conflict);
                     }
@@ -142,7 +143,7 @@ impl TxnManager {
 
         Ok(commit_ts)
     }
-    pub async fn done_commit(&self, txn: TxnTs)->Result<()> {
+    pub async fn done_commit(&self, txn: TxnTs) -> Result<()> {
         self.0.txn_mark.done(txn).await
     }
     pub fn detect_conflicts(&self) -> bool {

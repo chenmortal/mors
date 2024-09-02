@@ -20,7 +20,7 @@ fn build_reload(count: u32, table_num: u32) {
     builder.set_dir(tempdir.path().to_path_buf());
 
     for i in 0..table_num {
-        let mut memtable = builder.build(kms.clone()).unwrap();
+        let memtable = builder.build(kms.clone()).unwrap();
         let prefix = format!("table{}", i);
         let entries = generate_entries(count, &prefix);
         for entry in &entries {

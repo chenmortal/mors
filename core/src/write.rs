@@ -261,9 +261,7 @@ where
                 .write()
                 .map_err(|e| MorsError::RwLockPoisoned(e.to_string()))?;
 
-            let old_memtable = replace(&mut *memtable_w, new_memtable);
-            // Arc::new(old_memtable)
-            old_memtable
+            replace(&mut *memtable_w, new_memtable)
         };
 
         self.flush_sender()
@@ -284,7 +282,7 @@ where
         request: &mut WriteRequest,
     ) -> Result<()> {
         let memtable = self.memtable().unwrap();
-        let mut memtable_w = memtable
+        let memtable_w = memtable
             .write()
             .map_err(|e| MorsError::RwLockPoisoned(e.to_string()))?;
         for (entry, vptr) in &mut request.entries_vptrs {

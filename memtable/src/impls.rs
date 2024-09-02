@@ -39,13 +39,13 @@ impl<T: SkipListTrait, K: Kms> MemtableBuilderTrait<Memtable<T, K>, T, K>
     fn set_memtable_size(&mut self, memtable_size: usize) {
         self.set_memtable_size_impl(memtable_size);
     }
-    
+
     fn max_batch_size(&self) -> usize {
-        todo!()
+        self.max_batch_size_impl()
     }
-    
+
     fn max_batch_count(&self) -> usize {
-        todo!()
+        self.max_batch_count_impl()
     }
 }
 impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
@@ -89,5 +89,4 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
     fn delete_wal(&self) -> std::result::Result<(), MemtableError> {
         Ok(self.wal.delete().map_err(MorsMemtableError::Wal)?)
     }
-    
 }

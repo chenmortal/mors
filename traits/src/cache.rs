@@ -1,4 +1,3 @@
-use bytes::BufMut;
 use mors_common::file_id::SSTableId;
 
 use crate::sstable::BlockIndex;
@@ -15,13 +14,5 @@ pub struct BlockCacheKey((SSTableId, BlockIndex));
 impl From<(SSTableId, BlockIndex)> for BlockCacheKey {
     fn from(value: (SSTableId, BlockIndex)) -> Self {
         Self(value)
-    }
-}
-impl BlockCacheKey {
-    fn encode(&self) -> Vec<u8> {
-        let mut v = Vec::with_capacity(8);
-        v.put_u32(self.0 .0.into());
-        v.put_u32(self.0 .1.into());
-        v
     }
 }
