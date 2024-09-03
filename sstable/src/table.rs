@@ -10,9 +10,11 @@ use mors_common::{
     compress::CompressionType,
     file_id::{FileId, SSTableId},
     kv::ValueMeta,
-    mmap::{MmapFile, MmapFileBuilder},
+    // mmap::{MmapFile, MmapFileBuilder},
     ts::{KeyTs, TxnTs},
 };
+use mors_traits::file::StorageBuilderTrait;
+use mors_traits::file::StorageTrait;
 use mors_traits::{
     cache::BlockCacheKey,
     default::{WithDir, WithReadOnly, DEFAULT_DIR},
@@ -23,6 +25,7 @@ use mors_traits::{
     kms::KmsCipher,
     sstable::{BlockIndex, SSTableError, TableBuilderTrait, TableTrait},
 };
+use mors_wal::storage::mmap::{MmapFile, MmapFileBuilder};
 use prost::Message;
 
 use crate::{

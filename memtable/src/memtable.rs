@@ -1,4 +1,5 @@
 use log::info;
+use mors_traits::file::{StorageBuilderTrait, StorageTrait};
 use std::collections::VecDeque;
 use std::fs::{read_dir, remove_file};
 use std::marker::PhantomData;
@@ -6,17 +7,14 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 
-use memmap2::Advice;
-use mors_common::{
-    file_id::{FileId, MemtableId},
-    mmap::MmapFileBuilder,
-};
+// use memmap2::Advice;
+use mors_common::file_id::{FileId, MemtableId};
+use mors_traits::memtable::MemtableBuilderTrait;
 // use mors_common::page_size;
 use mors_common::ts::KeyTsBorrow;
 use mors_traits::{
     default::{WithDir, WithReadOnly, DEFAULT_DIR},
     kms::Kms,
-    memtable::MemtableBuilderTrait,
     skip_list::SkipListTrait,
 };
 
@@ -25,9 +23,9 @@ use mors_wal::LogFile;
 use crate::error::MorsMemtableError;
 use crate::Result;
 
-pub struct Memtable<T: SkipListTrait, K: Kms> {
+pub struct Memtable<T: SkipListTrait, K: Kms, S: StorageTrait> {
     pub(crate) skip_list: T,
-    pub(crate) wal: LogFile<MemtableId, K>,
+    pub(crate) wal: LogFile<MemtableId, K, S>,
     // pub(crate) max_version: TxnTs,
     pub(crate) max_txn_ts: AtomicU64,
     // pub(crate) buf: Vec<u8>,
@@ -89,17 +87,18 @@ impl<T: SkipListTrait> MemtableBuilder<T> {
     }
 }
 impl<T: SkipListTrait> MemtableBuilder<T> {
-    pub(crate) fn open_impl<K: Kms>(
+    pub(crate) fn open_impl<K: Kms, S: StorageTrait>(
         &self,
         kms: K,
         id: MemtableId,
-    ) -> Result<Memtable<T, K>> {
-        let mut mmap_builder = MmapFileBuilder::new();
-        mmap_builder
-            .advice(Advice::Sequential)
+    ) -> Result<Memtable<T, K, S>> {
+        let mut builder = S::StorageBuilder::default();
+        // let mut mmap_builder = MmapFileBuilder::new();
+        builder
             .read(true)
             .create(!self.read_only)
             .write(!self.read_only);
+        // .advice(Advice::Sequential)
 
         let mem_path = id.join_dir(self.dir.clone());
         let skip_list = T::new(self.arena_size(), KeyTsBorrow::cmp)?;
@@ -108,7 +107,7 @@ impl<T: SkipListTrait> MemtableBuilder<T> {
             id,
             mem_path,
             2 * self.memtable_size as u64,
-            mmap_builder,
+            builder,
             kms,
         )?;
         let memtable = Memtable {
@@ -123,10 +122,10 @@ impl<T: SkipListTrait> MemtableBuilder<T> {
         Ok(memtable)
     }
 
-    pub fn open_exist_impl<K: Kms>(
+    pub fn open_exist_impl<K: Kms, S: StorageTrait>(
         &self,
         kms: K,
-    ) -> Result<VecDeque<Arc<Memtable<T, K>>>> {
+    ) -> Result<VecDeque<Arc<Memtable<T, K, S>>>> {
         let mut ids = read_dir(&self.dir)?
             .filter_map(std::result::Result::ok)
             .filter_map(|e| MemtableId::parse(e.path()).ok())
@@ -158,7 +157,10 @@ impl<T: SkipListTrait> MemtableBuilder<T> {
         Ok(immut_memtable)
     }
 
-    pub fn build_impl<K: Kms>(&self, kms: K) -> Result<Memtable<T, K>> {
+    pub fn build_impl<K: Kms, S: StorageTrait>(
+        &self,
+        kms: K,
+    ) -> Result<Memtable<T, K, S>> {
         let id: MemtableId =
             self.next_fid.fetch_add(1, Ordering::SeqCst).into();
         let path = id.join_dir(&self.dir);

@@ -15,6 +15,7 @@ use mors_skip_list::skip_list::SkipList;
 use mors_sstable::table::Table;
 
 use mors_vlog::vlogctl::VlogCtl;
+use mors_wal::storage::mmap::MmapFile;
 use tokio::runtime::Builder;
 #[cfg(feature = "sync")]
 use {std::sync::Arc, tokio::runtime::Handle};
@@ -30,11 +31,11 @@ mod write;
 use mors_common::kv::{Entry, Meta};
 pub type Result<T> = std::result::Result<T, MorsError>;
 
-type MorsMemtable = Memtable<SkipList, MorsKms>;
+type MorsMemtable = Memtable<SkipList, MorsKms, MmapFile>;
 type MorsLevelCtl = LevelCtl<Table<AesCipher>, MorsKms>;
 type MorsTable = Table<AesCipher>;
 type MorsLevelCtlType = LevelCtl<MorsTable, MorsKms>;
-type MorsVlog = VlogCtl<MorsKms>;
+type MorsVlog = VlogCtl<MorsKms, MmapFile>;
 type WriteTxnType = WriteTxn<
     MorsMemtable,
     MorsKms,
@@ -111,7 +112,7 @@ impl Default for MorsBuilder {
 }
 impl Deref for Mors {
     type Target = Core<
-        Memtable<SkipList, MorsKms>,
+        MorsMemtable,
         MorsKms,
         LevelCtl<Table<AesCipher>, MorsKms>,
         Table<AesCipher>,
@@ -125,7 +126,7 @@ impl Deref for Mors {
 }
 impl Deref for MorsBuilder {
     type Target = CoreBuilder<
-        Memtable<SkipList, MorsKms>,
+        MorsMemtable,
         MorsKms,
         LevelCtl<Table<AesCipher>, MorsKms>,
         Table<AesCipher>,

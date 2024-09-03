@@ -98,12 +98,9 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
                 .cloned()
                 .collect::<Vec<_>>()
                 .into()
-        } else {
-            let table_index = handler
-                .tables()
-                .binary_search_by(|t| t.biggest().cmp(key))
-                .ok()
-                .unwrap();
+        } else if let Ok(table_index) =
+            handler.tables().binary_search_by(|t| t.biggest().cmp(key))
+        {
             if table_index >= handler.tables().len() {
                 return None;
             }
@@ -112,6 +109,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
                 return None;
             }
             vec![t].into()
+        } else {
+            None
         }
     }
 }

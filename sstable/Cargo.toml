@@ -12,6 +12,7 @@ sync = ["moka/sync"]
 [dependencies]
 mors-common = { workspace = true }
 mors-traits = { workspace = true }
+mors-wal = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }
 memmap2 = { workspace = true }

@@ -1,6 +1,11 @@
+use std::collections::VecDeque;
+use std::sync::Arc;
+
 use mors_common::kv::Entry;
 use mors_common::kv::Meta;
+use mors_encrypt::registry::MorsKms;
 use mors_encrypt::registry::MorsKmsBuilder;
+use mors_memtable::memtable::Memtable;
 use mors_memtable::memtable::MemtableBuilder;
 use mors_skip_list::skip_list::SkipList;
 use mors_traits::default::WithDir;
@@ -8,6 +13,7 @@ use mors_traits::kms::KmsBuilder;
 use mors_traits::memtable::MemtableBuilderTrait;
 use mors_traits::memtable::MemtableTrait;
 type TestMemtableBuilder = MemtableBuilder<SkipList>;
+use mors_wal::storage::mmap::MmapFile;
 use proptest::prelude::ProptestConfig;
 use proptest::proptest;
 fn build_reload(count: u32, table_num: u32) {
@@ -20,7 +26,8 @@ fn build_reload(count: u32, table_num: u32) {
     builder.set_dir(tempdir.path().to_path_buf());
 
     for i in 0..table_num {
-        let memtable = builder.build(kms.clone()).unwrap();
+        let memtable: Memtable<SkipList, MorsKms, MmapFile> =
+            builder.build(kms.clone()).unwrap();
         let prefix = format!("table{}", i);
         let entries = generate_entries(count, &prefix);
         for entry in &entries {
@@ -28,7 +35,8 @@ fn build_reload(count: u32, table_num: u32) {
         }
     }
 
-    let memtables = builder.open_exist(kms).unwrap();
+    let memtables: VecDeque<Arc<Memtable<SkipList, MorsKms, MmapFile>>> =
+        builder.open_exist(kms).unwrap();
     assert_eq!(memtables.len(), table_num as usize);
     for (i, memtable) in memtables.iter().enumerate() {
         let prefix = format!("table{}", i);

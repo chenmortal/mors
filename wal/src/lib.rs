@@ -1,13 +1,10 @@
 use crate::error::MorsWalError;
 use bytes::{Buf, BufMut};
-use mors_common::{
-    file_id::FileId,
-    mmap::{MmapFile, MmapFileBuilder},
-};
+use mors_common::file_id::FileId;
+use mors_traits::file::{StorageBuilderTrait, StorageTrait};
 use mors_traits::kms::{CipherKeyId, Kms, KmsCipher};
 use std::{
     fs::remove_file,
-    io::Read,
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, AtomicUsize, Ordering},
 };
@@ -15,34 +12,30 @@ use std::{
 pub mod error;
 pub mod header;
 pub mod read;
+pub mod storage;
 pub mod write;
-
 type Result<T> = std::result::Result<T, MorsWalError>;
-pub struct LogFile<F: FileId, K: Kms> {
+pub struct LogFile<F: FileId, K: Kms, S: StorageTrait> {
     id: F,
     kms: K,
     cipher: Option<K::Cipher>,
-    mmap: MmapFile,
+    storage: S,
     size: AtomicUsize,
-    append_pos: AtomicUsize,
     path_buf: PathBuf,
     base_nonce: Vec<u8>,
     valid_len: AtomicU64,
 }
-impl<F: FileId, K: Kms> LogFile<F, K> {
+impl<F: FileId, K: Kms, S: StorageTrait> LogFile<F, K, S> {
     pub fn id(&self) -> F {
         self.id
     }
 }
-impl<F: FileId, K: Kms> LogFile<F, K>
-// where
-// MorsWalError: From<<K::Cipher as KmsCipher>::ErrorType>,
-{
+impl<F: FileId, K: Kms, S: StorageTrait> LogFile<F, K, S> {
     pub fn open<P: AsRef<Path>>(
         id: F,
         path_buf: P,
         max_size: u64,
-        builder: MmapFileBuilder,
+        builder: S::StorageBuilder,
         kms: K,
     ) -> Result<Self> {
         let is_exist = path_buf.as_ref().exists();
@@ -51,11 +44,11 @@ impl<F: FileId, K: Kms> LogFile<F, K>
             id,
             kms,
             cipher: None,
-            mmap,
+            storage: mmap,
             path_buf: path_buf.as_ref().to_owned(),
             size: AtomicUsize::new(0),
             base_nonce: Vec::new(),
-            append_pos: AtomicUsize::new(0),
+
             valid_len: AtomicU64::new(max_size),
         };
 
@@ -68,14 +61,13 @@ impl<F: FileId, K: Kms> LogFile<F, K>
             log_file
                 .size
                 .store(Self::LOG_HEADER_SIZE, Ordering::Relaxed);
-            log_file
-                .append_pos
-                .store(Self::LOG_HEADER_SIZE, Ordering::Release);
         }
-        log_file.size.store(log_file.mmap.len()?, Ordering::Relaxed);
+        log_file
+            .size
+            .store(log_file.storage.file_len()? as usize, Ordering::Relaxed);
 
         let mut buf = vec![0; Self::LOG_HEADER_SIZE];
-        if log_file.mmap.read(&mut buf)? != Self::LOG_HEADER_SIZE {
+        if log_file.storage.read(&mut buf)? != Self::LOG_HEADER_SIZE {
             return Err(MorsWalError::InvalidLogHeader(
                 path_buf.as_ref().to_owned(),
             ));
@@ -106,8 +98,11 @@ impl<F: FileId, K: Kms> LogFile<F, K>
         buf.put(self.base_nonce.as_ref());
 
         debug_assert_eq!(buf.len(), Self::LOG_HEADER_SIZE);
-        debug_assert_eq!(self.mmap.append(0, &buf)?, Self::LOG_HEADER_SIZE);
-        self.mmap.flush_range(0, Self::LOG_HEADER_SIZE)?;
+        debug_assert_eq!(
+            self.storage.append(&buf, Ordering::Relaxed)?,
+            Self::LOG_HEADER_SIZE
+        );
+        self.storage.flush_range(0, Self::LOG_HEADER_SIZE)?;
         Ok(())
     }
     fn cipher_key_id(&self) -> CipherKeyId {
@@ -126,15 +121,12 @@ impl<F: FileId, K: Kms> LogFile<F, K>
     //     v.extend_from_slice(&offset);
     //     v
     // }
-    fn decrypt(&self, buf: &[u8]) -> Result<Option<Vec<u8>>> {
-        Ok(match self.cipher.as_ref() {
-            Some(c) => {
-                // let nonce = self.generate_nonce(offset);
-                Some(c.decrypt_with_slice(&self.base_nonce, buf)?)
-            }
-            None => None,
-        })
-    }
+    // fn decrypt(&self, buf: &[u8]) -> Result<Option<Vec<u8>>> {
+    //     Ok(match self.cipher.as_ref() {
+    //         Some(c) => Some(c.decrypt_with_slice(&self.base_nonce, buf)?),
+    //         None => None,
+    //     })
+    // }
     fn encrypt(&self, buf: &[u8]) -> Result<Option<Vec<u8>>> {
         Ok(match self.cipher.as_ref() {
             Some(c) => {
@@ -147,17 +139,14 @@ impl<F: FileId, K: Kms> LogFile<F, K>
     pub fn len(&self) -> usize {
         self.size.load(Ordering::Relaxed)
     }
-    pub fn append_pos(&self) -> &AtomicUsize {
-        &self.append_pos
-    }
-    pub fn max_size(&self) -> usize {
-        self.mmap.len().unwrap_or(0)
-    }
+    // pub fn max_size(&self) -> usize {
+    //     self.storage.len().unwrap_or(0)
+    // }
     pub fn is_empty(&self) -> bool {
-        self.len() == Self::LOG_HEADER_SIZE
+        self.storage.load_append_pos(Ordering::Relaxed) == Self::LOG_HEADER_SIZE
     }
     pub fn delete(&self) -> Result<()> {
-        Ok(self.mmap.delete()?)
+        Ok(self.storage.delete()?)
     }
     pub(crate) fn set_size(&self, size: usize) {
         self.size.store(size, Ordering::Relaxed);
@@ -166,9 +155,17 @@ impl<F: FileId, K: Kms> LogFile<F, K>
         self.valid_len.store(valid_len, Ordering::SeqCst);
     }
 }
-impl<F: FileId, K: Kms> Drop for LogFile<F, K> {
+impl<F: FileId, K: Kms, S: StorageTrait> Drop for LogFile<F, K, S> {
     fn drop(&mut self) {
-        let valid_len = self.valid_len.load(Ordering::SeqCst);
-        self.mmap.set_len(valid_len as usize).unwrap();
+        let valid_size = self.storage.load_append_pos(Ordering::Relaxed);
+        if let Err(e) = self.flush() {
+            eprintln!("Error: {:?}", e);
+        };
+        if let Err(e) = self.storage.set_len(valid_size as u64) {
+            eprintln!("Error: {:?}", e);
+        };
+
+        // let valid_len = self.valid_len.load(Ordering::SeqCst);
+        // self.mmap.set_len(valid_len as usize).unwrap();
     }
 }

@@ -51,7 +51,7 @@ fn main_impl() -> Result<()> {
     builder.set_dir(dir).set_read_only(false);
     let mors = builder.build()?;
     let mut write_txn = mors.begin_write().unwrap();
-    // write_txn.set("key".into(), "value".into())?;
+    write_txn.set("key".into(), "value".into())?;
     let v = write_txn.get("key".into())?;
     let vp = v.value().as_ref();
     assert_eq!(vp, b"value");

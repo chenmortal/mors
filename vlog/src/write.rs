@@ -1,13 +1,14 @@
 use std::slice::IterMut;
 
 use mors_common::kv::{Entry, Meta, ValuePointer};
+use mors_traits::file::StorageTrait;
 use mors_traits::{kms::Kms, vlog::VlogCtlTrait};
 use mors_wal::error::MorsWalError;
 
 use crate::vlogctl::VlogCtl;
 use crate::Result;
 
-impl<K: Kms> VlogCtl<K> {
+impl<K: Kms, S: StorageTrait> VlogCtl<K, S> {
     pub(crate) async fn write_impl<'a>(
         &self,
         iter_mut: Vec<IterMut<'a, (Entry, ValuePointer)>>,
@@ -57,7 +58,6 @@ impl<K: Kms> VlogCtl<K> {
             let len = self.woffset();
             if len >= self.vlog_file_size() {
                 latest.flush()?;
-                latest.set_valid_len(len as u64);
                 let new = self.create_new()?;
                 latest = new;
             }
@@ -65,7 +65,6 @@ impl<K: Kms> VlogCtl<K> {
         let len = self.woffset();
         if len >= self.vlog_file_size() {
             latest.flush()?;
-            latest.set_valid_len(len as u64);
             let _ = self.create_new()?;
         }
 

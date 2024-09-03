@@ -9,28 +9,43 @@ use mors_common::{
     kv::{Entry, Meta, ValuePointer},
     ts::TxnTs,
 };
-use mors_traits::kms::Kms;
+use mors_traits::{
+    file::StorageTrait,
+    kms::{Kms, KmsCipher},
+};
 use std::{
     hash::Hasher,
-    io::{self, BufRead, BufReader, Read},
+    io::{self, BufReader, Read},
 };
-pub struct LogFileIter<'a, F: FileId, K: Kms> {
-    log_file: &'a LogFile<F, K>,
+pub struct LogFileIter<'a, F: FileId, K: Kms, S: StorageTrait> {
+    // log_file: &'a LogFile<F, K, S>,
+    cipher: &'a Option<K::Cipher>,
+    base_nonce: &'a Vec<u8>,
+    id: F,
     record_offset: usize,
-    reader: BufReader<&'a [u8]>,
+    reader: BufReader<&'a mut S>,
     entries_vptrs: Vec<(Entry, ValuePointer)>,
     valid_end_offset: usize,
 }
-impl<'a, F: FileId, K: Kms> LogFileIter<'a, F, K> {
-    pub fn new(log_file: &'a LogFile<F, K>, offset: usize) -> Self {
-        let reader = BufReader::new(&log_file.mmap.as_ref()[offset..]);
+impl<'a, F: FileId, K: Kms, S: StorageTrait> LogFileIter<'a, F, K, S> {
+    pub fn new(log_file: &'a mut LogFile<F, K, S>, offset: usize) -> Self {
+        // let mut buf = [0u8; offset];
+        // log_file.storage.read_exact(buf);
+        log_file.storage.set_read_pos(offset);
+        let p = &log_file.cipher;
+        let id = log_file.id();
+        let reader = BufReader::new(&mut log_file.storage);
+        // let reader = BufReader::new(&log_file.storage.as_ref()[offset..]);
 
         Self {
-            log_file,
+            // log_file,
             record_offset: offset,
             reader,
             entries_vptrs: Vec::new(),
             valid_end_offset: offset,
+            cipher: p,
+            id,
+            base_nonce: &log_file.base_nonce,
         }
     }
 
@@ -59,7 +74,11 @@ impl<'a, F: FileId, K: Kms> LogFileIter<'a, F, K> {
             .into());
         }
 
-        kv_buf = self.log_file.decrypt(&kv_buf)?.unwrap_or(kv_buf);
+        let kv_buf = match self.cipher.as_ref() {
+            Some(c) => c.decrypt_with_slice(self.base_nonce, &kv_buf)?,
+            None => kv_buf,
+        };
+        // kv_buf = self.log_file.decrypt(&kv_buf)?.unwrap_or(kv_buf);
 
         let mut entry = Entry::from_log(
             &kv_buf[..key_len],
@@ -87,11 +106,8 @@ impl<'a, F: FileId, K: Kms> LogFileIter<'a, F, K> {
         let size = header_len + key_len + value_len + crc_buf.len();
         debug_assert!(size == hash_reader.len + 4);
 
-        let v_ptr = ValuePointer::new(
-            self.log_file.id(),
-            size as u32,
-            self.record_offset as u64,
-        );
+        let v_ptr =
+            ValuePointer::new(self.id, size as u32, self.record_offset as u64);
         self.record_offset += size;
         Ok((entry, v_ptr))
     }
@@ -145,13 +161,13 @@ impl<'a, F: FileId, K: Kms> LogFileIter<'a, F, K> {
     }
 }
 
-pub struct HashReader<'a, B: BufRead, T: Hasher> {
+pub struct HashReader<'a, B: Read, T: Hasher> {
     reader: &'a mut BufReader<B>,
     hasher: T,
     len: usize,
 }
 
-impl<B: BufRead, T: Hasher> Read for HashReader<'_, B, T> {
+impl<B: Read, T: Hasher> Read for HashReader<'_, B, T> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let size = self.reader.read(buf)?;
         self.len += size;
