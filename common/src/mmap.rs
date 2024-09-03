@@ -1,5 +1,4 @@
-use std::cmp::Ordering;
-use std::io::{Error, Read, SeekFrom, Write};
+use std::io::{Error, Read, SeekFrom};
 use std::path::Path;
 use std::{
     cmp::max,
@@ -22,8 +21,7 @@ pub struct MmapFile {
     ///point to actual file , already read from actual file
     r_pos: usize,
 
-    last_flush_pos: usize,
-
+    // last_flush_pos: usize,
     raw: MmapRaw,
     path: PathBuf,
     fd: File,
@@ -95,29 +93,29 @@ impl Read for MmapFile {
     }
 }
 
-impl Write for MmapFile {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let buf_len = buf.len();
-        self.check_len_satisfied(self.w_pos, buf_len)?;
-        { Self::raw_write(&self.raw, self.w_pos, buf) }?;
-        self.w_pos += buf_len;
-        Ok(buf_len)
-    }
+// impl Write for MmapFile {
+//     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+//         let buf_len = buf.len();
+//         self.check_len_satisfied(self.w_pos, buf_len)?;
+//         { Self::raw_write(&self.raw, self.w_pos, buf) }?;
+//         self.w_pos += buf_len;
+//         Ok(buf_len)
+//     }
 
-    fn flush(&mut self) -> io::Result<()> {
-        let (offset, len) = match self.w_pos.cmp(&self.last_flush_pos) {
-            Ordering::Less => (self.w_pos, self.last_flush_pos - self.w_pos),
-            Ordering::Equal => return Ok(()),
-            Ordering::Greater => {
-                (self.last_flush_pos, self.w_pos - self.last_flush_pos)
-            }
-        };
+//     // fn flush(&mut self) -> io::Result<()> {
+//     //     let (offset, len) = match self.w_pos.cmp(&self.last_flush_pos) {
+//     //         Ordering::Less => (self.w_pos, self.last_flush_pos - self.w_pos),
+//     //         Ordering::Equal => return Ok(()),
+//     //         Ordering::Greater => {
+//     //             (self.last_flush_pos, self.w_pos - self.last_flush_pos)
+//     //         }
+//     //     };
 
-        self.raw.flush_range(offset, len)?;
-        self.last_flush_pos = self.w_pos;
-        Ok(())
-    }
-}
+//     //     self.raw.flush_range(offset, len)?;
+//     //     self.last_flush_pos = self.w_pos;
+//     //     Ok(())
+//     // }
+// }
 
 impl AsRef<[u8]> for MmapFile {
     fn as_ref(&self) -> &[u8] {
@@ -208,21 +206,21 @@ impl MmapFile {
         Ok(())
     }
 
-    pub fn write_seek(&mut self, write_pos: SeekFrom) -> Result<(), Error> {
-        self.flush()?;
-        match write_pos {
-            SeekFrom::Start(start) => {
-                self.w_pos = start as usize;
-            }
-            SeekFrom::End(end) => {
-                self.w_pos = self.raw.len() - end as usize;
-            }
-            SeekFrom::Current(current) => {
-                self.w_pos += current as usize;
-            }
-        }
-        Ok(())
-    }
+    // pub fn write_seek(&mut self, write_pos: SeekFrom) -> Result<(), Error> {
+    //     self.flush()?;
+    //     match write_pos {
+    //         SeekFrom::Start(start) => {
+    //             self.w_pos = start as usize;
+    //         }
+    //         SeekFrom::End(end) => {
+    //             self.w_pos = self.raw.len() - end as usize;
+    //         }
+    //         SeekFrom::Current(current) => {
+    //             self.w_pos += current as usize;
+    //         }
+    //     }
+    //     Ok(())
+    // }
 
     pub fn pread(&self, buf: &mut [u8], offset: usize) -> Result<usize, Error> {
         let buf_len = unsafe { Self::raw_read(&self.raw, offset, buf) };
@@ -309,7 +307,7 @@ impl MmapFileBuilder {
         let mmap = MmapFile {
             w_pos: 0,
             r_pos: 0,
-            last_flush_pos: 0,
+            // last_flush_pos: 0,
             raw: mmap,
             path: path.as_ref().to_path_buf(),
             fd: file,

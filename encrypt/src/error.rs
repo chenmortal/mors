@@ -11,7 +11,7 @@ pub enum MorsKmsError {
     RwLockPoisoned(String),
     #[error("Encryption key mismatch")]
     EncryptionKeyMismatch,
-    #[error("Invalid data key id {0}")]
+    #[error("Invalid data key id: {0}")]
     InvalidDataKeyID(CipherKeyId),
     #[error(transparent)]
     MorsEncryptError(#[from] MorsEncryptError),

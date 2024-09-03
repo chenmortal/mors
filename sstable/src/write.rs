@@ -1,5 +1,4 @@
 use std::{
-    io::Write,
     mem::replace,
     path::PathBuf,
     sync::{
@@ -21,6 +20,7 @@ use mors_common::{
 };
 use mors_traits::{
     default::WithDir,
+    file::Append,
     iter::{CacheIterator, KvCacheIter},
     kms::KmsCipher,
     sstable::{SSTableError, TableWriterTrait},
@@ -95,8 +95,10 @@ impl<K: KmsCipher> TableWriterTrait for TableWriter<K> {
             builder.advice(Advice::Sequential);
             builder.create_new(true).append(true).read(true);
             let mut mmap = builder.build(path, data.size)?;
-            data.write(&mut mmap)?;
-            mmap.flush()?;
+            let mut offset = 0;
+            data.write(&mut offset, &mut mmap)?;
+            assert_eq!(offset, data.size as usize);
+            mmap.flush_range(0, offset)?;
             mmap.set_len(data.size as usize)?;
             mmap.sync_all()?;
             Ok(())
@@ -297,14 +299,20 @@ struct TableBuildData {
     size: u64,
 }
 impl TableBuildData {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
+    fn write<W: Append>(
+        &self,
+        offset: &mut usize,
+        writer: &mut W,
+    ) -> Result<()> {
         for block in self.block_list.iter() {
-            writer.write_all(block.data())?;
+            *offset += writer.append(*offset, block.data())?;
         }
-        writer.write_all(&self.index)?;
-        writer.write_all(&(self.index.len() as u32).to_be_bytes())?;
-        writer.write_all(&self.checksum)?;
-        writer.write_all(&(self.checksum.len() as u32).to_be_bytes())?;
+        *offset += writer.append(*offset, &self.index)?;
+        *offset +=
+            writer.append(*offset, &(self.index.len() as u32).to_be_bytes())?;
+        *offset += writer.append(*offset, &self.checksum)?;
+        *offset += writer
+            .append(*offset, &(self.checksum.len() as u32).to_be_bytes())?;
         Ok(())
     }
 }

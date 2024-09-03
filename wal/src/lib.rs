@@ -7,7 +7,7 @@ use mors_common::{
 use mors_traits::kms::{CipherKeyId, Kms, KmsCipher};
 use std::{
     fs::remove_file,
-    io::{Read, Write},
+    io::Read,
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, AtomicUsize, Ordering},
 };
@@ -68,6 +68,9 @@ impl<F: FileId, K: Kms> LogFile<F, K>
             log_file
                 .size
                 .store(Self::LOG_HEADER_SIZE, Ordering::Relaxed);
+            log_file
+                .append_pos
+                .store(Self::LOG_HEADER_SIZE, Ordering::Release);
         }
         log_file.size.store(log_file.mmap.len()?, Ordering::Relaxed);
 
@@ -103,8 +106,8 @@ impl<F: FileId, K: Kms> LogFile<F, K>
         buf.put(self.base_nonce.as_ref());
 
         debug_assert_eq!(buf.len(), Self::LOG_HEADER_SIZE);
-        debug_assert_eq!(self.mmap.write(&buf)?, Self::LOG_HEADER_SIZE);
-        self.mmap.flush()?;
+        debug_assert_eq!(self.mmap.append(0, &buf)?, Self::LOG_HEADER_SIZE);
+        self.mmap.flush_range(0, Self::LOG_HEADER_SIZE)?;
         Ok(())
     }
     fn cipher_key_id(&self) -> CipherKeyId {

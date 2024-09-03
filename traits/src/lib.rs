@@ -7,3 +7,4 @@ pub mod memtable;
 pub mod skip_list;
 pub mod sstable;
 pub mod vlog;
+pub mod file;

@@ -11,7 +11,7 @@ use thiserror::Error;
 pub struct CipherKeyId(u64);
 impl Display for CipherKeyId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CipherKeyId{:x}", self.0)
+        write!(f, "CipherKeyId {:x}", self.0)
     }
 }
 impl From<u64> for CipherKeyId {

@@ -17,16 +17,6 @@ impl<F: FileId, K: Kms> LogFile<F, K> {
         self.mmap.set_len(end_offset)?;
         Ok(())
     }
-    pub fn write_entry(
-        &mut self,
-        buf: &mut Vec<u8>,
-        entry: &Entry,
-    ) -> Result<()> {
-        buf.clear();
-        let buf = self.encode_entry(entry)?;
-        self.mmap.write_all(&buf)?;
-        Ok(())
-    }
     pub fn append_entry(&self, entry: &Entry) -> Result<usize> {
         let encode = self.encode_entry(entry)?;
         let write_at = self
@@ -38,9 +28,6 @@ impl<F: FileId, K: Kms> LogFile<F, K> {
             }
         };
         Ok(encode.len())
-    }
-    pub fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
-        self.mmap.write_all(buf)
     }
     pub fn flush(&self) -> Result<()> {
         Ok(self.mmap.flush_range(

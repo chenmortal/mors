@@ -263,6 +263,9 @@ impl WriteTransaction {
     pub fn set_entry(&mut self, entry: KvEntry) -> Result<()> {
         Ok(self.txn.modify(entry.entry)?)
     }
+    pub fn get(&self, key: Bytes) -> Result<KvEntry> {
+        self.handler.block_on(self.txn.get(key))
+    }
     pub fn delete(&mut self, key: Bytes) -> Result<()> {
         let mut entry = KvEntry::new(key, Bytes::new());
         entry.set_delete();
