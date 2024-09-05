@@ -150,7 +150,7 @@ pub struct CoreBuilder<
     num_memtables: usize,
     kms: K::KmsBuilder,
     memtable: M::MemtableBuilder,
-    levelctl: L::LevelCtlBuilder,
+    pub(crate) levelctl: L::LevelCtlBuilder,
     vlogctl: V::VlogCtlBuilder,
     txn_manager: TxnManagerBuilder,
 }

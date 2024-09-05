@@ -48,6 +48,7 @@ pub trait LevelCtlBuilderTrait<
         &self,
         kms: K,
     ) -> impl std::future::Future<Output = Result<L, LevelCtlError>>;
+    fn set_cache(&mut self, cache: T::Cache) -> &mut Self;
 }
 #[derive(Error, Debug)]
 pub struct LevelCtlError(Box<dyn Error>);

@@ -189,7 +189,7 @@ impl Default for LevelCtlConfig {
 pub struct LevelCtlBuilder<T: TableTrait<K::Cipher>, K: Kms> {
     manifest: ManifestBuilder,
     table: T::TableBuilder,
-    cache: Option<T::Cache>,
+
     config: LevelCtlConfig,
     dir: PathBuf,
     read_only: bool,
@@ -199,7 +199,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> Default for LevelCtlBuilder<T, K> {
         Self {
             manifest: ManifestBuilder::default(),
             table: T::TableBuilder::default(),
-            cache: None,
+
             config: LevelCtlConfig::default(),
             dir: PathBuf::from(DEFAULT_DIR),
             read_only: false,
@@ -236,6 +236,14 @@ impl<T: TableTrait<K::Cipher>, K: Kms>
         kms: K,
     ) -> std::result::Result<LevelCtl<T, K>, LevelCtlError> {
         Ok(self.build_impl(kms).await?)
+    }
+
+    fn set_cache(
+        &mut self,
+        cache: <T as TableTrait<K::Cipher>>::Cache,
+    ) -> &mut Self {
+        self.table.set_cache(cache);
+        self
     }
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
@@ -310,11 +318,10 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
             let cipher_id = table.key_id();
 
             let mut table_builder = self.table.clone();
-            if let Some(c) = self.cache.as_ref() {
-                table_builder.set_cache(c.clone());
-            }
+
             table_builder.set_compression(table.compress());
             table_builder.set_dir(self.dir.clone());
+
             let kms_clone = kms.clone();
             let table_id = *id;
             debug!("spawning task for table {}", table_id);

@@ -8,6 +8,7 @@ use std::{
 };
 
 use flatbuffers::FlatBufferBuilder;
+use log::debug;
 use memmap2::Advice;
 use mors_common::{
     bloom::Bloom,
@@ -96,7 +97,8 @@ impl<K: KmsCipher> TableWriterTrait for TableWriter<K> {
             let mut builder = MmapFileBuilder::new();
             builder.advice(Advice::Sequential);
             builder.create_new(true).append(true).read(true);
-            let mut mmap = builder.build(path, data.size)?;
+            debug!("write {} data to file: {:?} ", data.size, path);
+            let mut mmap = builder.build(path, 2 * data.size)?;
 
             data.write(&mut mmap)?;
             let offset = mmap.load_append_pos(Ordering::Acquire);

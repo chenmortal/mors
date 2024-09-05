@@ -46,40 +46,31 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
         key: &KeyTs,
     ) -> Result<Option<(TxnTs, Option<ValueMeta>)>> {
         if let Some(tables) = self.seek_table(key) {
-            let mut tasks = Vec::with_capacity(tables.len());
+            let mut max_txn = TxnTs::default();
+            let mut max_value = None;
+
             for table in tables {
                 let ks = key.encode();
-                tasks.push(tokio::spawn(async move {
-                    let k = KeyTsBorrow::from(ks.as_ref());
-                    let mut iter = table.iter(true);
-                    match iter.seek(k) {
-                        Ok(seek) => {
-                            if seek {
-                                if let Some(seek_key) = iter.key() {
-                                    if k.key() == seek_key.key() {
-                                        let txn = seek_key.txn_ts();
-                                        return Some((txn, iter.value()));
+                let k = KeyTsBorrow::from(ks.as_ref());
+                let mut iter = table.iter(true);
+                match iter.seek(k) {
+                    Ok(seek) => {
+                        if seek {
+                            if let Some(seek_key) = iter.key() {
+                                if k.key() == seek_key.key() {
+                                    let txn = seek_key.txn_ts();
+                                    if txn > max_txn {
+                                        max_txn = txn;
+                                        max_value = iter.value();
                                     }
                                 }
                             }
-                            None
-                        }
-                        Err(e) => {
-                            error!("{} seek  error:{}", table.id(), e);
-                            None
                         }
                     }
-                }));
-            }
-            let mut max_txn = TxnTs::default();
-            let mut max_value = None;
-            for task in tasks {
-                if let Some((txn, value)) = task.await? {
-                    if txn > max_txn {
-                        max_txn = txn;
-                        max_value = value;
+                    Err(e) => {
+                        error!("{} seek  error:{}", table.id(), e);
                     }
-                };
+                }
             }
             if max_txn != TxnTs::default() {
                 return Ok(Some((max_txn, max_value)));

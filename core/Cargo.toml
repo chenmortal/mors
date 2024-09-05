@@ -6,7 +6,7 @@ license.workspace = true
 readme.workspace = true
 
 [features]
-default = ["sync","txn"]
+default = ["txn"]
 sync = []
 txn = []
 [lints]

@@ -115,6 +115,9 @@ impl<K: KmsCipher> KvSeekIter for CacheTableIter<K> {
                 if index >= indexbuf.offsets().len() {
                     return Ok(false);
                 }
+                if index==0{
+                    return Ok(false);
+                }
                 index - 1
             }
         };

@@ -3,7 +3,7 @@ mod pb;
 pub mod table;
 mod block;
 mod fb;
-mod cache;
+pub mod cache;
 mod table_index;
 mod write;
 mod read;

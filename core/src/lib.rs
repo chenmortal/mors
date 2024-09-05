@@ -12,8 +12,10 @@ use mors_levelctl::ctl::LevelCtl;
 use mors_memtable::memtable::Memtable;
 
 use mors_skip_list::skip_list::SkipList;
+use mors_sstable::cache::MorsCacheBuilder;
 use mors_sstable::table::Table;
-
+use mors_traits::cache::CacheBuilder;
+use mors_traits::levelctl::LevelCtlBuilderTrait;
 use mors_vlog::vlogctl::VlogCtl;
 use mors_wal::storage::mmap::MmapFile;
 use tokio::runtime::Builder;
@@ -144,6 +146,11 @@ impl DerefMut for MorsBuilder {
     }
 }
 impl MorsBuilder {
+    fn init(&mut self) {
+        let cache_builder = MorsCacheBuilder::default();
+        let cache = cache_builder.build().unwrap();
+        self.levelctl.set_cache(cache);
+    }
     #[cfg(feature = "sync")]
     pub fn tokio_builder(&mut self) -> &mut Builder {
         &mut self.tokio_builder
@@ -152,6 +159,7 @@ impl MorsBuilder {
     #[cfg(feature = "sync")]
     pub fn build(&mut self) -> Result<Mors> {
         use std::sync::Arc;
+        self.init();
         let runtime = self.tokio_builder.build()?;
         let k = runtime.block_on(self.builder.build())?;
         let inner = MorsInner { core: k, runtime };
@@ -161,6 +169,7 @@ impl MorsBuilder {
     }
     #[cfg(not(feature = "sync"))]
     pub async fn build(&mut self) -> Result<Mors> {
+        self.init();
         let core = self.builder.build().await?;
         let inner = MorsInner { core };
         Ok(Mors { inner })
@@ -264,6 +273,7 @@ impl WriteTransaction {
     pub fn set_entry(&mut self, entry: KvEntry) -> Result<()> {
         Ok(self.txn.modify(entry.entry)?)
     }
+    #[cfg(feature = "sync")]
     pub fn get(&self, key: Bytes) -> Result<KvEntry> {
         self.handler.block_on(self.txn.get(key))
     }
