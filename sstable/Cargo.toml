@@ -36,8 +36,15 @@ sha2 = { workspace = true }
 mors-encrypt = { workspace = true }
 env_logger = { workspace = true }
 proptest = { workspace = true }
+criterion = { workspace = true, features = ["html_reports", "async_tokio"] }
+crc32fast = { workspace = true }
+
 [lints]
 workspace = true
+
+[[bench]]
+name = "build"
+harness = false
 
 [[example]]
 name = "simple"

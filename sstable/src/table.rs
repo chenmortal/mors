@@ -10,7 +10,7 @@ use mors_common::{
     compress::CompressionType,
     file_id::{FileId, SSTableId},
     kv::ValueMeta,
-    // mmap::{MmapFile, MmapFileBuilder},
+    page_size,
     ts::{KeyTs, TxnTs},
 };
 use mors_traits::file::StorageBuilderTrait;
@@ -89,7 +89,7 @@ impl<K: KmsCipher> Default for TableBuilder<K> {
             checksum_verify_mode: ChecksumVerificationMode::default(),
             checksum_algo: checksum::Algorithm::Crc32c,
             bloom_false_positive: 0.01,
-            block_size: 4 * 1024,
+            block_size: page_size() * 4,
             compression: CompressionType::default(),
             read_only: false,
             dir: PathBuf::from(DEFAULT_DIR),
@@ -438,7 +438,7 @@ impl<K: KmsCipher> TableTrait<K> for Table<K> {
         Ok(self.0.mmap.delete().map_err(MorsTableError::IoError)?)
     }
 
-     fn may_contain(&self, key: &[u8]) -> bool {
+    fn may_contain(&self, key: &[u8]) -> bool {
         if self.0.cheap_index.bloom_filter_len == 0 {
             return true;
         }

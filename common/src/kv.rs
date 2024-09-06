@@ -204,7 +204,15 @@ impl ValueMeta {
         v[2 + p..].copy_from_slice(self.value());
         v
     }
-
+    pub fn len(&self) -> usize {
+        self.value.len()
+            + size_of::<PhyTs>()
+            + size_of::<u8>()
+            + size_of::<Meta>()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.value.is_empty()
+    }
     pub fn decode(data: &[u8]) -> Option<Self> {
         if data.len() < VALUEMETA_MIN_ENCODED_SIZE.to_owned() {
             return None;

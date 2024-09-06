@@ -1,5 +1,5 @@
-use mors_common::kv::ValueMeta;
-use mors_common::ts::KeyTsBorrow;
+use mors_common::kv::{Meta, ValueMeta};
+use mors_common::ts::{KeyTs, KeyTsBorrow};
 use std::cmp::Ordering;
 use std::error::Error;
 use std::fmt::Display;
@@ -334,6 +334,81 @@ impl IterError {
         IterError(Box::new(err))
     }
 }
+pub struct SeqIter<'a> {
+    index: Option<usize>,
+    kv: &'a Vec<(KeyTs, ValueMeta)>,
+    k: Option<Vec<u8>>,
+    v: Option<ValueMeta>,
+}
+impl<'a> SeqIter<'a> {
+    pub fn new_with_kv(kv: &'a Vec<(KeyTs, ValueMeta)>) -> Self {
+        Self {
+            index: None,
+            kv,
+            k: None,
+            v: None,
+        }
+    }
+}
+impl<'a> CacheIter for SeqIter<'a> {
+    type Item = usize;
+
+    fn item(&self) -> Option<&Self::Item> {
+        self.index.as_ref()
+    }
+}
+impl<'a> CacheIterator for SeqIter<'a> {
+    fn next(&mut self) -> std::result::Result<bool, IterError> {
+        match self.index.as_mut() {
+            Some(index) => {
+                if *index >= self.kv.len() - 1 {
+                    Ok(false)
+                } else {
+                    *index += 1;
+                    let (k, v) = self.kv[*index].clone();
+                    self.k = k.encode().into();
+                    self.v = v.into();
+                    Ok(true)
+                }
+            }
+            None => {
+                self.index = Some(0);
+                let (k, v) = self.kv[0].clone();
+                self.k = k.encode().into();
+                self.v = v.into();
+                Ok(true)
+            }
+        }
+    }
+}
+impl<'a> KvCacheIter<ValueMeta> for SeqIter<'a> {
+    fn key(&self) -> Option<KeyTsBorrow<'_>> {
+        if let Some(k) = self.k.as_ref() {
+            return Some(k.as_slice().into());
+        }
+        None
+    }
+
+    fn value(&self) -> Option<ValueMeta> {
+        self.v.clone()
+    }
+}
+
+pub fn generate_kv(count: u32, prefix: &str) -> Vec<(KeyTs, ValueMeta)> {
+    let mut kv = Vec::with_capacity(count as usize);
+    for i in 0..count {
+        let k = prefix.to_string() + &format!("{:06}", i);
+        let key = KeyTs::new(k.into(), 0.into());
+        let v = format!("{}", i);
+        let mut value = ValueMeta::default();
+        value.set_value(v.into());
+        value.set_meta(Meta::from_bits(b'A').unwrap());
+        value.set_user_meta(0);
+        kv.push((key, value));
+    }
+    kv
+}
+
 mod test {
     use bytes::Buf;
 
