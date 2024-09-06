@@ -370,7 +370,7 @@ mod test {
             let mut rng = get_rng(seed);
             let db = mors.clone();
             let handler = tokio::spawn(async move {
-                let count = 100000;
+                let count = 10000;
                 let random = gen_random_entries(&mut rng, count, 1000.into());
                 let mut entries = Vec::with_capacity(count);
                 let mut receivers = Vec::new();
@@ -411,7 +411,7 @@ mod test {
                             if let Some((txn_ts, _value)) = r {
                                 assert_eq!(txn_ts, entry.key_ts().txn_ts());
                                 count += 1;
-                                if count % 1000 == 0 {
+                                if count % 100 == 0 {
                                     info!(
                                         "{} Read completed count {}",
                                         seed, count

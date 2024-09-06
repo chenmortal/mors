@@ -231,7 +231,7 @@ impl<K: KmsCipher> TableBuilder<K> {
         match table.0.checksum_verify_mode {
             ChecksumVerificationMode::OnBlockRead
             | ChecksumVerificationMode::OnTableAndBlockRead => {
-                if let Err(e) = table.verify().await {
+                if let Err(e) = table.verify() {
                     if let MorsTableError::ChecksumVerify(_, _) = &e {
                         error!(
                             "Ignore table {} checksum verify error: {}",
@@ -438,7 +438,7 @@ impl<K: KmsCipher> TableTrait<K> for Table<K> {
         Ok(self.0.mmap.delete().map_err(MorsTableError::IoError)?)
     }
 
-    fn may_contain(&self, key: &[u8]) -> bool {
+     fn may_contain(&self, key: &[u8]) -> bool {
         if self.0.cheap_index.bloom_filter_len == 0 {
             return true;
         }
@@ -456,7 +456,24 @@ impl<K: KmsCipher> TableTrait<K> for Table<K> {
     }
 }
 impl<K: KmsCipher> Table<K> {
+    #[cfg(not(feature = "sync"))]
     async fn verify(&self) -> Result<()> {
+        for i in 0..self.0.cheap_index.offsets_len {
+            let block = self.get_block(i.into(), true).await?;
+
+            match self.0.checksum_verify_mode {
+                ChecksumVerificationMode::OnBlockRead
+                | ChecksumVerificationMode::OnTableAndBlockRead => {}
+                _ => {
+                    block.verify()?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+    #[cfg(feature = "sync")]
+    fn verify(&self) -> Result<()> {
         for i in 0..self.0.cheap_index.offsets_len {
             let block = self.get_block(i.into(), true)?;
 
@@ -617,6 +634,30 @@ impl<K: KmsCipher> Table<K> {
         }
         Ok(block)
     }
+    #[cfg(not(feature = "sync"))]
+    pub(crate) async fn get_index(&self) -> Result<TableIndexBuf> {
+        if let Some(c) = self.0.cache.as_ref() {
+            if let Some(t) = c.get_index(self.id()).await {
+                return Ok(t);
+            };
+        }
+
+        let raw_data_ref =
+            self.0.mmap.pread_ref(self.0.index_start, self.0.index_len);
+        let data = self
+            .0
+            .cipher
+            .as_ref()
+            .map(|c| c.decrypt(raw_data_ref))
+            .transpose()?
+            .unwrap_or_else(|| raw_data_ref.to_vec());
+        let index_buf = TableIndexBuf::from_vec(data)?;
+        if let Some(c) = self.0.cache.as_ref() {
+            c.insert_index(self.id(), index_buf.clone()).await
+        }
+        Ok(index_buf)
+    }
+    #[cfg(feature = "sync")]
     pub(crate) fn get_index(&self) -> Result<TableIndexBuf> {
         if let Some(c) = self.0.cache.as_ref() {
             if let Some(t) = c.get_index(self.id()) {
