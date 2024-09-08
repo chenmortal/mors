@@ -3,7 +3,7 @@ use mors_common::ts::{KeyTs, KeyTsBorrow};
 use std::cmp::Ordering;
 use std::error::Error;
 use std::fmt::Display;
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref, DerefMut, Range};
 use thiserror::Error;
 
 // here use async fn look at https://blog.rust-lang.org/inside-rust/2022/11/17/async-fn-in-trait-nightly.html
@@ -397,9 +397,27 @@ impl<'a> KvCacheIter<ValueMeta> for SeqIter<'a> {
 pub fn generate_kv(count: u32, prefix: &str) -> Vec<(KeyTs, ValueMeta)> {
     let mut kv = Vec::with_capacity(count as usize);
     for i in 0..count {
-        let k = prefix.to_string() + &format!("{:06}", i);
+        let k = prefix.to_string() + &format!("{:20}", i);
         let key = KeyTs::new(k.into(), 0.into());
         let v = format!("{}", i);
+        let mut value = ValueMeta::default();
+        value.set_value(v.into());
+        value.set_meta(Meta::from_bits(b'A').unwrap());
+        value.set_user_meta(0);
+        kv.push((key, value));
+    }
+    kv
+}
+pub fn generate_kv_slice(
+    range: Range<u64>,
+    k_prefix: &str,
+    v_prefix: &str,
+) -> Vec<(KeyTs, ValueMeta)> {
+    let mut kv = Vec::with_capacity(range.clone().count());
+    for i in range {
+        let k = k_prefix.to_string() + &format!("{:20}", i);
+        let key = KeyTs::new(k.into(), 0.into());
+        let v = v_prefix.to_string() + &format!("{:20}", i);
         let mut value = ValueMeta::default();
         value.set_value(v.into());
         value.set_meta(Meta::from_bits(b'A').unwrap());

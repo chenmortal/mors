@@ -18,10 +18,14 @@ log = { workspace = true }
 tabled = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
+bytesize = "1.3.0"
 rand = { workspace = true }
 [dev-dependencies]
+tempfile = { workspace = true }
+env_logger = { workspace = true }
 mors-sstable = { workspace = true }
 mors-encrypt = { workspace = true }
+mors-vlog = { workspace = true }
 [build-dependencies]
 prost-build = { workspace = true }
 [lints]

@@ -147,10 +147,6 @@ impl LevelCtlConfig {
         self.max_level = max_level;
         self
     }
-    /// Maximum number of levels of compaction allowed in the LSM.
-    pub fn max_level(&self) -> Level {
-        self.max_level
-    }
     /// The default value of level0_num_tables_stall is 15.
     /// If the number of Level0 tables exceeds this value, writes will be blocked until compaction
     pub fn set_level0_num_tables_stall(
@@ -160,20 +156,12 @@ impl LevelCtlConfig {
         self.level0_num_tables_stall = level0_num_tables_stall;
         self
     }
-    /// The default value of level0_num_tables_stall is 15.
-    pub fn level0_num_tables_stall(&self) -> usize {
-        self.level0_num_tables_stall
-    }
     /// the number of compaction workers to run concurrently.  Setting this to
     /// zero stops compactions, which could eventually cause writes to block forever.
     /// The default value of num_compactors is 4. One is dedicated just for L0 and L1.
     pub fn set_num_compactors(&mut self, num_compactors: usize) -> &mut Self {
         self.num_compactors = num_compactors;
         self
-    }
-    /// the number of compaction workers to run concurrently.
-    pub fn num_compactors(&self) -> usize {
-        self.num_compactors
     }
     /// If levelmax2max_compaction is true, then the compaction will compact the maximum level to the maximum level.
     pub fn set_levelmax2max_compaction(
@@ -183,20 +171,12 @@ impl LevelCtlConfig {
         self.levelmax2max_compaction = levelmax2max_compaction;
         self
     }
-    pub fn levelmax2max_compaction(&self) -> bool {
-        self.levelmax2max_compaction
-    }
     /// The default value of base_level_size is 10 MB.
     /// sets the maximum size target for the base level.
     pub fn set_base_level_size(&mut self, base_level_size: usize) -> &mut Self {
         self.base_level_size = base_level_size;
         self
     }
-    /// the maximum size target for the base level.
-    pub fn base_level_size(&self) -> usize {
-        self.base_level_size
-    }
-
     /// level_size_multiplier sets the ratio between the maximum sizes of contiguous levels in the LSM.
     /// Once a level grows to be larger than this ratio allowed, the compaction process will be triggered.
     /// The default value of LevelSizeMultiplier is 10.
@@ -207,10 +187,6 @@ impl LevelCtlConfig {
         self.level_size_multiplier = level_size_multiplier;
         self
     }
-    /// level_size_multiplier sets the ratio between the maximum sizes of contiguous levels in the LSM.
-    pub fn level_size_multiplier(&self) -> usize {
-        self.level_size_multiplier
-    }
     /// table_size_multiplier sets the ratio between the maximum sizes of contiguous tables in the LSM.
     /// The default value of TableSizeMultiplier is 2.
     pub fn set_table_size_multiplier(
@@ -220,18 +196,11 @@ impl LevelCtlConfig {
         self.table_size_multiplier = table_size_multiplier;
         self
     }
-    /// table_size_multiplier sets the ratio between the maximum sizes of contiguous tables in the LSM.
-    pub fn table_size_multiplier(&self) -> usize {
-        self.table_size_multiplier
-    }
-    /// the size of level0 in bytes.
+    /// the size(bytes) of level0 in bytes.
     /// The default value of level0_size is 64 MB.
     pub fn set_level0_size(&mut self, level0_size: usize) -> &mut Self {
         self.level0_size = level0_size;
         self
-    }
-    pub fn level0_size(&self) -> usize {
-        self.level0_size
     }
     /// the number of tables in level0.
     /// The default value of level0_tables_len is 5.
@@ -242,10 +211,6 @@ impl LevelCtlConfig {
         self.level0_tables_len = level0_tables_len;
         self
     }
-    /// the number of tables in level0.
-    pub fn level0_tables_len(&self) -> usize {
-        self.level0_tables_len
-    }
     /// the number of versions to keep.
     /// The default value of num_versions_to_keep is 1.
     pub fn set_num_versions_to_keep(
@@ -254,6 +219,40 @@ impl LevelCtlConfig {
     ) -> &mut Self {
         self.num_versions_to_keep = num_versions_to_keep;
         self
+    }
+    /// Maximum number of levels of compaction allowed in the LSM.
+    pub fn max_level(&self) -> Level {
+        self.max_level
+    }
+    /// The default value of level0_num_tables_stall is 15.
+    pub fn level0_num_tables_stall(&self) -> usize {
+        self.level0_num_tables_stall
+    }
+    /// the number of compaction workers to run concurrently.
+    pub fn num_compactors(&self) -> usize {
+        self.num_compactors
+    }
+    pub fn levelmax2max_compaction(&self) -> bool {
+        self.levelmax2max_compaction
+    }
+    /// the maximum size target for the base level.
+    pub fn base_level_size(&self) -> usize {
+        self.base_level_size
+    }
+    /// level_size_multiplier sets the ratio between the maximum sizes of contiguous levels in the LSM.
+    pub fn level_size_multiplier(&self) -> usize {
+        self.level_size_multiplier
+    }
+    /// table_size_multiplier sets the ratio between the maximum sizes of contiguous tables in the LSM.
+    pub fn table_size_multiplier(&self) -> usize {
+        self.table_size_multiplier
+    }
+    pub fn level0_size(&self) -> usize {
+        self.level0_size
+    }
+    /// the number of tables in level0.
+    pub fn level0_tables_len(&self) -> usize {
+        self.level0_tables_len
     }
     /// the number of versions to keep.
     pub fn num_versions_to_keep(&self) -> usize {

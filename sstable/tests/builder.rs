@@ -20,7 +20,7 @@ use std::{
 
 type TestTable = Table<AesCipher>;
 type TestTableBuilder = TableBuilder<AesCipher>;
-async fn build_table(
+pub async fn build_table(
     dir: &Path,
     kv: &Vec<(KeyTs, ValueMeta)>,
     compression: CompressionType,
