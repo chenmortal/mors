@@ -20,7 +20,7 @@ use mors_traits::{
 type TestTableBuilder = TableBuilder<AesCipher>;
 
 async fn build_table(
-    kv: Vec<(KeyTs, ValueMeta)>,
+    kv: &Vec<(KeyTs, ValueMeta)>,
     block_size: usize,
     compression: CompressionType,
 ) -> Result<(), SSTableError> {
@@ -29,13 +29,13 @@ async fn build_table(
     builder.set_block_size(block_size);
     builder.set_compression(compression);
     builder.set_dir(tempdir.path().to_path_buf());
-    let iter = SeqIter::new_with_kv(&kv);
+    let iter = SeqIter::new_with_kv(kv);
     let next_id = Arc::new(AtomicU32::new(1));
     let table = builder.build_l0(iter, next_id, None).await?;
     assert!(table.is_some());
     let table = table.unwrap();
     let mut table_iter = table.iter(false);
-    let mut iter = SeqIter::new_with_kv(&kv);
+    let mut iter = SeqIter::new_with_kv(kv);
     while iter.next().unwrap() {
         let n = table_iter.next();
         assert!(n.is_ok());
@@ -64,7 +64,12 @@ fn bench_build_table(c: &mut Criterion) {
     {
         let kv = generate_kv(*count, "test");
 
-        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(8)
+            .enable_all()
+            .build()
+            .unwrap();
+
         group.throughput(Throughput::Bytes((*count * size as u32) as u64));
         group.sample_size(10);
         let par = "count:".to_string()
@@ -80,11 +85,7 @@ fn bench_build_table(c: &mut Criterion) {
             &kv,
             |b, data| {
                 b.to_async(&runtime).iter(|| {
-                    build_table(
-                        data.clone(),
-                        *block_size,
-                        CompressionType::None,
-                    )
+                    build_table(data, *block_size, CompressionType::None)
                 })
             },
         );

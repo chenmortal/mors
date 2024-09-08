@@ -29,7 +29,7 @@ async fn build_table(
     builder.set_block_size(4 * 1024);
     builder.set_compression(compression);
     builder.set_dir(dir.to_path_buf());
-    let iter = SeqIter::new_with_kv(&kv);
+    let iter = SeqIter::new_with_kv(kv);
     let next_id = Arc::new(AtomicU32::new(1));
     let table = builder.build_l0(iter, next_id, None).await;
     assert!(table.is_ok());

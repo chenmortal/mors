@@ -19,7 +19,9 @@ tabled = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 rand = { workspace = true }
-
+[dev-dependencies]
+mors-sstable = { workspace = true }
+mors-encrypt = { workspace = true }
 [build-dependencies]
 prost-build = { workspace = true }
 [lints]
