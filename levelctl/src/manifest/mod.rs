@@ -445,4 +445,47 @@ impl TableManifest {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use mors_common::compress::CompressionType;
+    use mors_common::file_id::SSTableId;
 
+    use super::manifest_change::ManifestChange;
+    use super::ManifestBuilder;
+
+    #[tokio::test]
+    async fn test_builder() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut builder = ManifestBuilder::default();
+        builder.set_dir(temp_dir.path().to_path_buf());
+        let manifest = builder.build().unwrap();
+        let mut id = 0;
+        let mut level_tables = Vec::new();
+        for level in 0..5u32 {
+            let mut tables: Vec<SSTableId> = Vec::new();
+            for _ in 0..10 {
+                id += 1;
+                let change = ManifestChange::new_create(
+                    id.into(),
+                    level.into(),
+                    None,
+                    CompressionType::None,
+                );
+                tables.push(id.into());
+                let r = manifest.push_changes(vec![change]).await;
+                assert!(r.is_ok());
+            }
+            level_tables.push(tables);
+        }
+        drop(manifest);
+        let manifest = builder.build().unwrap();
+        let manifest = manifest.lock().await;
+        let info = manifest.info();
+        for (index, tables) in level_tables.iter().enumerate() {
+            assert_eq!(tables.len(), info.levels[index].tables.len());
+            for table_id in tables {
+                info.levels[index].tables.contains(table_id);
+            }
+        }
+    }
+}
