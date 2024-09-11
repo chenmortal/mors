@@ -1,10 +1,22 @@
-use std::{cmp::Ordering, fmt::Display};
+use std::{
+    cmp::Ordering,
+    fmt::{Debug, Display},
+};
 
 use bytes::Bytes;
+use bytesize::ByteSize;
 use mors_traits::{
     kms::Kms,
     levelctl::{Level, LevelCtlTrait, LEVEL0},
     sstable::{TableBuilderTrait, TableTrait},
+};
+use tabled::{
+    builder::Builder,
+    settings::{
+        object::{Columns, Rows},
+        style::{BorderSpanCorrection, LineText, Offset},
+        Alignment, Color, Style,
+    },
 };
 
 use super::Result;
@@ -44,11 +56,61 @@ impl CompactPriority {
         &self.drop_prefixes
     }
 }
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub(crate) struct CompactTarget {
     base_level: Level,
     target_size: Vec<usize>,
     file_size: Vec<usize>,
+}
+impl Debug for CompactTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut builder = Builder::default();
+        debug_assert_eq!(self.target_size.len(), self.file_size.len());
+        let len = self.target_size.len();
+        let mut levels = Vec::with_capacity(len + 1);
+        levels.push("Level".to_string());
+        for i in 0..len {
+            let level: Level = i.into();
+            levels.push(format!("{}", level));
+        }
+        builder.push_record(levels);
+
+        let mut target_size = Vec::with_capacity(len + 1);
+        target_size.push("levelTotalSize".to_string());
+
+        target_size.extend(
+            self.target_size
+                .iter()
+                .map(|x| ByteSize::b(*x as u64).to_string_as(true).to_string()),
+        );
+        builder.push_record(target_size);
+
+        let mut file_size = Vec::with_capacity(len + 1);
+        file_size.push("levelFileSize".to_string());
+        file_size.extend(
+            self.file_size
+                .iter()
+                .map(|x| ByteSize::b(*x as u64).to_string_as(true).to_string()),
+        );
+        builder.push_record(file_size);
+
+        let style = Style::modern_rounded();
+
+        let clr_green = Color::FG_GREEN;
+        let text = "CompactTarget";
+        let table = builder
+            .build()
+            .with(style)
+            .with(
+                LineText::new(text, Rows::first())
+                    .offset(Offset::End(text.len())),
+            )
+            .with(Alignment::center())
+            .with(BorderSpanCorrection)
+            .modify(Columns::single(self.base_level.to_usize() + 1), clr_green)
+            .to_string();
+        write!(f, "{}", table)
+    }
 }
 impl CompactTarget {
     pub(crate) fn target_size(&self, level: Level) -> usize {
@@ -220,5 +282,36 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         });
 
         Ok(prios)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use bytesize::ByteSize;
+
+    use super::CompactTarget;
+
+    #[test]
+    fn test_compact_target_display() {
+        let compact = CompactTarget {
+            base_level: 1u32.into(),
+            target_size: vec![
+                ByteSize::mib(1).as_u64() as usize,
+                ByteSize::mib(2).as_u64() as usize,
+                ByteSize::mib(3).as_u64() as usize,
+            ],
+            file_size: vec![
+                ByteSize::mib(1).as_u64() as usize,
+                ByteSize::mib(2).as_u64() as usize,
+                ByteSize::mib(3).as_u64() as usize,
+            ],
+        };
+        println!("{:?}", compact);
+    }
+    #[test]
+    fn test_bytesize() {
+        let k = ByteSize::b(2 * 1024 * 1024);
+        println!("{}", k.to_string_as(true));
+        // let size = ByteSize::mib(1).as_u64() as usize;
+        // assert_eq!(size, 1024 * 1024);
     }
 }
