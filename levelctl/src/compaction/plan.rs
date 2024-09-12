@@ -98,6 +98,9 @@ impl<T: TableTrait<K::Cipher>, K: Kms> CompactPlan<T, K> {
             kr.left = right;
         }
     }
+    pub(crate) fn push_split(&mut self, split: KeyTsRange) {
+        self.splits.push(split);
+    }
 }
 pub(crate) struct CompactPlanReadGuard<'a, T: TableTrait<K::Cipher>, K: Kms> {
     pub(crate) this_level: RwLockReadGuard<'a, LevelHandlerTables<T, K>>,
@@ -190,6 +193,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         } else {
             plan.top.clear();
             let mut s = KeyTsRange::from::<T, K>(&top[0]);
+            plan.top.push(top[0].clone());
             for t in top.iter().skip(1) {
                 let other = KeyTsRange::from::<T, K>(t);
                 if s.intersects(&other) {

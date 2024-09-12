@@ -132,10 +132,10 @@ pub struct LevelCtlConfig {
     level0_num_tables_stall: usize,
     num_compactors: usize,
     levelmax2max_compaction: bool,
-    base_level_size: usize,
+    base_level_total_size: usize,
     level_size_multiplier: usize,
     table_size_multiplier: usize,
-    level0_size: usize,
+    level0_table_size: usize,
     level0_tables_len: usize,
     num_versions_to_keep: usize,
 }
@@ -172,9 +172,12 @@ impl LevelCtlConfig {
         self
     }
     /// The default value of base_level_size is 10 MB.
-    /// sets the maximum size target for the base level.
-    pub fn set_base_level_size(&mut self, base_level_size: usize) -> &mut Self {
-        self.base_level_size = base_level_size;
+    /// sets the maximum total size target for the base level.
+    pub fn set_base_level_total_size(
+        &mut self,
+        base_level_size: usize,
+    ) -> &mut Self {
+        self.base_level_total_size = base_level_size;
         self
     }
     /// level_size_multiplier sets the ratio between the maximum sizes of contiguous levels in the LSM.
@@ -196,10 +199,10 @@ impl LevelCtlConfig {
         self.table_size_multiplier = table_size_multiplier;
         self
     }
-    /// the size(bytes) of level0 in bytes.
+    /// the size of level0's single table file in bytes.
     /// The default value of level0_size is 64 MB.
-    pub fn set_level0_size(&mut self, level0_size: usize) -> &mut Self {
-        self.level0_size = level0_size;
+    pub fn set_level0_table_size(&mut self, level0_size: usize) -> &mut Self {
+        self.level0_table_size = level0_size;
         self
     }
     /// the number of tables in level0.
@@ -236,8 +239,8 @@ impl LevelCtlConfig {
         self.levelmax2max_compaction
     }
     /// the maximum size target for the base level.
-    pub fn base_level_size(&self) -> usize {
-        self.base_level_size
+    pub fn base_level_total_size(&self) -> usize {
+        self.base_level_total_size
     }
     /// level_size_multiplier sets the ratio between the maximum sizes of contiguous levels in the LSM.
     pub fn level_size_multiplier(&self) -> usize {
@@ -247,8 +250,8 @@ impl LevelCtlConfig {
     pub fn table_size_multiplier(&self) -> usize {
         self.table_size_multiplier
     }
-    pub fn level0_size(&self) -> usize {
-        self.level0_size
+    pub fn level0_table_size(&self) -> usize {
+        self.level0_table_size
     }
     /// the number of tables in level0.
     pub fn level0_tables_len(&self) -> usize {
@@ -266,10 +269,10 @@ impl Default for LevelCtlConfig {
             level0_num_tables_stall: 15,
             num_compactors: 4,
             levelmax2max_compaction: false,
-            base_level_size: 10 << 20, //10 MB
+            base_level_total_size: 10 << 20, //10 MB
             level_size_multiplier: 10,
             table_size_multiplier: 2,
-            level0_size: 64 << 20,
+            level0_table_size: 64 << 20,
             level0_tables_len: 5,
             num_versions_to_keep: 1,
         }

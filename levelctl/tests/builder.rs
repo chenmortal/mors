@@ -79,12 +79,12 @@ async fn test_builder() {
     builder
         .set_dir(dir.clone())
         .set_max_level(4u32.into())
-        .set_num_compactors(3)
+        .set_num_compactors(1)
         .set_levelmax2max_compaction(true)
-        .set_base_level_size(ByteSize::mib(10).as_u64() as usize)
+        .set_base_level_total_size(ByteSize::mib(10).as_u64() as usize)
         .set_level_size_multiplier(2)
         .set_table_size_multiplier(2)
-        .set_level0_size(ByteSize::mib(5).as_u64() as usize)
+        .set_level0_table_size(ByteSize::mib(5).as_u64() as usize)
         .set_level0_tables_len(3);
     let kms = MorsKms::default();
     let level_ctl = builder.build(kms.clone()).await.unwrap();

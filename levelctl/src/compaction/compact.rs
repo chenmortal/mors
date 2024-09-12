@@ -55,7 +55,9 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         if this_level.level() != next_level.level() {
             plan.add_splits();
         }
-
+        if plan.splits().is_empty() {
+            plan.push_split(KeyTsRange::default());
+        }
         let new_tables =
             self.compact_build_tables(level, plan, &context).await?;
 
