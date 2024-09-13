@@ -17,6 +17,7 @@ prost = { workspace = true }
 thiserror = { workspace = true }
 memmap2 = { workspace = true }
 bytes = { workspace = true }
+bytesize = { workspace = true }
 crc32fast = { workspace = true }
 xxhash-rust = { workspace = true }
 flatbuffers = { workspace = true }
