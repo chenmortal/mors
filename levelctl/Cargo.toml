@@ -19,6 +19,7 @@ tabled = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 bytesize = { workspace = true }
+pretty-hex = { workspace = true }
 rand = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }

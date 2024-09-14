@@ -229,7 +229,7 @@ impl From<&[u8]> for KeyTs {
         }
     }
 }
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
+#[derive(PartialEq, Eq, Clone, Copy, Default)]
 pub struct KeyTsBorrow<'a>(&'a [u8]);
 impl<'a> KeyTsBorrow<'a> {
     pub fn key(&self) -> &[u8] {
@@ -257,6 +257,24 @@ impl Deref for KeyTsBorrow<'_> {
 
     fn deref(&self) -> &Self::Target {
         self.0
+    }
+}
+impl Debug for KeyTsBorrow<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "KeyTs: Key({})-{}",
+            self.key().hex_dump(),
+            self.txn_ts()
+        ))
+    }
+}
+impl Display for KeyTsBorrow<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "KeyTs: Key({})-{}",
+            self.key().hex_dump(),
+            self.txn_ts()
+        ))
     }
 }
 impl Ord for KeyTsBorrow<'_> {

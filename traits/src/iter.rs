@@ -253,6 +253,9 @@ impl CacheIterator for KvCacheMergeIterator {
             }
 
             let result = self.smaller_mut().next()?;
+            if !result {
+                self.smaller_mut().valid = false;
+            }
             if self.bigger().valid {
                 if result {
                     if self.bigger().key().is_none()
