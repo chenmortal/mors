@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use bytesize::ByteSize;
 use log::LevelFilter;
 use mors_common::closer::Closer;
+use mors_common::kv::Meta;
 use mors_encrypt::cipher::AesCipher;
 use mors_encrypt::registry::MorsKms;
 use mors_levelctl::ctl::LevelCtlBuilder;
@@ -23,7 +24,10 @@ pub type TestVlogCtlBuilder = VlogCtlBuilder<MorsKms>;
 
 #[test]
 fn test_kv_size() {
-    let (k, v) = generate_kv_slice(0..1, "k", "v").pop().unwrap();
+    let pop = generate_kv_slice(0..1, "k", "v", Meta::default())
+        .pop()
+        .unwrap();
+    let (k, v) = pop;
     dbg!(k.len());
     dbg!(v.len());
 }
@@ -55,9 +59,15 @@ async fn test_builder() {
 
     let discard = Discard::new(&dir).unwrap();
 
-    let (tables, _) =
-        generate_table(dir, 10, ByteSize::mib(2).as_u64() as usize, "k", "v")
-            .await;
+    let (tables, _) = generate_table(
+        dir,
+        10,
+        ByteSize::mib(2).as_u64() as usize,
+        "k",
+        "v",
+        Meta::default(),
+    )
+    .await;
 
     for table in tables {
         let r = level_ctl.push_level0(table).await;

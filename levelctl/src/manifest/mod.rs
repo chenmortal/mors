@@ -349,8 +349,8 @@ impl ManifestInfo {
                         compress: change.compression.into(),
                     },
                 );
-
-                if self.levels.len() <= change.level as usize {
+                
+                for _ in self.levels.len()..=change.level as usize {
                     self.levels.push(LevelManifest::default());
                 }
                 self.levels[change.level as usize]

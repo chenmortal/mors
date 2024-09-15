@@ -415,6 +415,7 @@ pub fn generate_kv_slice(
     range: Range<u64>,
     k_prefix: &str,
     v_prefix: &str,
+    meta: Meta
 ) -> Vec<(KeyTs, ValueMeta)> {
     let mut kv = Vec::with_capacity(range.clone().count());
     for i in range {
@@ -423,7 +424,7 @@ pub fn generate_kv_slice(
         let v = v_prefix.to_string() + &format!("{:20}", i);
         let mut value = ValueMeta::default();
         value.set_value(v.into());
-        value.set_meta(Meta::from_bits(b'A').unwrap());
+        value.set_meta(meta);
         value.set_user_meta(0);
         kv.push((key, value));
     }

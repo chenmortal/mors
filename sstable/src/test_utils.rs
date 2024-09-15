@@ -4,6 +4,7 @@ use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 
 use bytesize::ByteSize;
+use mors_common::kv::Meta;
 use mors_traits::cache::CacheBuilder;
 use mors_traits::default::WithDir;
 use mors_traits::iter::{generate_kv_slice, SeqIter};
@@ -19,6 +20,7 @@ pub async fn generate_table<K: KmsCipher>(
     table_size: usize,
     k_prefix: &'static str,
     v_prefix: &'static str,
+    meta: Meta,
 ) -> (Vec<Table<K>>, Range<u64>) {
     let mut builder = TableBuilder::default();
 
@@ -29,7 +31,9 @@ pub async fn generate_table<K: KmsCipher>(
     builder.set_cache(cache);
     let next_id = Arc::new(AtomicU32::new(1));
 
-    let (k, v) = generate_kv_slice(0..1, k_prefix, v_prefix).pop().unwrap();
+    let (k, v) = generate_kv_slice(0..1, k_prefix, v_prefix, meta)
+        .pop()
+        .unwrap();
     let kv_count = (table_size / (k.len() + v.len())) as u64;
 
     let mut task = Vec::with_capacity(count as usize);
@@ -40,7 +44,7 @@ pub async fn generate_table<K: KmsCipher>(
         task.push(tokio::spawn(async move {
             let start = i * kv_count;
             let end = (i + 1) * kv_count;
-            let kv = generate_kv_slice(start..end, k_prefix, v_prefix);
+            let kv = generate_kv_slice(start..end, k_prefix, v_prefix, meta);
             let iter = SeqIter::new_with_kv(&kv);
             let table = builder_c.build_l0(iter, next_id_c, None).await;
             assert!(table.is_ok());

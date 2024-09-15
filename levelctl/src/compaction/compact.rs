@@ -417,6 +417,7 @@ impl<'a, T: TableTrait<K::Cipher>, K: Kms> AddKeyContext<'a, T, K> {
             } else {
                 self.writer.push(&key, &value, vptr_len);
             }
+            iter.next()?;
         }
         debug!(
             "Pushed {} keys, skipped {} keys, took {:?}",
