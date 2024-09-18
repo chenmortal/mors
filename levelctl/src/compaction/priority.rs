@@ -5,7 +5,6 @@ use std::{
 
 use bytes::Bytes;
 use bytesize::ByteSize;
-use log::debug;
 use mors_traits::{
     kms::Kms,
     levelctl::{Level, LevelCtlTrait, LEVEL0},
@@ -24,7 +23,7 @@ use tabled::{
 use super::Result;
 use crate::ctl::LevelCtl;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub(crate) struct CompactPriority {
     level: Level,
     now_total_size: usize,
@@ -36,7 +35,7 @@ pub(crate) struct CompactPriority {
     drop_prefixes: Vec<Bytes>,
     target: CompactTarget,
 }
-pub(crate) fn fmt_compact_prioritys(
+pub(crate) fn fmt_compact_priorities(
     prios: &[CompactPriority],
     l0_table_len: usize,
     t_l0_table_len: usize,
@@ -121,11 +120,14 @@ impl CompactPriority {
     pub(crate) fn adjusted(&self) -> f64 {
         self.adjusted
     }
+    pub(crate) fn score(&self) -> f64 {
+        self.score
+    }
     pub(crate) fn drop_prefixes(&self) -> &[Bytes] {
         &self.drop_prefixes
     }
 }
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PartialEq, Eq)]
 pub(crate) struct CompactTarget {
     base_level: Level,
     target_size: Vec<usize>,
@@ -287,7 +289,6 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     pub(crate) fn pick_compact_levels(&self) -> Result<Vec<CompactPriority>> {
         let mut prios = Vec::with_capacity(self.handlers_len());
         let target = self.target();
-        debug!("\n{}\n", target);
 
         for level in 0..=self.max_level().to_usize() {
             let level = level.into();
@@ -348,23 +349,6 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                 .unwrap_or(Ordering::Greater)
         });
 
-        debug!(
-            "\n{}\n",
-            fmt_compact_prioritys(
-                &prios,
-                l0_tables_len,
-                self.config().level0_tables_len(),
-            )
-        );
-        // Pick all the levels whose original score is >= 1.0, irrespective of their adjusted score.
-        // We'll still sort them by their adjusted score below. Having both these scores allows us to
-        // make better decisions about compacting L0. If we see a score >= 1.0, we can do L0->L0
-        // compactions. If the adjusted score >= 1.0, then we can do L0->Lbase compactions.
-        let prios = prios
-            .drain(..prios.len() - 1)
-            .filter(|p| p.score >= 1.)
-            .collect::<Vec<_>>();
-
         Ok(prios)
     }
 }
@@ -373,7 +357,7 @@ mod tests {
 
     use bytesize::ByteSize;
 
-    use crate::compaction::priority::fmt_compact_prioritys;
+    use crate::compaction::priority::fmt_compact_priorities;
 
     use super::{CompactPriority, CompactTarget};
 
@@ -434,7 +418,7 @@ mod tests {
             ..Default::default()
         };
         let prios = vec![priority1, priority2, priority3];
-        let priors = fmt_compact_prioritys(&prios, 2, 3);
+        let priors = fmt_compact_priorities(&prios, 2, 3);
         // let prioris = CompactPrioritys { prios: &prios };
         println!("{}", priors);
     }

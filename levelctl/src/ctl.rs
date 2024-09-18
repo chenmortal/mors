@@ -211,7 +211,7 @@ impl LevelCtlConfig {
         &mut self,
         level0_tables_len: usize,
     ) -> &mut Self {
-        self.level0_tables_len = level0_tables_len;
+        self.level0_tables_len = level0_tables_len + 1;
         self
     }
     /// the number of versions to keep.

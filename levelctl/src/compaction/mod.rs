@@ -1,13 +1,13 @@
 use std::time::Duration;
 
-use log::{info, warn};
+use log::{debug, info, warn};
 use mors_common::closer::Closer;
 use mors_traits::{
     kms::Kms, levelctl::LEVEL0, sstable::TableTrait, vlog::DiscardTrait,
 };
 use rand::Rng;
 
-use priority::CompactPriority;
+use priority::{fmt_compact_priorities, CompactPriority};
 use tokio::{
     select,
     time::{interval, sleep},
@@ -96,7 +96,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
 
         let mut count = 0;
         let mut ticker = interval(Duration::from_millis(50));
-
+        let mut last_priorities = Vec::new();
         loop {
             select! {
                 _=ticker.tick() => {
@@ -108,21 +108,45 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                         self.run_compact(task_id,priority,context.clone()).await;
                         count=0;
                     }else{
-                        let mut prios=self.pick_compact_levels()?;
-                        if task_id==0{
-                            if let Some(index)=prios.iter().position(|p|p.level()==LEVEL0){
-                                let level0=prios.remove(index);
-                                prios.insert(0,level0);
+
+                        let mut priorities = self.pick_compact_levels()?;
+
+                        if priorities != last_priorities {
+                            last_priorities=priorities.clone();
+                            debug!(
+                                "\n{}\n{}\n",
+                                fmt_compact_priorities(
+                                    &priorities,
+                                    self.handler(LEVEL0).unwrap().tables_len(),
+                                    self.config().level0_tables_len(),
+                                ),
+                                priorities[0].target()
+                            );
+                            // Pick all the levels whose original score is >= 1.0, irrespective of their adjusted score.
+                            // We'll still sort them by their adjusted score below. Having both these scores allows us to
+                            // make better decisions about compacting L0. If we see a score >= 1.0, we can do L0->L0
+                            // compactions. If the adjusted score >= 1.0, then we can do L0->Lbase compactions.
+                            let mut prios = priorities
+                            .drain(..priorities.len() - 1)
+                            .filter(|p| p.score() >= 1.)
+                            .collect::<Vec<_>>();
+                            if task_id==0{
+                                if let Some(index)=prios.iter().position(|p|p.level()==LEVEL0){
+                                    let level0=prios.remove(index);
+                                    prios.insert(0,level0);
+                                }
+                            }
+                            for prio in prios{
+                                if prio.adjusted() >= 1.0 || (task_id == 0 && prio.level() == LEVEL0) {
+                                    if self.run_compact(task_id, prio, context.clone()).await {
+                                        break;
+                                    }
+                                } else {
+                                    break;
+                                }
                             }
                         }
-                        for prio in prios{
-                            if prio.adjusted() <1.0 && !(task_id==0 && prio.level()==LEVEL0)  {
-                                break;
-                            }
-                            if self.run_compact(task_id,prio,context.clone()).await{
-                                break;
-                            };
-                        }
+
                     }
                 }
                 _=closer.cancelled() => {
@@ -133,7 +157,6 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         }
         Ok(())
     }
-
     // doCompact picks some table on level l and compacts it away to the next level.
     async fn run_compact<D: DiscardTrait>(
         &self,
@@ -141,7 +164,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         mut priority: CompactPriority,
         context: CompactContext<K, D>,
     ) -> bool {
-        debug_assert!(priority.level() < self.max_level());
+        debug_assert!(priority.level() <= self.max_level());
         let priority_level = priority.level();
         // base level can't be LEVEL0 , update it
         if priority.target().base_level() == LEVEL0 {

@@ -52,7 +52,9 @@ async fn test_builder() {
         .set_level_size_multiplier(2)
         .set_table_size_multiplier(2)
         .set_level0_table_size(ByteSize::mib(5).as_u64() as usize)
-        .set_level0_tables_len(3);
+        .set_level0_num_tables_stall(30)
+        .set_level0_tables_len(1);
+
     // builder.set_cache();
     let kms = MorsKms::default();
     let level_ctl = builder.build(kms.clone()).await.unwrap();
@@ -61,7 +63,7 @@ async fn test_builder() {
 
     let (tables, _) = generate_table(
         dir,
-        10,
+        20,
         ByteSize::mib(2).as_u64() as usize,
         "k",
         "v",
