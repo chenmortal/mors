@@ -48,12 +48,12 @@ async fn test_builder() {
         .set_max_level(4u32.into())
         .set_num_compactors(1)
         .set_levelmax2max_compaction(true)
-        .set_base_level_total_size(ByteSize::mib(10).as_u64() as usize)
+        .set_base_level_total_size(ByteSize::mib(5).as_u64() as usize)
         .set_level_size_multiplier(2)
         .set_table_size_multiplier(2)
-        .set_level0_table_size(ByteSize::mib(5).as_u64() as usize)
-        .set_level0_num_tables_stall(30)
-        .set_level0_tables_len(1);
+        .set_level0_table_size(ByteSize::mib(2).as_u64() as usize)
+        .set_level0_num_tables_stall(100)
+        .set_level0_tables_len(2);
 
     // builder.set_cache();
     let kms = MorsKms::default();
@@ -63,7 +63,7 @@ async fn test_builder() {
 
     let (tables, _) = generate_table(
         dir,
-        20,
+        30,
         ByteSize::mib(2).as_u64() as usize,
         "k",
         "v",

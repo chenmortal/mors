@@ -60,6 +60,9 @@ impl<T: TableTrait<K::Cipher>, K: Kms> CompactPlan<T, K> {
     pub(crate) fn next_range(&self) -> &KeyTsRange {
         &self.next_range
     }
+    pub(crate) fn this_size(&self) -> usize {
+        self.this_size
+    }
     pub(crate) fn top(&self) -> &[T] {
         &self.top
     }
@@ -261,7 +264,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             .cloned()
             .collect::<Vec<_>>();
 
-        if out.len() < 4 {
+        if out.len() < 2 {
             return Ok(false);
         }
 
@@ -270,7 +273,6 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
 
         // Avoid any other L0 -> Lbase from happening, while this is going on.
         status.levels_mut()[plan.this_level.level().to_usize()]
-            .ranges_mut()
             .push(KeyTsRange::inf());
 
         plan.top.iter().for_each(|t| {
@@ -303,7 +305,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         for t in this_tables {
             plan.this_size = t.size();
             plan.this_range = KeyTsRange::from::<T, K>(&t);
-
+            // If we're already compacting this range, don't do anything.
             if self
                 .compact_status()
                 .intersects(this_level, &plan.this_range)?
@@ -425,7 +427,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         self.compact_status().check_update(lock, plan)
     }
 }
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub(crate) struct KeyTsRange {
     left: KeyTs,
     right: KeyTs,
@@ -538,7 +540,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandlerTables<T, K> {
 }
 
 #[test]
-fn test_a(){
-    let k=1.0;
+fn test_a() {
+    let k = 1.0;
     assert!((0.0..=1.0).contains(&k));
 }

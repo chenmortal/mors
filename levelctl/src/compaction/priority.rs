@@ -66,9 +66,21 @@ pub(crate) fn fmt_compact_priorities(
             record.push(now_total_size);
         }
 
-        record
-            .push(ByteSize::b(prio.plan_delete_size as u64).to_string_as(true));
-        record.push(ByteSize::b(prio.plan_size as u64).to_string_as(true));
+        let delete_size = ByteSize::b(prio.plan_delete_size.unsigned_abs())
+            .to_string_as(true);
+        if prio.plan_delete_size < 0 {
+            record.push(format!("-{}", delete_size));
+        } else {
+            record.push(delete_size);
+        }
+
+        let plan_size =
+            ByteSize::b(prio.plan_size.unsigned_abs()).to_string_as(true);
+        if prio.plan_size < 0 {
+            record.push(format!("-{}", plan_size));
+        } else {
+            record.push(plan_size);
+        }
         let target_size =
             ByteSize::b(prio.target_size as u64).to_string_as(true);
         if prio.level == LEVEL0 {
@@ -76,8 +88,8 @@ pub(crate) fn fmt_compact_priorities(
         } else {
             record.push(target_size);
         }
-        record.push(format!("{:.2}", prio.score));
-        record.push(format!("{:.2}", prio.adjusted));
+        record.push(format!("{:.4}", prio.score));
+        record.push(format!("{:.4}", prio.adjusted));
         builder.push_column(record);
     }
     let style = Style::modern_rounded();

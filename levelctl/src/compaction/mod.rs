@@ -172,7 +172,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         };
         match self.gen_plan(task_id, priority) {
             Ok(mut plan) => {
-                match self
+                let result = match self
                     .compact(task_id, priority_level, &mut plan, context)
                     .await
                 {
@@ -188,7 +188,9 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                         warn!("[Compactor: {}] compact error: {}", task_id, e);
                         false
                     }
-                }
+                };
+                self.compact_status().remove(&plan);
+                result
             }
             Err(MorsLevelCtlError::FillTablesError) => false,
             Err(e) => {
