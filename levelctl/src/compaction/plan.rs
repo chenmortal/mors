@@ -536,3 +536,9 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandlerTables<T, K> {
         Some(left_index..=right_index)
     }
 }
+
+#[test]
+fn test_a(){
+    let k=1.0;
+    assert!((0.0..=1.0).contains(&k));
+}

@@ -256,7 +256,7 @@ impl CacheIterator for KvCacheMergeIterator {
             if !result {
                 self.smaller_mut().valid = false;
             }
-            if self.bigger().valid {
+            if self.right.is_some() && self.bigger().valid {
                 if result {
                     if self.bigger().key().is_none()
                         && !self.bigger_mut().next()?
@@ -415,7 +415,7 @@ pub fn generate_kv_slice(
     range: Range<u64>,
     k_prefix: &str,
     v_prefix: &str,
-    meta: Meta
+    meta: Meta,
 ) -> Vec<(KeyTs, ValueMeta)> {
     let mut kv = Vec::with_capacity(range.clone().count());
     for i in range {

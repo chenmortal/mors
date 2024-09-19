@@ -154,6 +154,7 @@ impl<K: KmsCipher> TableBuilderTrait<Table<K>, K> for TableBuilder<K> {
 
     fn set_table_size(&mut self, size: usize) -> &mut Self {
         self.table_size = size;
+        self.table_capacity = (size as f64 * 0.95) as usize;
         self
     }
 

@@ -122,28 +122,28 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                                 ),
                                 priorities[0].target()
                             );
-                            // Pick all the levels whose original score is >= 1.0, irrespective of their adjusted score.
-                            // We'll still sort them by their adjusted score below. Having both these scores allows us to
-                            // make better decisions about compacting L0. If we see a score >= 1.0, we can do L0->L0
-                            // compactions. If the adjusted score >= 1.0, then we can do L0->Lbase compactions.
-                            let mut prios = priorities
-                            .drain(..priorities.len() - 1)
-                            .filter(|p| p.score() >= 1.)
-                            .collect::<Vec<_>>();
-                            if task_id==0{
-                                if let Some(index)=prios.iter().position(|p|p.level()==LEVEL0){
-                                    let level0=prios.remove(index);
-                                    prios.insert(0,level0);
-                                }
+                        }
+                        // Pick all the levels whose original score is >= 1.0, irrespective of their adjusted score.
+                        // We'll still sort them by their adjusted score below. Having both these scores allows us to
+                        // make better decisions about compacting L0. If we see a score >= 1.0, we can do L0->L0
+                        // compactions. If the adjusted score >= 1.0, then we can do L0->Lbase compactions.
+                        let mut prios = priorities
+                        .drain(..priorities.len() - 1)
+                        .filter(|p| p.score() >= 1.)
+                        .collect::<Vec<_>>();
+                        if task_id==0{
+                            if let Some(index)=prios.iter().position(|p|p.level()==LEVEL0){
+                                let level0=prios.remove(index);
+                                prios.insert(0,level0);
                             }
-                            for prio in prios{
-                                if prio.adjusted() >= 1.0 || (task_id == 0 && prio.level() == LEVEL0) {
-                                    if self.run_compact(task_id, prio, context.clone()).await {
-                                        break;
-                                    }
-                                } else {
+                        }
+                        for prio in prios{
+                            if prio.adjusted() >= 1.0 || (task_id == 0 && prio.level() == LEVEL0) {
+                                if self.run_compact(task_id, prio, context.clone()).await {
                                     break;
                                 }
+                            } else {
+                                break;
                             }
                         }
 
