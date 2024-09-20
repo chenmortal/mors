@@ -288,7 +288,6 @@ impl<K: KmsCipher> TableBuilder<K> {
             .map(|c| c.decrypt(&data))
             .transpose()?
             .unwrap_or(data);
-
         let index_buf = TableIndexBuf::from_vec(data)?;
 
         debug_assert!(!index_buf.offsets().is_empty());
@@ -306,7 +305,7 @@ impl<K: KmsCipher> TableBuilder<K> {
             .offsets()
             .first()
             .ok_or(MorsTableError::TableIndexOffsetEmpty)?;
-        let smallest = first_block_offset.key_ts().to_owned();
+        let smallest = first_block_offset.key_ts().to_owned().into();
 
         //get biggest
         let last_block_offset = index_buf

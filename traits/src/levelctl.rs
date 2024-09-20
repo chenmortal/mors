@@ -49,6 +49,7 @@ pub trait LevelCtlBuilderTrait<
         kms: K,
     ) -> impl std::future::Future<Output = Result<L, LevelCtlError>>;
     fn set_cache(&mut self, cache: T::Cache) -> &mut Self;
+    fn set_level0_table_size(&mut self, size: usize) -> &mut Self;
 }
 #[derive(Error, Debug)]
 pub struct LevelCtlError(Box<dyn Error>);

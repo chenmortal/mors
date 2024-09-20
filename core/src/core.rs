@@ -217,6 +217,7 @@ impl<
     }
     pub fn set_memtable_size(&mut self, memtable_size: usize) -> &mut Self {
         self.memtable.set_memtable_size(memtable_size);
+        self.levelctl.set_level0_table_size(memtable_size);
         self
     }
 }

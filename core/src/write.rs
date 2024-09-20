@@ -359,8 +359,9 @@ mod test {
         let mut builder = MorsBuilder::default();
         builder.set_dir(dir).set_read_only(false);
         builder
-            .set_num_memtables(5)
-            .set_memtable_size(10 * 1024 * 1024);
+            .set_num_memtables(3)
+            .set_memtable_size(5 * 1024 * 1024);
+            
 
         let mors = builder.build().await?;
 
@@ -411,7 +412,7 @@ mod test {
                             if let Some((txn_ts, _value)) = r {
                                 assert_eq!(txn_ts, entry.key_ts().txn_ts());
                                 count += 1;
-                                if count % 100 == 0 {
+                                if count % 1000 == 0 {
                                     info!(
                                         "{} Read completed count {}",
                                         seed, count

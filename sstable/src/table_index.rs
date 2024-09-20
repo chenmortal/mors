@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use flatbuffers::InvalidFlatbuffer;
-use mors_common::ts::KeyTs;
+use mors_common::ts::KeyTsBorrow;
 use mors_traits::sstable::TableIndexBufTrait;
 
 use crate::fb::table_generated::TableIndex;
@@ -23,15 +23,19 @@ impl TableIndexBufTrait for TableIndexBuf {}
 
 impl TableIndexBuf {
     pub(crate) fn from_vec(data: Vec<u8>) -> Result<Self, InvalidFlatbuffer> {
-        let table_index = flatbuffers::root::<TableIndex>(&data)?;
+        let table_index =
+            unsafe { flatbuffers::root_unchecked::<TableIndex>(&data) };
         assert!(table_index.offsets().is_some());
         let offsets = table_index.offsets().unwrap();
         let offsets = offsets
             .iter()
             .map(|offset| {
                 assert!(offset.key_ts().is_some());
+                offsets.bytes().to_vec();
                 BlockOffsetBuf {
-                    key_ts: KeyTs::from(offset.key_ts().unwrap().bytes()),
+                    key_ts: Bytes::from(
+                        offset.key_ts().unwrap().bytes().to_vec(),
+                    ),
                     offset: offset.offset(),
                     size: offset.len(),
                 }
@@ -78,13 +82,13 @@ impl TableIndexBuf {
 }
 #[derive(Debug, Clone)]
 pub(crate) struct BlockOffsetBuf {
-    key_ts: KeyTs,
+    key_ts: Bytes,
     offset: u32,
     size: u32,
 }
 impl BlockOffsetBuf {
-    pub(crate) fn key_ts(&self) -> &KeyTs {
-        &self.key_ts
+    pub(crate) fn key_ts(&self) -> KeyTsBorrow {
+        KeyTsBorrow::from(self.key_ts.as_ref())
     }
     pub(crate) fn offset(&self) -> u32 {
         self.offset

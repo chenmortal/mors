@@ -1,8 +1,5 @@
-use std::fs::create_dir;
-use std::path::PathBuf;
-
 use bytesize::ByteSize;
-use log::LevelFilter;
+use log::{trace, LevelFilter};
 use mors_common::closer::Closer;
 use mors_common::kv::Meta;
 use mors_encrypt::cipher::AesCipher;
@@ -16,6 +13,9 @@ use mors_traits::levelctl::LevelCtlBuilderTrait;
 use mors_traits::levelctl::LevelCtlTrait;
 use mors_vlog::discard::Discard;
 use mors_vlog::vlogctl::VlogCtlBuilder;
+use std::fs::create_dir;
+use std::path::PathBuf;
+use std::time::SystemTime;
 
 pub type TestTable = Table<AesCipher>;
 pub type TestLevelCtlBuilder = LevelCtlBuilder<TestTable, MorsKms>;
@@ -55,13 +55,12 @@ async fn test_builder() {
         .set_level0_num_tables_stall(100)
         .set_level0_tables_len(2);
 
-    // builder.set_cache();
     let kms = MorsKms::default();
     let level_ctl = builder.build(kms.clone()).await.unwrap();
 
     let discard = Discard::new(&dir).unwrap();
 
-    let (tables, _) = generate_table(
+    let (tables, range) = generate_table(
         dir,
         30,
         ByteSize::mib(2).as_u64() as usize,
@@ -76,5 +75,21 @@ async fn test_builder() {
         assert!(r.is_ok());
     }
     let compact_task = Closer::new("levectl compact");
-    level_ctl.spawn_compact(compact_task, kms, discard).await;
+    // tokio::spawn(level_ctl.clone().spawn_compact(compact_task, kms, discard));
+    let mut count = 0;
+    let mut start = SystemTime::now();
+    for (k, v) in generate_kv_slice(range, "k", "v", Meta::default()) {
+        let result = level_ctl.get(&k).await;
+        assert!(result.is_ok());
+        let (_t, value) = result.unwrap().unwrap();
+        assert_eq!(v, value.unwrap());
+        count += 1;
+        if count % 1000 == 0 {
+            let duration = start.elapsed().unwrap();
+            trace!("count:{} for duration {}", count, duration.as_secs());
+            start = SystemTime::now();
+        }
+        // let (_txn, value) = level_ctl.get(&k).await.unwrap().unwrap();
+        // assert_eq!(v, value.unwrap());
+    }
 }

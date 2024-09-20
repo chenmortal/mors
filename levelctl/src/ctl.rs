@@ -347,6 +347,11 @@ impl<T: TableTrait<K::Cipher>, K: Kms>
         self.table.set_cache(cache);
         self
     }
+
+    fn set_level0_table_size(&mut self, size: usize) -> &mut Self {
+        self.config.set_level0_table_size(size);
+        self
+    }
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
     pub fn set_level0_num_tables_stall(
