@@ -84,7 +84,7 @@ async fn test_builder() {
         let (_t, value) = result.unwrap().unwrap();
         assert_eq!(v, value.unwrap());
         count += 1;
-        if count % 1000 == 0 {
+        if count % 10000 == 0 {
             let duration = start.elapsed().unwrap();
             trace!("count:{} for duration {}", count, duration.as_secs());
             start = SystemTime::now();

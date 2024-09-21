@@ -301,21 +301,19 @@ impl<K: KmsCipher> TableBuilder<K> {
         cipher: &Option<K>,
     ) -> Result<(KeyTs, KeyTs)> {
         //get smallest
-        let first_block_offset = index_buf
-            .offsets()
-            .first()
-            .ok_or(MorsTableError::TableIndexOffsetEmpty)?;
-        let smallest = first_block_offset.key_ts().to_owned().into();
+        if index_buf.offsets().is_empty() {
+            return Err(MorsTableError::TableIndexOffsetEmpty);
+        }
+        let first_block_offset = index_buf.offsets().get(0);
+        let smallest = first_block_offset.key_ts().unwrap().bytes().into();
 
         //get biggest
-        let last_block_offset = index_buf
-            .offsets()
-            .last()
-            .ok_or(MorsTableError::TableIndexOffsetEmpty)?;
+        let last_block_offset =
+            index_buf.offsets().get(index_buf.offsets_len() - 1);
 
         let last = last_block_offset.offset() as usize;
         let data =
-            &mmap.as_ref()[last..last + last_block_offset.size() as usize];
+            &mmap.as_ref()[last..last + last_block_offset.len() as usize];
 
         let plaintext = cipher
             .as_ref()
@@ -598,12 +596,12 @@ impl<K: KmsCipher> Table<K> {
         let table_index = self.table_index()?;
 
         let block_id: usize = block_index.into();
-        let block = &table_index.offsets()[block_id];
+        let block = &table_index.offsets().get(block_id);
 
         let raw_data_ref = self
             .0
             .mmap
-            .pread_ref(block.offset() as usize, block.size() as usize);
+            .pread_ref(block.offset() as usize, block.len() as usize);
         let data = self
             .0
             .cipher
