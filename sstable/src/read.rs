@@ -117,14 +117,15 @@ impl<K: KmsCipher> KvSeekIter for CacheTableIter<K> {
             b.partial_cmp(&k).unwrap()
         }) {
             Ok(index) => index,
-            Err(index) => {
+            Err(mut index) => {
+                if index == 0 {
+                    return Ok(false);
+                };
+                index-=1;
                 if index >= indexbuf.offsets().len() {
                     return Ok(false);
                 }
-                if index == 0 {
-                    return Ok(false);
-                }
-                index - 1
+                index
             }
         };
         let next_block = self.inner.get_block(index.into(), self.use_cache)?;

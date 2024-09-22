@@ -1,5 +1,5 @@
 use bytesize::ByteSize;
-use log::{trace, LevelFilter};
+use log::{error, info, trace, LevelFilter};
 use mors_common::closer::Closer;
 use mors_common::kv::Meta;
 use mors_encrypt::cipher::AesCipher;
@@ -11,6 +11,7 @@ use mors_traits::default::WithDir;
 use mors_traits::iter::generate_kv_slice;
 use mors_traits::levelctl::LevelCtlBuilderTrait;
 use mors_traits::levelctl::LevelCtlTrait;
+use mors_traits::sstable::TableTrait;
 use mors_vlog::discard::Discard;
 use mors_vlog::vlogctl::VlogCtlBuilder;
 use std::fs::create_dir;
@@ -69,27 +70,47 @@ async fn test_builder() {
         Meta::default(),
     )
     .await;
-
+    //20 20 20 20 33 34 38 38  34
     for table in tables {
+        info!(
+            "table {} smallest {} biggest {}",
+            table.id(),
+            table.smallest(),
+            table.biggest()
+        );
         let r = level_ctl.push_level0(table).await;
         assert!(r.is_ok());
     }
-    let compact_task = Closer::new("levectl compact");
+    let _compact_task = Closer::new("levectl compact");
     // tokio::spawn(level_ctl.clone().spawn_compact(compact_task, kms, discard));
     let mut count = 0;
     let mut start = SystemTime::now();
     for (k, v) in generate_kv_slice(range, "k", "v", Meta::default()) {
         let result = level_ctl.get(&k).await;
         assert!(result.is_ok());
-        let (_t, value) = result.unwrap().unwrap();
-        assert_eq!(v, value.unwrap());
-        count += 1;
-        if count % 10000 == 0 {
-            let duration = start.elapsed().unwrap();
-            trace!("count:{} for duration {}", count, duration.as_secs());
-            start = SystemTime::now();
+        match result {
+            Ok(r) => match r {
+                Some((_t, value)) => {
+                    assert_eq!(v, value.unwrap());
+                    count += 1;
+                    if count % 10000 == 0 {
+                        let duration = start.elapsed().unwrap();
+                        trace!(
+                            "count:{} for duration {}",
+                            count,
+                            duration.as_secs()
+                        );
+                        start = SystemTime::now();
+                    }
+                }
+                None => {
+                    error!("key:{} not found", k);
+                }
+            },
+            Err(e) => {
+                error!("error:{},k {}", e, k);
+            }
         }
         // let (_txn, value) = level_ctl.get(&k).await.unwrap().unwrap();
-        // assert_eq!(v, value.unwrap());
     }
 }

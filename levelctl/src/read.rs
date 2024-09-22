@@ -19,7 +19,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         &self,
         key: &KeyTs,
     ) -> Result<Option<(TxnTs, Option<ValueMeta>)>> {
-        let mut max_txn = TxnTs::default();
+        let mut max_txn = None;
         let mut max_value = None;
         for level in 0..=self.max_level().to_u8() {
             let level: Level = level.into();
@@ -28,14 +28,22 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                 if txn == key.txn_ts() {
                     return Ok(Some((txn, value)));
                 }
-                if txn > max_txn {
-                    max_txn = txn;
-                    max_value = value;
+                match max_txn {
+                    Some(m_txn) => {
+                        if txn > m_txn {
+                            max_txn = Some(txn);
+                            max_value = value;
+                        }
+                    }
+                    None => {
+                        max_txn = Some(txn);
+                        max_value = value;
+                    }
                 }
             };
         }
-        if max_txn != TxnTs::default() {
-            return Ok(Some((max_txn, max_value)));
+        if let Some(m_txn) = max_txn {
+            return Ok(Some((m_txn, max_value)));
         }
         Ok(None)
     }
