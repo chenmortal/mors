@@ -4,8 +4,7 @@ use mors_common::{
 };
 use mors_traits::{
     kms::Kms, levelctl::LevelCtlTrait, memtable::MemtableTrait,
-    skip_list::SkipListTrait, sstable::TableTrait, 
-    vlog::VlogCtlTrait,
+    skip_list::SkipListTrait, sstable::TableTrait, vlog::VlogCtlTrait,
 };
 
 use crate::core::CoreInner;
@@ -18,7 +17,6 @@ where
     T: TableTrait<K::Cipher>,
     S: SkipListTrait,
     V: VlogCtlTrait<K>,
-
 {
     pub(crate) async fn get(
         &self,

@@ -15,7 +15,16 @@ pub struct Entry {
     offset: usize,
     value_threshold: usize,
 }
-
+impl From<(KeyTs, ValueMeta)> for Entry {
+    fn from(value: (KeyTs, ValueMeta)) -> Self {
+        Entry {
+            key_ts: value.0,
+            value_meta: value.1,
+            offset: Default::default(),
+            value_threshold: Default::default(),
+        }
+    }
+}
 impl Entry {
     pub fn new(key: Bytes, value: Bytes) -> Self {
         let key_ts = KeyTs::new(key, TxnTs::default());
@@ -91,6 +100,16 @@ impl Entry {
     pub fn expires_at(&self) -> PhyTs {
         self.value_meta.expires_at()
     }
+    pub fn is_deleted_or_expired(&self) -> bool {
+        if self.meta().contains(Meta::DELETE) {
+            return true;
+        };
+        if self.expires_at() == PhyTs::default() {
+            return false;
+        }
+        self.expires_at() <= PhyTs::now().unwrap()
+    }
+
     pub fn version(&self) -> TxnTs {
         self.key_ts.txn_ts()
     }
@@ -185,7 +204,15 @@ impl ValueMeta {
         v[2 + p..].copy_from_slice(self.value());
         v
     }
-
+    pub fn len(&self) -> usize {
+        self.value.len()
+            + size_of::<PhyTs>()
+            + size_of::<u8>()
+            + size_of::<Meta>()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.value.is_empty()
+    }
     pub fn decode(data: &[u8]) -> Option<Self> {
         if data.len() < VALUEMETA_MIN_ENCODED_SIZE.to_owned() {
             return None;

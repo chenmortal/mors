@@ -4,11 +4,13 @@ use crate::error::MorsVlogError;
 use bytes::{Buf, BufMut};
 use log::info;
 use memmap2::Advice;
-use mors_common::{mmap::MmapFile, util::search};
+use mors_common::util::search;
+use mors_traits::file::StorageBuilderTrait;
+use mors_traits::file::StorageTrait;
 use mors_traits::vlog::DiscardTrait;
+use mors_wal::storage::mmap::MmapFile;
 use parking_lot::Mutex;
 use std::mem::size_of;
-
 const DISCARD_FILE_NAME: &str = "DISCARD";
 const DISCARD_FILE_SIZE: usize = 1 << 20; //1MB
 const SLOT_SIZE: usize = 2 * size_of::<u64>();
@@ -73,7 +75,7 @@ impl Discard {
                     inner.set(index * SLOT_SIZE + 8, discard as u64)?;
                     while inner.next_slot >= inner.mmap.len()? / SLOT_SIZE {
                         let len = inner.mmap.len()?;
-                        inner.mmap.set_len(2 * len)?;
+                        inner.mmap.set_len(2 * len as u64)?;
                     }
                     inner.sort()?;
                     Ok(discard as u64)

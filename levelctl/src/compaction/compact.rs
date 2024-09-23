@@ -55,7 +55,9 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         if this_level.level() != next_level.level() {
             plan.add_splits();
         }
-
+        if plan.splits().is_empty() {
+            plan.push_split(KeyTsRange::default());
+        }
         let new_tables =
             self.compact_build_tables(level, plan, &context).await?;
 
@@ -179,13 +181,13 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             let mut out: Vec<Box<dyn KvCacheIterator<ValueMeta>>> = Vec::new();
             if level == LEVEL0 {
                 for t in top.iter().rev() {
-                    out.push(Box::new(t.iter(false)));
+                    out.push(Box::new(t.iter(true)));
                 }
             } else if !top.is_empty() {
                 assert_eq!(top.len(), 1);
                 out = vec![Box::new(top[0].iter(false))]
             };
-            out.push(Box::new(CacheTableConcatIter::new(valid.clone(), false)));
+            out.push(Box::new(CacheTableConcatIter::new(valid.clone(), true)));
             out
         };
         let mut compact_task = Vec::new();
@@ -341,7 +343,7 @@ impl<'a, T: TableTrait<K::Cipher>, K: Kms> AddKeyContext<'a, T, K> {
             if key.key() != self.last_key.key() {
                 self.first_key_has_discard_set = false;
                 if !self.kr.right().is_empty()
-                    && iter.key().unwrap() == *self.kr.right()
+                    && iter.key().unwrap() >= *self.kr.right()
                 {
                     break;
                 }
@@ -415,6 +417,7 @@ impl<'a, T: TableTrait<K::Cipher>, K: Kms> AddKeyContext<'a, T, K> {
             } else {
                 self.writer.push(&key, &value, vptr_len);
             }
+            iter.next()?;
         }
         debug!(
             "Pushed {} keys, skipped {} keys, took {:?}",

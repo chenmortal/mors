@@ -101,7 +101,10 @@ pub struct CacheTableConcatIter<T: TableTrait<K>, K: KmsCipher> {
 }
 impl<T: TableTrait<K>, K: KmsCipher> CacheTableConcatIter<T, K> {
     pub fn new(tables: Vec<T>, use_cache: bool) -> Self {
-        let iters = Vec::with_capacity(tables.len());
+        let mut iters = Vec::with_capacity(tables.len());
+        for _ in 0..tables.len() {
+            iters.push(None);
+        }
         Self {
             index: None,
             back_index: None,
@@ -137,7 +140,9 @@ impl<T: TableTrait<K>, K: KmsCipher> CacheIterator
     for CacheTableConcatIter<T, K>
 {
     fn next(&mut self) -> Result<bool, IterError> {
-        if self.double_ended_eq() {
+        if (self.index.is_some() || self.back_index.is_some())
+            && self.double_ended_eq()
+        {
             return Ok(false);
         }
         let new_index = match self.index {
@@ -161,6 +166,7 @@ impl<T: TableTrait<K>, K: KmsCipher> CacheIterator
                 0
             }
         };
+        self.index = Some(new_index);
         let mut iter = self.tables[new_index].iter(self.use_cache);
         if !iter.next()? {
             return Ok(false);

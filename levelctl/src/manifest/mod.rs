@@ -18,7 +18,16 @@ use std::{
     path::PathBuf,
     sync::Arc,
 };
-use tabled::{builder::Builder, settings::Style};
+use tabled::settings::style::{LineText, Offset};
+
+use tabled::{
+    builder::Builder,
+    settings::{
+        object::{Cell, Rows},
+        style::{BorderSpanCorrection, VerticalLine},
+        Alignment, Modify, Span, Style,
+    },
+};
 use tokio::sync::Mutex;
 
 use bytes::{Buf, BufMut};
@@ -64,6 +73,8 @@ pub struct ManifestInfo {
 impl Display for ManifestInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut builder = Builder::default();
+        builder.push_record(vec!["Level", "SSTable List"]);
+        let mut max_span = 0;
         for (index, level_manifest) in self.levels.iter().enumerate() {
             let level = format!("Level {}", index);
             let mut sstables =
@@ -74,9 +85,31 @@ impl Display for ManifestInfo {
             for sstable in sstables {
                 record.push(sstable.to_string());
             }
+            max_span = max_span.max(record.len());
             builder.push_record(record);
         }
-        let table = builder.build().with(Style::empty()).to_string();
+        let style = Style::modern_rounded().remove_vertical().verticals([(
+            1,
+            VerticalLine::new('│')
+                .top('┬')
+                .bottom('┴')
+                .intersection('┼'),
+        )]);
+
+        let text = "Manifest Info";
+        let table = builder
+            .build()
+            .with(style)
+            .with(
+                LineText::new(text, Rows::first())
+                    .offset(Offset::End(text.len())),
+            )
+            .with(
+                Modify::new(Cell::new(0, 1)).with(Span::column(max_span - 1)), //         // .with("SSTables"),
+            )
+            .with(Alignment::center())
+            .with(BorderSpanCorrection)
+            .to_string();
         write!(f, "{}", table)
     }
 }
@@ -316,8 +349,8 @@ impl ManifestInfo {
                         compress: change.compression.into(),
                     },
                 );
-
-                if self.levels.len() <= change.level as usize {
+                
+                for _ in self.levels.len()..=change.level as usize {
                     self.levels.push(LevelManifest::default());
                 }
                 self.levels[change.level as usize]
@@ -442,5 +475,50 @@ impl TableManifest {
     }
     pub(crate) fn level(&self) -> Level {
         self.level
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use mors_common::compress::CompressionType;
+    use mors_common::file_id::SSTableId;
+
+    use super::manifest_change::ManifestChange;
+    use super::ManifestBuilder;
+
+    #[tokio::test]
+    async fn test_builder() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut builder = ManifestBuilder::default();
+        builder.set_dir(temp_dir.path().to_path_buf());
+        let manifest = builder.build().unwrap();
+        let mut id = 0;
+        let mut level_tables = Vec::new();
+        for level in 0..5u32 {
+            let mut tables: Vec<SSTableId> = Vec::new();
+            for _ in 0..(5 - level) {
+                id += 1;
+                let change = ManifestChange::new_create(
+                    id.into(),
+                    level.into(),
+                    None,
+                    CompressionType::None,
+                );
+                tables.push(id.into());
+                let r = manifest.push_changes(vec![change]).await;
+                assert!(r.is_ok());
+            }
+            level_tables.push(tables);
+        }
+        drop(manifest);
+        let manifest = builder.build().unwrap();
+        let manifest = manifest.lock().await;
+        let info = manifest.info();
+        for (index, tables) in level_tables.iter().enumerate() {
+            assert_eq!(tables.len(), info.levels[index].tables.len());
+            for table_id in tables {
+                info.levels[index].tables.contains(table_id);
+            }
+        }
     }
 }

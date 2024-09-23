@@ -1,5 +1,4 @@
 use std::{
-    io::Write,
     mem::replace,
     path::PathBuf,
     sync::{
@@ -9,22 +8,26 @@ use std::{
 };
 
 use flatbuffers::FlatBufferBuilder;
+use log::debug;
 use memmap2::Advice;
 use mors_common::{
     bloom::Bloom,
     compress::CompressionType,
     file_id::{FileId, SSTableId},
     kv::{Meta, ValueMeta, ValuePointer},
-    mmap::MmapFileBuilder,
     rayon::{self, AsyncRayonHandle},
     ts::{KeyTsBorrow, TxnTs},
 };
+
 use mors_traits::{
     default::WithDir,
+    file::StorageBuilderTrait,
+    file::StorageTrait,
     iter::{CacheIterator, KvCacheIter},
     kms::KmsCipher,
     sstable::{SSTableError, TableWriterTrait},
 };
+use mors_wal::storage::mmap::MmapFileBuilder;
 use prost::Message;
 use tokio::task::spawn_blocking;
 
@@ -94,10 +97,14 @@ impl<K: KmsCipher> TableWriterTrait for TableWriter<K> {
             let mut builder = MmapFileBuilder::new();
             builder.advice(Advice::Sequential);
             builder.create_new(true).append(true).read(true);
-            let mut mmap = builder.build(path, data.size)?;
+            debug!("write {} data to file: {:?} ", data.size, path);
+            let mut mmap = builder.build(path, 2 * data.size)?;
+
             data.write(&mut mmap)?;
-            mmap.flush()?;
-            mmap.set_len(data.size as usize)?;
+            let offset = mmap.load_append_pos(Ordering::Acquire);
+            assert_eq!(offset, data.size as usize);
+            mmap.flush_range(0, offset)?;
+            mmap.set_len(data.size)?;
             mmap.sync_all()?;
             Ok(())
         }
@@ -297,14 +304,21 @@ struct TableBuildData {
     size: u64,
 }
 impl TableBuildData {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
+    fn write<W: StorageTrait>(&self, writer: &mut W) -> Result<()> {
         for block in self.block_list.iter() {
-            writer.write_all(block.data())?;
+            writer.append(block.data(), Ordering::Relaxed)?;
         }
-        writer.write_all(&self.index)?;
-        writer.write_all(&(self.index.len() as u32).to_be_bytes())?;
-        writer.write_all(&self.checksum)?;
-        writer.write_all(&(self.checksum.len() as u32).to_be_bytes())?;
+        writer.append(&self.index, Ordering::Relaxed)?;
+
+        writer.append(
+            &(self.index.len() as u32).to_be_bytes(),
+            Ordering::Relaxed,
+        )?;
+        writer.append(&self.checksum, Ordering::Relaxed)?;
+        writer.append(
+            &(self.checksum.len() as u32).to_be_bytes(),
+            Ordering::Relaxed,
+        )?;
         Ok(())
     }
 }

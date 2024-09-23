@@ -20,6 +20,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             table.compression(),
         );
         self.manifest().push_changes(vec![change]).await?;
+        self.next_id().fetch_max(Into::<u32>::into (table.id())+1,Ordering::AcqRel);
         let handler = self.handler(LEVEL0).unwrap();
         let level0_num_tables_stall = self.config().level0_num_tables_stall();
 

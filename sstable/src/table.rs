@@ -10,9 +10,11 @@ use mors_common::{
     compress::CompressionType,
     file_id::{FileId, SSTableId},
     kv::ValueMeta,
-    mmap::{MmapFile, MmapFileBuilder},
+    page_size,
     ts::{KeyTs, TxnTs},
 };
+use mors_traits::file::StorageBuilderTrait;
+use mors_traits::file::StorageTrait;
 use mors_traits::{
     cache::BlockCacheKey,
     default::{WithDir, WithReadOnly, DEFAULT_DIR},
@@ -23,6 +25,7 @@ use mors_traits::{
     kms::KmsCipher,
     sstable::{BlockIndex, SSTableError, TableBuilderTrait, TableTrait},
 };
+use mors_wal::storage::mmap::{MmapFile, MmapFileBuilder};
 use prost::Message;
 
 use crate::{
@@ -86,7 +89,7 @@ impl<K: KmsCipher> Default for TableBuilder<K> {
             checksum_verify_mode: ChecksumVerificationMode::default(),
             checksum_algo: checksum::Algorithm::Crc32c,
             bloom_false_positive: 0.01,
-            block_size: 4 * 1024,
+            block_size: page_size() * 4,
             compression: CompressionType::default(),
             read_only: false,
             dir: PathBuf::from(DEFAULT_DIR),
@@ -151,6 +154,7 @@ impl<K: KmsCipher> TableBuilderTrait<Table<K>, K> for TableBuilder<K> {
 
     fn set_table_size(&mut self, size: usize) -> &mut Self {
         self.table_size = size;
+        self.table_capacity = (size as f64 * 0.95) as usize;
         self
     }
 
@@ -228,7 +232,7 @@ impl<K: KmsCipher> TableBuilder<K> {
         match table.0.checksum_verify_mode {
             ChecksumVerificationMode::OnBlockRead
             | ChecksumVerificationMode::OnTableAndBlockRead => {
-                if let Err(e) = table.verify().await {
+                if let Err(e) = table.verify() {
                     if let MorsTableError::ChecksumVerify(_, _) = &e {
                         error!(
                             "Ignore table {} checksum verify error: {}",
@@ -284,7 +288,6 @@ impl<K: KmsCipher> TableBuilder<K> {
             .map(|c| c.decrypt(&data))
             .transpose()?
             .unwrap_or(data);
-
         let index_buf = TableIndexBuf::from_vec(data)?;
 
         debug_assert!(!index_buf.offsets().is_empty());
@@ -298,21 +301,19 @@ impl<K: KmsCipher> TableBuilder<K> {
         cipher: &Option<K>,
     ) -> Result<(KeyTs, KeyTs)> {
         //get smallest
-        let first_block_offset = index_buf
-            .offsets()
-            .first()
-            .ok_or(MorsTableError::TableIndexOffsetEmpty)?;
-        let smallest = first_block_offset.key_ts().to_owned();
+        if index_buf.offsets().is_empty() {
+            return Err(MorsTableError::TableIndexOffsetEmpty);
+        }
+        let first_block_offset = index_buf.offsets().get(0);
+        let smallest = first_block_offset.key_ts().unwrap().bytes().into();
 
         //get biggest
-        let last_block_offset = index_buf
-            .offsets()
-            .last()
-            .ok_or(MorsTableError::TableIndexOffsetEmpty)?;
+        let last_block_offset =
+            index_buf.offsets().get(index_buf.offsets_len() - 1);
 
         let last = last_block_offset.offset() as usize;
         let data =
-            &mmap.as_ref()[last..last + last_block_offset.size() as usize];
+            &mmap.as_ref()[last..last + last_block_offset.len() as usize];
 
         let plaintext = cipher
             .as_ref()
@@ -453,7 +454,24 @@ impl<K: KmsCipher> TableTrait<K> for Table<K> {
     }
 }
 impl<K: KmsCipher> Table<K> {
+    #[cfg(not(feature = "sync"))]
     async fn verify(&self) -> Result<()> {
+        for i in 0..self.0.cheap_index.offsets_len {
+            let block = self.get_block(i.into(), true).await?;
+
+            match self.0.checksum_verify_mode {
+                ChecksumVerificationMode::OnBlockRead
+                | ChecksumVerificationMode::OnTableAndBlockRead => {}
+                _ => {
+                    block.verify()?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+    #[cfg(feature = "sync")]
+    fn verify(&self) -> Result<()> {
         for i in 0..self.0.cheap_index.offsets_len {
             let block = self.get_block(i.into(), true)?;
 
@@ -578,12 +596,12 @@ impl<K: KmsCipher> Table<K> {
         let table_index = self.table_index()?;
 
         let block_id: usize = block_index.into();
-        let block = &table_index.offsets()[block_id];
+        let block = &table_index.offsets().get(block_id);
 
         let raw_data_ref = self
             .0
             .mmap
-            .pread_ref(block.offset() as usize, block.size() as usize);
+            .pread_ref(block.offset() as usize, block.len() as usize);
         let data = self
             .0
             .cipher
@@ -614,6 +632,30 @@ impl<K: KmsCipher> Table<K> {
         }
         Ok(block)
     }
+    #[cfg(not(feature = "sync"))]
+    pub(crate) async fn get_index(&self) -> Result<TableIndexBuf> {
+        if let Some(c) = self.0.cache.as_ref() {
+            if let Some(t) = c.get_index(self.id()).await {
+                return Ok(t);
+            };
+        }
+
+        let raw_data_ref =
+            self.0.mmap.pread_ref(self.0.index_start, self.0.index_len);
+        let data = self
+            .0
+            .cipher
+            .as_ref()
+            .map(|c| c.decrypt(raw_data_ref))
+            .transpose()?
+            .unwrap_or_else(|| raw_data_ref.to_vec());
+        let index_buf = TableIndexBuf::from_vec(data)?;
+        if let Some(c) = self.0.cache.as_ref() {
+            c.insert_index(self.id(), index_buf.clone()).await
+        }
+        Ok(index_buf)
+    }
+    #[cfg(feature = "sync")]
     pub(crate) fn get_index(&self) -> Result<TableIndexBuf> {
         if let Some(c) = self.0.cache.as_ref() {
             if let Some(t) = c.get_index(self.id()) {

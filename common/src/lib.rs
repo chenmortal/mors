@@ -3,7 +3,7 @@ extern crate lazy_static;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-pub mod mmap;
+// pub mod mmap;
 pub mod lock;
 mod sys;
 pub mod compress;

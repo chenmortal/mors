@@ -1,52 +1,37 @@
 use bytes::BufMut;
 use mors_common::{file_id::FileId, kv::Entry};
+use mors_traits::file::StorageTrait;
 use mors_traits::kms::Kms;
 use std::{
     hash::Hasher,
     io::{self, Write},
+    sync::atomic::Ordering,
 };
 
 use crate::{error::MorsWalError, header::LogEntryHeader, LogFile, Result};
-impl<F: FileId, K: Kms> LogFile<F, K> {
+impl<F: FileId, K: Kms, S: StorageTrait> LogFile<F, K, S> {
     pub fn set_len(&mut self, end_offset: usize) -> io::Result<()> {
-        let file_size = self.mmap.file_len()? as usize;
+        let file_size = self.storage.file_len()? as usize;
         if end_offset == file_size {
             return Ok(());
         }
         self.set_size(end_offset);
-        self.mmap.set_len(end_offset)?;
-        Ok(())
-    }
-    pub fn write_entry(
-        &mut self,
-        buf: &mut Vec<u8>,
-        entry: &Entry,
-    ) -> Result<()> {
-        buf.clear();
-        let buf = self.encode_entry(entry)?;
-        self.mmap.write_all(&buf)?;
+        self.storage.set_len(end_offset as u64)?;
         Ok(())
     }
     pub fn append_entry(&self, entry: &Entry) -> Result<usize> {
         let encode = self.encode_entry(entry)?;
-        let write_at = self
-            .append_pos()
-            .fetch_add(encode.len(), std::sync::atomic::Ordering::Relaxed);
-        if let Err(e) = self.mmap.append(write_at, &encode) {
+        if let Err(e) = self.storage.append(&encode, Ordering::Relaxed) {
             if e.kind() == io::ErrorKind::Other {
                 return Err(MorsWalError::StorageFull);
             }
         };
         Ok(encode.len())
     }
-    pub fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
-        self.mmap.write_all(buf)
-    }
     pub fn flush(&self) -> Result<()> {
-        Ok(self.mmap.flush_range(
-            0,
-            self.append_pos().load(std::sync::atomic::Ordering::SeqCst),
-        )?)
+        Ok(self
+            .storage
+            .flush_range(0, self.storage.load_append_pos(Ordering::Relaxed))?)
     }
     pub fn encode_entry(&self, entry: &Entry) -> Result<Vec<u8>> {
         let header = LogEntryHeader::new(entry);

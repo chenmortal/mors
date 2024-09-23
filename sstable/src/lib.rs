@@ -1,10 +1,11 @@
-mod error;
-mod pb;
-pub mod table;
 mod block;
+pub mod cache;
+mod error;
 mod fb;
-mod cache;
-mod table_index;
-mod write;
+mod pb;
 mod read;
+pub mod table;
+mod table_index;
+pub mod test_utils;
+mod write;
 type Result<T> = std::result::Result<T, error::MorsTableError>;

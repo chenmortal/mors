@@ -12,10 +12,12 @@ sync = ["moka/sync"]
 [dependencies]
 mors-common = { workspace = true }
 mors-traits = { workspace = true }
+mors-wal = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }
 memmap2 = { workspace = true }
 bytes = { workspace = true }
+bytesize = { workspace = true }
 crc32fast = { workspace = true }
 xxhash-rust = { workspace = true }
 flatbuffers = { workspace = true }
@@ -35,8 +37,15 @@ sha2 = { workspace = true }
 mors-encrypt = { workspace = true }
 env_logger = { workspace = true }
 proptest = { workspace = true }
+criterion = { workspace = true, features = ["html_reports", "async_tokio"] }
+crc32fast = { workspace = true }
+
 [lints]
 workspace = true
+
+[[bench]]
+name = "build"
+harness = false
 
 [[example]]
 name = "simple"

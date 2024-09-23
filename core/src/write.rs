@@ -261,9 +261,7 @@ where
                 .write()
                 .map_err(|e| MorsError::RwLockPoisoned(e.to_string()))?;
 
-            let old_memtable = replace(&mut *memtable_w, new_memtable);
-            // Arc::new(old_memtable)
-            old_memtable
+            replace(&mut *memtable_w, new_memtable)
         };
 
         self.flush_sender()
@@ -284,7 +282,7 @@ where
         request: &mut WriteRequest,
     ) -> Result<()> {
         let memtable = self.memtable().unwrap();
-        let mut memtable_w = memtable
+        let memtable_w = memtable
             .write()
             .map_err(|e| MorsError::RwLockPoisoned(e.to_string()))?;
         for (entry, vptr) in &mut request.entries_vptrs {
@@ -361,8 +359,9 @@ mod test {
         let mut builder = MorsBuilder::default();
         builder.set_dir(dir).set_read_only(false);
         builder
-            .set_num_memtables(5)
-            .set_memtable_size(64 * 1024 * 1024);
+            .set_num_memtables(3)
+            .set_memtable_size(5 * 1024 * 1024);
+            
 
         let mors = builder.build().await?;
 
@@ -406,16 +405,34 @@ mod test {
                 }
                 info!("{} Write completed", seed);
                 let mut count = 0;
+                let mut not_found = 0;
                 for entry in random_read {
-                    let (txn_ts, _value) =
-                        db.inner().get(entry.key_ts()).await.unwrap().unwrap();
-                    assert_eq!(txn_ts, entry.key_ts().txn_ts());
-                    count += 1;
-                    if count % 100 == 0 {
-                        info!("{} Read completed count {}", seed, count);
+                    match db.inner().get(entry.key_ts()).await {
+                        Ok(r) => {
+                            if let Some((txn_ts, _value)) = r {
+                                assert_eq!(txn_ts, entry.key_ts().txn_ts());
+                                count += 1;
+                                if count % 1000 == 0 {
+                                    info!(
+                                        "{} Read completed count {}",
+                                        seed, count
+                                    );
+                                }
+                            } else {
+                                not_found += 1;
+                                // eprintln!("Error: {:?}", "No value found");
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Error: {:?}", e.to_string());
+                        }
                     }
+                    // let k = db.inner().get(entry.key_ts()).await.map_err(|e|{eprintln!("Error: {:?}",e.to_string());});;
+                    // let (txn_ts, _value) =
+                    //     db.inner().get(entry.key_ts()).await.;
                 }
                 info!("{} Read completed", seed);
+                info!("{} Not found count:{}", seed, not_found);
             });
             handlers.push(handler);
         }

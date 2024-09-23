@@ -1,9 +1,10 @@
 use std::cmp::Ordering;
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::ops::{Add, AddAssign, Deref, Sub};
 use std::time::{Duration, SystemTime, SystemTimeError};
 
 use bytes::{Buf, BufMut, Bytes};
+use pretty_hex::PrettyHex;
 
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct PhyTs(u64);
@@ -85,7 +86,7 @@ impl AddAssign<u64> for TxnTs {
 }
 impl Display for TxnTs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("TxnTs:{}", self.0))
+        f.write_fmt(format_args!("TxnTs({})", self.0))
     }
 }
 impl From<u64> for TxnTs {
@@ -98,14 +99,46 @@ impl From<TxnTs> for u64 {
         value.0
     }
 }
-#[derive(Debug, Default, PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct KeyTs {
     key: Bytes,
     txn_ts: TxnTs,
+    to_string: fn(&[u8]) -> String,
+}
+impl Default for KeyTs {
+    fn default() -> Self {
+        Self {
+            key: Bytes::default(),
+            txn_ts: TxnTs::default(),
+            to_string: |x| x.hex_dump().to_string(),
+        }
+    }
+}
+impl Debug for KeyTs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "KeyTs: Key({})-{}",
+            (self.to_string)(&self.key),
+            self.txn_ts
+        ))
+    }
+}
+impl Display for KeyTs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "KeyTs: Key({})-{}",
+            (self.to_string)(&self.key),
+            self.txn_ts
+        ))
+    }
 }
 impl KeyTs {
     pub fn new(key: Bytes, txn_ts: TxnTs) -> Self {
-        Self { key, txn_ts }
+        Self {
+            key,
+            txn_ts,
+            ..Default::default()
+        }
     }
 
     pub fn encode(&self) -> Vec<u8> {
@@ -122,7 +155,9 @@ impl KeyTs {
     pub fn txn_ts(&self) -> TxnTs {
         self.txn_ts
     }
-
+    pub fn set_to_string(&mut self, to_string: fn(&[u8]) -> String) {
+        self.to_string = to_string;
+    }
     pub fn set_key(&mut self, key: Bytes) {
         self.key = key;
     }
@@ -182,17 +217,19 @@ impl From<&[u8]> for KeyTs {
             Self {
                 key: value.to_vec().into(),
                 txn_ts: 0.into(),
+                ..Default::default()
             }
         } else {
             let mut p = &value[len - 8..];
             Self {
                 key: value[..len - 8].to_vec().into(),
                 txn_ts: p.get_u64().into(),
+                ..Default::default()
             }
         }
     }
 }
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
+#[derive(PartialEq, Eq, Clone, Copy, Default)]
 pub struct KeyTsBorrow<'a>(&'a [u8]);
 impl<'a> KeyTsBorrow<'a> {
     pub fn key(&self) -> &[u8] {
@@ -220,6 +257,24 @@ impl Deref for KeyTsBorrow<'_> {
 
     fn deref(&self) -> &Self::Target {
         self.0
+    }
+}
+impl Debug for KeyTsBorrow<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "KeyTs: Key({})-{}",
+            self.key().hex_dump(),
+            self.txn_ts()
+        ))
+    }
+}
+impl Display for KeyTsBorrow<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "KeyTs: Key({})-{}",
+            self.key().hex_dump(),
+            self.txn_ts()
+        ))
     }
 }
 impl Ord for KeyTsBorrow<'_> {
@@ -295,5 +350,16 @@ impl<'a> AsRef<[u8]> for KeyTsBorrow<'a> {
 impl<'a> From<KeyTsBorrow<'a>> for &'a [u8] {
     fn from(val: KeyTsBorrow<'a>) -> Self {
         val.0
+    }
+}
+#[cfg(test)]
+mod tests {
+    use crate::ts::KeyTs;
+
+    #[test]
+    fn test_fmt() {
+        let mut key_ts = KeyTs::new("hello".into(), 10.into());
+        key_ts.set_to_string(|x| String::from_utf8_lossy(x).to_string());
+        assert_eq!(format!("{:?}", key_ts), "KeyTs: Key(hello)-TxnTs(10)");
     }
 }

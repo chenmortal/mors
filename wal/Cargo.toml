@@ -9,6 +9,7 @@ version.workspace = true
 [dependencies]
 mors-traits = { workspace = true }
 mors-common = { workspace = true }
+memmap2 = { workspace = true }
 thiserror = { workspace = true }
 bytes = { workspace = true }
 integer-encoding = { workspace = true }

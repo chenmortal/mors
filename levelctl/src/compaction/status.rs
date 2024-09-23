@@ -46,11 +46,7 @@ impl Deref for CompactStatus {
         &self.0
     }
 }
-#[derive(Debug, Default, Clone)]
-pub(crate) struct LevelCompactStatus {
-    ranges: Vec<KeyTsRange>,
-    del_size: i64,
-}
+
 impl CompactStatus {
     pub(crate) fn check_update<T: TableTrait<K::Cipher>, K: Kms>(
         &self,
@@ -70,13 +66,9 @@ impl CompactStatus {
             return Ok(false);
         }
 
-        inner_w.levels[this_level]
-            .ranges
-            .push(plan.this_range().clone());
-        inner_w.levels[next_level]
-            .ranges
-            .push(plan.next_range().clone());
-
+        inner_w.levels[this_level].push(plan.this_range().clone());
+        inner_w.levels[next_level].push(plan.next_range().clone());
+        inner_w.levels[this_level].del_size += plan.this_size() as i64;
         for t in plan.top() {
             inner_w.tables.insert(t.id());
         }
@@ -85,13 +77,79 @@ impl CompactStatus {
         }
         Ok(true)
     }
+    pub(crate) fn remove<T: TableTrait<K::Cipher>, K: Kms>(
+        &self,
+        plan: &CompactPlan<T, K>,
+    ) {
+        let mut inner_w = self.0.write().unwrap();
+        let this_level = plan.this_level().level();
+        let next_level = plan.next_level().level();
+
+        debug_assert!(this_level.to_usize() < inner_w.levels.len());
+        debug_assert!(next_level.to_usize() < inner_w.levels.len());
+
+        inner_w.levels[this_level.to_usize()].del_size -=
+            plan.this_size() as i64;
+
+        let this_found =
+            inner_w.levels[this_level.to_usize()].remove(plan.this_range());
+
+        let mut next_found = true;
+        if this_level != next_level && !plan.next_range().is_empty() {
+            next_found =
+                inner_w.levels[next_level.to_usize()].remove(plan.next_range());
+        }
+
+        if !this_found || !next_found {
+            let this = plan.this_range();
+            let next = plan.next_range();
+            log::error!(
+                "Looking for: {:?} in this level {}.",
+                this,
+                this_level
+            );
+            log::error!(
+                "This Level:\n{:?}",
+                inner_w.levels[this_level.to_usize()]
+            );
+            log::error!(
+                "Looking for: {:?} in next level {}.",
+                next,
+                next_level
+            );
+            log::error!(
+                "Next Level:\n{:?}",
+                inner_w.levels[next_level.to_usize()]
+            );
+        }
+        for t in plan.top() {
+            assert!(inner_w.tables.remove(&t.id()));
+        }
+        for t in plan.bottom() {
+            assert!(inner_w.tables.remove(&t.id()));
+        }
+    }
+}
+#[derive(Debug, Default, Clone)]
+pub(crate) struct LevelCompactStatus {
+    ranges: Vec<KeyTsRange>,
+    del_size: i64,
 }
 impl LevelCompactStatus {
     pub(crate) fn intersects(&self, target: &KeyTsRange) -> bool {
         self.ranges.iter().any(|range| range.intersects(target))
     }
-    pub(crate) fn ranges_mut(&mut self) -> &mut Vec<KeyTsRange> {
-        &mut self.ranges
+    pub(crate) fn push(&mut self, ks: KeyTsRange) {
+        self.ranges.push(ks);
+    }
+    pub(crate) fn remove(&mut self, t: &KeyTsRange) -> bool {
+        match self.ranges.iter().position(|x| x == t) {
+            Some(index) => {
+                self.ranges.remove(index);
+                true
+            }
+            None => false,
+        }
     }
 }
 impl CompactStatusInner {
@@ -104,4 +162,18 @@ impl CompactStatusInner {
     pub(crate) fn levels_mut(&mut self) -> &mut [LevelCompactStatus] {
         &mut self.levels
     }
+}
+#[test]
+fn test_a() {
+    let mut vec = vec![1, 2, 3, 4];
+    match vec.iter().position(|x| *x == 2) {
+        Some(i) => {
+            vec.remove(i);
+            true
+        }
+        None => false,
+    };
+    assert_eq!(vec, [1, 3, 4]);
+    // let k = vec.retain(|&x| x != 5);
+    // assert_eq!(vec, [2, 4]);
 }

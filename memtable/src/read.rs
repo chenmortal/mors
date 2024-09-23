@@ -1,14 +1,12 @@
+use crate::memtable::Memtable;
+use crate::Result;
 use mors_common::{
     kv::ValueMeta,
     ts::{KeyTs, KeyTsBorrow, TxnTs},
 };
-use mors_traits::{
-    kms::Kms, memtable::MemtableTrait, skip_list::SkipListTrait,
-};
-
-use crate::memtable::Memtable;
-use crate::Result;
-impl<T: SkipListTrait, K: Kms> Memtable<T, K> {
+use mors_traits::memtable::MemtableTrait;
+use mors_traits::{file::StorageTrait, kms::Kms, skip_list::SkipListTrait};
+impl<T: SkipListTrait, K: Kms, S: StorageTrait> Memtable<T, K, S> {
     pub fn get_impl(
         &self,
         key: &KeyTs,

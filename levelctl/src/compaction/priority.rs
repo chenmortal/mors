@@ -1,21 +1,113 @@
-use std::{cmp::Ordering, fmt::Display};
+use std::{
+    cmp::Ordering,
+    fmt::{Debug, Display},
+};
 
 use bytes::Bytes;
+use bytesize::ByteSize;
 use mors_traits::{
     kms::Kms,
     levelctl::{Level, LevelCtlTrait, LEVEL0},
     sstable::{TableBuilderTrait, TableTrait},
 };
 
+use tabled::{
+    builder::Builder,
+    settings::{
+        object::{Cell, Columns, Rows},
+        style::{BorderSpanCorrection, LineText, Offset},
+        Alignment, Border, Color, Style,
+    },
+};
+
 use super::Result;
 use crate::ctl::LevelCtl;
-#[derive(Debug, Default, Clone)]
+
+#[derive(Debug, Default, Clone, PartialEq)]
 pub(crate) struct CompactPriority {
     level: Level,
+    now_total_size: usize,
+    plan_delete_size: i64,
+    plan_size: i64,
+    target_size: usize,
     score: f64,
     adjusted: f64,
     drop_prefixes: Vec<Bytes>,
     target: CompactTarget,
+}
+pub(crate) fn fmt_compact_priorities(
+    prios: &[CompactPriority],
+    l0_table_len: usize,
+    t_l0_table_len: usize,
+) -> String {
+    let mut builder = Builder::default();
+    builder.push_column(vec![
+        "Level",
+        "NowTotalSize",
+        "PlanDeleteSize",
+        "PlanSize",
+        "TargetSize",
+        "Score",
+        "Adjusted",
+    ]);
+    let prio_level = prios.first().unwrap().target().base_level();
+    let mut base_index = 0;
+    for (index, prio) in prios.iter().enumerate() {
+        let mut record = Vec::with_capacity(7);
+        if prio.level() == prio_level {
+            base_index = index;
+        }
+        record.push(format!("{}", prio.level));
+        let now_total_size =
+            ByteSize::b(prio.now_total_size as u64).to_string_as(true);
+        if prio.level == LEVEL0 {
+            record.push(format!("{}({})", now_total_size, l0_table_len));
+        } else {
+            record.push(now_total_size);
+        }
+
+        let delete_size = ByteSize::b(prio.plan_delete_size.unsigned_abs())
+            .to_string_as(true);
+        if prio.plan_delete_size < 0 {
+            record.push(format!("-{}", delete_size));
+        } else {
+            record.push(delete_size);
+        }
+
+        let plan_size =
+            ByteSize::b(prio.plan_size.unsigned_abs()).to_string_as(true);
+        if prio.plan_size < 0 {
+            record.push(format!("-{}", plan_size));
+        } else {
+            record.push(plan_size);
+        }
+        let target_size =
+            ByteSize::b(prio.target_size as u64).to_string_as(true);
+        if prio.level == LEVEL0 {
+            record.push(format!("{}({})", target_size, t_l0_table_len));
+        } else {
+            record.push(target_size);
+        }
+        record.push(format!("{:.4}", prio.score));
+        record.push(format!("{:.4}", prio.adjusted));
+        builder.push_column(record);
+    }
+    let style = Style::modern_rounded();
+    let text = "CompactPrioritys";
+    let clr_green = Color::FG_GREEN;
+
+    let table = builder
+        .build()
+        .with(style)
+        .with(
+            LineText::new(text, Rows::first()).offset(Offset::End(text.len())),
+        )
+        .with(Alignment::center())
+        .with(BorderSpanCorrection)
+        .modify(Columns::single(base_index + 1), clr_green)
+        .modify(Cell::new(0, base_index + 1), Border::new().set_bottom('+'))
+        .to_string();
+    table
 }
 impl CompactPriority {
     pub(crate) fn new(level: Level, target: CompactTarget) -> Self {
@@ -40,15 +132,77 @@ impl CompactPriority {
     pub(crate) fn adjusted(&self) -> f64 {
         self.adjusted
     }
+    pub(crate) fn score(&self) -> f64 {
+        self.score
+    }
     pub(crate) fn drop_prefixes(&self) -> &[Bytes] {
         &self.drop_prefixes
     }
 }
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone, PartialEq, Eq)]
 pub(crate) struct CompactTarget {
     base_level: Level,
     target_size: Vec<usize>,
     file_size: Vec<usize>,
+}
+impl Display for CompactTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl Debug for CompactTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut builder = Builder::default();
+        debug_assert_eq!(self.target_size.len(), self.file_size.len());
+        let len = self.target_size.len();
+        let mut levels = Vec::with_capacity(len + 1);
+        levels.push("Level".to_string());
+        for i in 0..len {
+            let level: Level = i.into();
+            levels.push(format!("{}", level));
+        }
+        builder.push_record(levels);
+
+        let mut target_size = Vec::with_capacity(len + 1);
+        target_size.push("levelTotalSize".to_string());
+
+        target_size.extend(
+            self.target_size
+                .iter()
+                .map(|x| ByteSize::b(*x as u64).to_string_as(true).to_string()),
+        );
+        builder.push_record(target_size);
+
+        let mut file_size = Vec::with_capacity(len + 1);
+        file_size.push("levelFileSize".to_string());
+        file_size.extend(
+            self.file_size
+                .iter()
+                .map(|x| ByteSize::b(*x as u64).to_string_as(true).to_string()),
+        );
+        builder.push_record(file_size);
+
+        let style = Style::modern_rounded();
+        let clr_green = Color::FG_GREEN;
+        let text = "CompactTarget";
+        let table = builder
+            .build()
+            .with(style)
+            .with(
+                LineText::new(text, Rows::first())
+                    .offset(Offset::End(text.len())),
+            )
+            .with(Alignment::center())
+            .with(BorderSpanCorrection)
+            .modify(Columns::single(self.base_level.to_usize() + 1), clr_green)
+            .modify(
+                Cell::new(0, self.base_level.to_usize() + 1),
+                Border::new().set_bottom('+'),
+            )
+            .to_string();
+        writeln!(f, "{}", table)
+    }
 }
 impl CompactTarget {
     pub(crate) fn target_size(&self, level: Level) -> usize {
@@ -65,15 +219,6 @@ impl CompactTarget {
     }
     pub(crate) fn base_level(&self) -> Level {
         self.base_level
-    }
-}
-impl Display for CompactTarget {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "base_level: {}, target_size: {:?}, file_size: {:?}",
-            self.base_level, self.target_size, self.file_size
-        )
     }
 }
 // levelTargets calculates the targets for levels in the LSM tree.
@@ -100,7 +245,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         let max_handler = self.handler(self.max_level()).unwrap();
 
         let mut level_size = max_handler.total_size();
-        let base_level_size = self.config().base_level_size();
+        let base_level_size = self.config().base_level_total_size();
 
         for i in (1..=self.max_level().into()).rev() {
             // L6->L1, if level size <= base level size and base_level not changed, then Lbase = i
@@ -113,12 +258,15 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             // if L6 size is 1GB, then L5 target size is 100MB, L4 target size is 10MB and so on.
             level_size /= self.config().level_size_multiplier();
         }
+        target.target_size[LEVEL0.to_usize()] =
+            self.config().level0_tables_len()
+                * self.config().level0_table_size();
 
         let mut table_size = self.table_builder().table_size();
         for i in 0..=self.max_level().to_usize() {
             if i == 0 {
                 // level0_size == memtable_size
-                target.file_size[i] = self.config().level0_size();
+                target.file_size[i] = self.config().level0_table_size();
             } else if i <= target.base_level.to_usize() {
                 target.file_size[i] = table_size;
             } else {
@@ -154,7 +302,13 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         let mut prios = Vec::with_capacity(self.handlers_len());
         let target = self.target();
 
-        let mut push_priority = |level: Level, score: f64| {
+        for level in 0..=self.max_level().to_usize() {
+            let level = level.into();
+            let plan_delete_size = self.compact_status().delete_size(level)?;
+            let now_total_size = self.handler(level).unwrap().total_size();
+            let plan_size = now_total_size as i64 - plan_delete_size;
+            let target_size = target.target_size(level);
+            let score = plan_size as f64 / target_size as f64;
             let adjusted = score;
             let priority = CompactPriority {
                 level,
@@ -162,23 +316,18 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                 adjusted,
                 drop_prefixes: vec![],
                 target: target.clone(),
+                now_total_size,
+                plan_delete_size,
+                plan_size,
+                target_size,
             };
             prios.push(priority);
-        };
-
-        push_priority(
-            LEVEL0,
-            self.handler(LEVEL0).unwrap().tables_len() as f64
-                / self.config().level0_tables_len() as f64,
-        );
-
-        for level in 1..=self.max_level().to_usize() {
-            let level = level.into();
-            let delete_size = self.compact_status().delete_size(level)?;
-            let total_size = self.handler(level).unwrap().total_size();
-            let size = total_size as i64 - delete_size;
-            push_priority(level, size as f64 / target.target_size(level) as f64)
         }
+        let l0_tables_len = self.handler(LEVEL0).unwrap().tables_len();
+        let level0_score =
+            l0_tables_len as f64 / self.config().level0_tables_len() as f64;
+        prios[0].score = level0_score;
+        prios[0].adjusted = level0_score;
 
         assert_eq!(prios.len(), self.handlers_len());
 
@@ -204,14 +353,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             }
             pre_level = level;
         }
-        // Pick all the levels whose original score is >= 1.0, irrespective of their adjusted score.
-        // We'll still sort them by their adjusted score below. Having both these scores allows us to
-        // make better decisions about compacting L0. If we see a score >= 1.0, we can do L0->L0
-        // compactions. If the adjusted score >= 1.0, then we can do L0->Lbase compactions.
-        let mut prios = prios
-            .drain(..prios.len() - 1)
-            .filter(|p| p.score >= 1.)
-            .collect::<Vec<_>>();
+
         // descend sort the levels by their adjusted score.
         prios.sort_by(|a, b| {
             b.adjusted
@@ -220,5 +362,76 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         });
 
         Ok(prios)
+    }
+}
+#[cfg(test)]
+mod tests {
+
+    use bytesize::ByteSize;
+
+    use crate::compaction::priority::fmt_compact_priorities;
+
+    use super::{CompactPriority, CompactTarget};
+
+    #[test]
+    fn test_compact_target_display() {
+        let compact = CompactTarget {
+            base_level: 1u32.into(),
+            target_size: vec![
+                ByteSize::mib(1).as_u64() as usize,
+                ByteSize::mib(2).as_u64() as usize,
+                ByteSize::mib(3).as_u64() as usize,
+            ],
+            file_size: vec![
+                ByteSize::mib(1).as_u64() as usize,
+                ByteSize::mib(2).as_u64() as usize,
+                ByteSize::mib(3).as_u64() as usize,
+            ],
+        };
+        println!("{}", compact);
+    }
+    #[test]
+    fn test_compact_priority() {
+        let target = CompactTarget {
+            base_level: 1u32.into(),
+            ..Default::default()
+        };
+        let priority1 = CompactPriority {
+            level: 0u32.into(),
+            now_total_size: ByteSize::mib(1).as_u64() as usize,
+            plan_delete_size: ByteSize::kib(256).as_u64() as i64,
+            plan_size: ByteSize::mib(1).as_u64() as i64,
+            target_size: ByteSize::mib(2).as_u64() as usize,
+            score: 0.75,
+            adjusted: 0.75,
+            target: target.clone(),
+            ..Default::default()
+        };
+        let priority2 = CompactPriority {
+            level: 1u32.into(),
+            now_total_size: ByteSize::mib(1).as_u64() as usize,
+            plan_delete_size: ByteSize::kib(256).as_u64() as i64,
+            plan_size: ByteSize::mib(1).as_u64() as i64,
+            target_size: ByteSize::mib(2).as_u64() as usize,
+            score: 0.9,
+            adjusted: 0.8,
+            target: target.clone(),
+            ..Default::default()
+        };
+        let priority3 = CompactPriority {
+            level: 2u32.into(),
+            now_total_size: ByteSize::mib(1).as_u64() as usize,
+            plan_delete_size: ByteSize::kib(256).as_u64() as i64,
+            plan_size: ByteSize::mib(1).as_u64() as i64,
+            target_size: ByteSize::mib(2).as_u64() as usize,
+            score: 0.8,
+            adjusted: 0.7,
+            target: target.clone(),
+            ..Default::default()
+        };
+        let prios = vec![priority1, priority2, priority3];
+        let priors = fmt_compact_priorities(&prios, 2, 3);
+        // let prioris = CompactPrioritys { prios: &prios };
+        println!("{}", priors);
     }
 }

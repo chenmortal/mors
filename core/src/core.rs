@@ -110,7 +110,7 @@ impl<
     pub(crate) fn vlogctl(&self) -> &V {
         &self.vlogctl
     }
-    pub(crate) fn block_write(&self)->&AtomicBool{
+    pub(crate) fn block_write(&self) -> &AtomicBool {
         &self.block_write
     }
 }
@@ -123,7 +123,7 @@ where
     S: SkipListTrait,
     V: VlogCtlTrait<K>,
 {
-    lock_guard: DBLockGuard,
+    _lock_guard: DBLockGuard,
     kms: K,
     immut_memtable: RwLock<VecDeque<Arc<M>>>,
     memtable: Option<RwLock<Arc<M>>>,
@@ -150,7 +150,7 @@ pub struct CoreBuilder<
     num_memtables: usize,
     kms: K::KmsBuilder,
     memtable: M::MemtableBuilder,
-    levelctl: L::LevelCtlBuilder,
+    pub(crate) levelctl: L::LevelCtlBuilder,
     vlogctl: V::VlogCtlBuilder,
     txn_manager: TxnManagerBuilder,
 }
@@ -217,6 +217,7 @@ impl<
     }
     pub fn set_memtable_size(&mut self, memtable_size: usize) -> &mut Self {
         self.memtable.set_memtable_size(memtable_size);
+        self.levelctl.set_level0_table_size(memtable_size);
         self
     }
 }
@@ -238,7 +239,7 @@ impl<
         guard_builder.add_dir(self.dir.clone());
         guard_builder.read_only(self.read_only);
 
-        let lock_guard = guard_builder.build()?;
+        let _lock_guard = guard_builder.build()?;
 
         let kms = self.kms.build()?;
         let immut_memtable = self.memtable.open_exist(kms.clone())?;
@@ -275,7 +276,7 @@ impl<
             Self::init_flush_channel(self.num_memtables);
 
         let inner = Arc::new(CoreInner {
-            lock_guard,
+            _lock_guard,
             kms,
             immut_memtable,
             memtable,

@@ -1,6 +1,7 @@
 use ahash::RandomState;
 use error::TxnError;
 use manager::TxnManager;
+use parking_lot::Mutex;
 use tokio::sync::oneshot;
 
 pub mod error;
@@ -15,7 +16,7 @@ use std::sync::atomic::AtomicI32;
 
 use bytes::Bytes;
 use mors_common::kv::{Entry, Meta};
-use mors_common::ts::TxnTs;
+use mors_common::ts::{KeyTs, TxnTs};
 use mors_traits::kms::Kms;
 use mors_traits::levelctl::LevelCtlTrait;
 use mors_traits::memtable::{MemtableBuilderTrait, MemtableTrait};
@@ -24,6 +25,7 @@ use mors_traits::sstable::TableTrait;
 
 use crate::core::Core;
 use crate::error::MorsError;
+use crate::KvEntry;
 use lazy_static::lazy_static;
 use mors_traits::vlog::VlogCtlTrait;
 
@@ -66,7 +68,7 @@ pub struct WriteTxn<
     count: usize,
     txn: TxnManager,
     conflict_keys: Option<HashSet<u64>>,
-    pub(super) read_key_hash: Vec<u64>,
+    pub(super) read_key_hash: Mutex<Vec<u64>>,
     pending_writes: HashMap<Bytes, Entry>,
     duplicate_writes: Vec<Entry>,
     num_iters: AtomicI32,
@@ -104,7 +106,7 @@ impl<
             count: 1,
             txn,
             conflict_keys,
-            read_key_hash: Vec::new(),
+            read_key_hash: Default::default(),
             pending_writes: HashMap::new(),
             duplicate_writes: Default::default(),
             num_iters: AtomicI32::new(0),
@@ -168,6 +170,52 @@ impl<
             }
         };
         Ok(())
+    }
+    pub(crate) async fn get(
+        &self,
+        key: Bytes,
+    ) -> std::result::Result<KvEntry, MorsError> {
+        if key.is_empty() {
+            return Err(TxnError::EmptyKey.into());
+        }
+        if self.discard {
+            return Err(TxnError::DiscardTxn.into());
+        }
+        if let Some(entry) = self.pending_writes.get(&key) {
+            if entry.key() == &key {
+                if entry.is_deleted_or_expired() {
+                    return Err(TxnError::KeyNotFound.into());
+                }
+                let mut entry_clone = entry.clone();
+                entry_clone.set_version(self.read_ts);
+
+                let mut kv_entry: KvEntry = entry_clone.into();
+                kv_entry.set_status(crate::PrefetchStatus::Prefetched);
+                return Ok(kv_entry);
+            }
+        };
+        let hash = HASH.hash_one(&key);
+        {
+            let mut read_key_hash = self.read_key_hash.lock();
+            read_key_hash.push(hash);
+        }
+        let key_ts = KeyTs::new(key, self.read_ts);
+        match self.core.inner().get(&key_ts).await? {
+            Some((txn_ts, value)) => {
+                if value.is_none() {
+                    return Err(TxnError::ValueNotFound.into());
+                }
+                let value = value.unwrap();
+                if value.meta().is_empty() || value.is_deleted_or_expired() {
+                    return Err(TxnError::ValueNotFound.into());
+                }
+                let mut entry: Entry = (key_ts, value).into();
+                entry.set_version(txn_ts);
+                let kv_entry: KvEntry = entry.into();
+                Ok(kv_entry)
+            }
+            None => Err(TxnError::KeyNotFound.into()),
+        }
     }
     pub(crate) async fn commit(
         &mut self,

@@ -50,7 +50,11 @@ fn main_impl() -> Result<()> {
     let mut builder = MorsBuilder::default();
     builder.set_dir(dir).set_read_only(false);
     let mors = builder.build()?;
-    let write_txn = mors.begin_write().unwrap();
-
+    let mut write_txn = mors.begin_write().unwrap();
+    write_txn.set("key".into(), "value".into())?;
+    let v = write_txn.get("key".into())?;
+    let vp = v.value().as_ref();
+    assert_eq!(vp, b"value");
+    write_txn.commit().unwrap();
     Ok(())
 }

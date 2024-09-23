@@ -6,6 +6,7 @@ use mors_common::{
     ts::{KeyTs, TxnTs},
 };
 use mors_traits::{
+    file::StorageTrait,
     kms::Kms,
     memtable::{MemtableBuilderTrait, MemtableError, MemtableTrait},
     skip_list::SkipListTrait,
@@ -17,18 +18,18 @@ use crate::{
 };
 
 type Result<T> = std::result::Result<T, MemtableError>;
-impl<T: SkipListTrait, K: Kms> MemtableBuilderTrait<Memtable<T, K>, T, K>
-    for MemtableBuilder<T>
+impl<T: SkipListTrait, K: Kms, S: StorageTrait>
+    MemtableBuilderTrait<Memtable<T, K, S>, T, K> for MemtableBuilder<T>
 {
-    fn open(&self, kms: K, id: MemtableId) -> Result<Memtable<T, K>> {
+    fn open(&self, kms: K, id: MemtableId) -> Result<Memtable<T, K, S>> {
         Ok(self.open_impl(kms, id)?)
     }
 
-    fn open_exist(&self, kms: K) -> Result<VecDeque<Arc<Memtable<T, K>>>> {
+    fn open_exist(&self, kms: K) -> Result<VecDeque<Arc<Memtable<T, K, S>>>> {
         Ok(self.open_exist_impl(kms)?)
     }
 
-    fn build(&self, kms: K) -> Result<Memtable<T, K>> {
+    fn build(&self, kms: K) -> Result<Memtable<T, K, S>> {
         Ok(self.build_impl(kms)?)
     }
 
@@ -39,16 +40,18 @@ impl<T: SkipListTrait, K: Kms> MemtableBuilderTrait<Memtable<T, K>, T, K>
     fn set_memtable_size(&mut self, memtable_size: usize) {
         self.set_memtable_size_impl(memtable_size);
     }
-    
+
     fn max_batch_size(&self) -> usize {
-        todo!()
+        self.max_batch_size_impl()
     }
-    
+
     fn max_batch_count(&self) -> usize {
-        todo!()
+        self.max_batch_count_impl()
     }
 }
-impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
+impl<T: SkipListTrait, K: Kms, S: StorageTrait> MemtableTrait<T, K>
+    for Memtable<T, K, S>
+{
     type ErrorType = MorsMemtableError;
     type MemtableBuilder = MemtableBuilder<T>;
 
@@ -89,5 +92,4 @@ impl<T: SkipListTrait, K: Kms> MemtableTrait<T, K> for Memtable<T, K> {
     fn delete_wal(&self) -> std::result::Result<(), MemtableError> {
         Ok(self.wal.delete().map_err(MorsMemtableError::Wal)?)
     }
-    
 }

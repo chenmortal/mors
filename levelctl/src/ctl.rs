@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    ops::{Deref, DerefMut},
     path::PathBuf,
     sync::{
         atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering},
@@ -126,47 +127,138 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     }
 }
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct LevelCtlConfig {
+pub struct LevelCtlConfig {
     max_level: Level,
     level0_num_tables_stall: usize,
     num_compactors: usize,
     levelmax2max_compaction: bool,
-    base_level_size: usize,
+    base_level_total_size: usize,
     level_size_multiplier: usize,
     table_size_multiplier: usize,
-    level0_size: usize,
+    level0_table_size: usize,
     level0_tables_len: usize,
     num_versions_to_keep: usize,
 }
 impl LevelCtlConfig {
-    pub(crate) fn max_level(&self) -> Level {
+    /// Maximum number of levels of compaction allowed in the LSM.
+    /// The default value of MaxLevels is 6.
+    /// notice \[0..max_level\] is valid level
+    pub fn set_max_level(&mut self, max_level: Level) -> &mut Self {
+        self.max_level = max_level;
+        self
+    }
+    /// The default value of level0_num_tables_stall is 15.
+    /// If the number of Level0 tables exceeds this value, writes will be blocked until compaction
+    pub fn set_level0_num_tables_stall(
+        &mut self,
+        level0_num_tables_stall: usize,
+    ) -> &mut Self {
+        self.level0_num_tables_stall = level0_num_tables_stall;
+        self
+    }
+    /// the number of compaction workers to run concurrently.  Setting this to
+    /// zero stops compactions, which could eventually cause writes to block forever.
+    /// The default value of num_compactors is 4. One is dedicated just for L0 and L1.
+    pub fn set_num_compactors(&mut self, num_compactors: usize) -> &mut Self {
+        self.num_compactors = num_compactors;
+        self
+    }
+    /// If levelmax2max_compaction is true, then the compaction will compact the maximum level to the maximum level.
+    pub fn set_levelmax2max_compaction(
+        &mut self,
+        levelmax2max_compaction: bool,
+    ) -> &mut Self {
+        self.levelmax2max_compaction = levelmax2max_compaction;
+        self
+    }
+    /// The default value of base_level_size is 10 MB.
+    /// sets the maximum total size target for the base level.
+    pub fn set_base_level_total_size(
+        &mut self,
+        base_level_size: usize,
+    ) -> &mut Self {
+        self.base_level_total_size = base_level_size;
+        self
+    }
+    /// level_size_multiplier sets the ratio between the maximum sizes of contiguous levels in the LSM.
+    /// Once a level grows to be larger than this ratio allowed, the compaction process will be triggered.
+    /// The default value of LevelSizeMultiplier is 10.
+    pub fn set_level_size_multiplier(
+        &mut self,
+        level_size_multiplier: usize,
+    ) -> &mut Self {
+        self.level_size_multiplier = level_size_multiplier;
+        self
+    }
+    /// table_size_multiplier sets the ratio between the maximum sizes of contiguous tables in the LSM.
+    /// The default value of TableSizeMultiplier is 2.
+    pub fn set_table_size_multiplier(
+        &mut self,
+        table_size_multiplier: usize,
+    ) -> &mut Self {
+        self.table_size_multiplier = table_size_multiplier;
+        self
+    }
+    /// the size of level0's single table file in bytes.
+    /// The default value of level0_size is 64 MB.
+    pub fn set_level0_table_size(&mut self, level0_size: usize) -> &mut Self {
+        self.level0_table_size = level0_size;
+        self
+    }
+    /// the number of tables in level0.
+    /// The default value of level0_tables_len is 5.
+    pub fn set_level0_tables_len(
+        &mut self,
+        level0_tables_len: usize,
+    ) -> &mut Self {
+        self.level0_tables_len = level0_tables_len + 1;
+        self
+    }
+    /// the number of versions to keep.
+    /// The default value of num_versions_to_keep is 1.
+    pub fn set_num_versions_to_keep(
+        &mut self,
+        num_versions_to_keep: usize,
+    ) -> &mut Self {
+        self.num_versions_to_keep = num_versions_to_keep;
+        self
+    }
+    /// Maximum number of levels of compaction allowed in the LSM.
+    pub fn max_level(&self) -> Level {
         self.max_level
     }
-    pub(crate) fn level0_num_tables_stall(&self) -> usize {
+    /// The default value of level0_num_tables_stall is 15.
+    pub fn level0_num_tables_stall(&self) -> usize {
         self.level0_num_tables_stall
     }
-    pub(crate) fn num_compactors(&self) -> usize {
+    /// the number of compaction workers to run concurrently.
+    pub fn num_compactors(&self) -> usize {
         self.num_compactors
     }
-    pub(crate) fn levelmax2max_compaction(&self) -> bool {
+    pub fn levelmax2max_compaction(&self) -> bool {
         self.levelmax2max_compaction
     }
-    pub(crate) fn base_level_size(&self) -> usize {
-        self.base_level_size
+    /// the maximum size target for the base level.
+    pub fn base_level_total_size(&self) -> usize {
+        self.base_level_total_size
     }
-    pub(crate) fn level_size_multiplier(&self) -> usize {
+    /// level_size_multiplier sets the ratio between the maximum sizes of contiguous levels in the LSM.
+    pub fn level_size_multiplier(&self) -> usize {
         self.level_size_multiplier
     }
-    pub(crate) fn table_size_multiplier(&self) -> usize {
+    /// table_size_multiplier sets the ratio between the maximum sizes of contiguous tables in the LSM.
+    pub fn table_size_multiplier(&self) -> usize {
         self.table_size_multiplier
     }
-    pub(crate) fn level0_size(&self) -> usize {
-        self.level0_size
+    pub fn level0_table_size(&self) -> usize {
+        self.level0_table_size
     }
-    pub(crate) fn level0_tables_len(&self) -> usize {
+    /// the number of tables in level0.
+    pub fn level0_tables_len(&self) -> usize {
         self.level0_tables_len
     }
-    pub(crate) fn num_versions_to_keep(&self) -> usize {
+    /// the number of versions to keep.
+    pub fn num_versions_to_keep(&self) -> usize {
         self.num_versions_to_keep
     }
 }
@@ -177,10 +269,10 @@ impl Default for LevelCtlConfig {
             level0_num_tables_stall: 15,
             num_compactors: 4,
             levelmax2max_compaction: false,
-            base_level_size: 10 << 20, //10 MB
+            base_level_total_size: 10 << 20, //10 MB
             level_size_multiplier: 10,
             table_size_multiplier: 2,
-            level0_size: 64 << 20,
+            level0_table_size: 64 << 20,
             level0_tables_len: 5,
             num_versions_to_keep: 1,
         }
@@ -189,17 +281,27 @@ impl Default for LevelCtlConfig {
 pub struct LevelCtlBuilder<T: TableTrait<K::Cipher>, K: Kms> {
     manifest: ManifestBuilder,
     table: T::TableBuilder,
-    cache: Option<T::Cache>,
     config: LevelCtlConfig,
     dir: PathBuf,
     read_only: bool,
+}
+impl<T: TableTrait<K::Cipher>, K: Kms> Deref for LevelCtlBuilder<T, K> {
+    type Target = LevelCtlConfig;
+
+    fn deref(&self) -> &Self::Target {
+        &self.config
+    }
+}
+impl<T: TableTrait<K::Cipher>, K: Kms> DerefMut for LevelCtlBuilder<T, K> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.config
+    }
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> Default for LevelCtlBuilder<T, K> {
     fn default() -> Self {
         Self {
             manifest: ManifestBuilder::default(),
             table: T::TableBuilder::default(),
-            cache: None,
             config: LevelCtlConfig::default(),
             dir: PathBuf::from(DEFAULT_DIR),
             read_only: false,
@@ -237,14 +339,21 @@ impl<T: TableTrait<K::Cipher>, K: Kms>
     ) -> std::result::Result<LevelCtl<T, K>, LevelCtlError> {
         Ok(self.build_impl(kms).await?)
     }
-}
-impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
-    // set max_level,notice [0..max_level] is valid level
-    pub fn set_max_level(&mut self, max_level: Level) -> &mut Self {
-        self.config.max_level = max_level;
+
+    fn set_cache(
+        &mut self,
+        cache: <T as TableTrait<K::Cipher>>::Cache,
+    ) -> &mut Self {
+        self.table.set_cache(cache);
         self
     }
 
+    fn set_level0_table_size(&mut self, size: usize) -> &mut Self {
+        self.config.set_level0_table_size(size);
+        self
+    }
+}
+impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
     pub fn set_level0_num_tables_stall(
         &mut self,
         level0_num_tables_stall: usize,
@@ -310,11 +419,10 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
             let cipher_id = table.key_id();
 
             let mut table_builder = self.table.clone();
-            if let Some(c) = self.cache.as_ref() {
-                table_builder.set_cache(c.clone());
-            }
+
             table_builder.set_compression(table.compress());
             table_builder.set_dir(self.dir.clone());
+
             let kms_clone = kms.clone();
             let table_id = *id;
             debug!("spawning task for table {}", table_id);

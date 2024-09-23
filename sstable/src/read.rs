@@ -1,3 +1,6 @@
+use std::cmp::Ordering;
+
+use flatbuffers::{Follow, Vector};
 use mors_common::{kv::ValueMeta, ts::KeyTsBorrow};
 use mors_traits::{
     iter::{
@@ -106,13 +109,19 @@ impl<K: KmsCipher> CacheIterator for CacheTableIter<K> {
 impl<K: KmsCipher> KvSeekIter for CacheTableIter<K> {
     fn seek(&mut self, k: KeyTsBorrow<'_>) -> Result<bool, IterError> {
         let indexbuf = self.inner.get_index()?;
-        let index = match indexbuf
-            .offsets()
-            .binary_search_by(|b| b.key_ts().partial_cmp(&k).unwrap())
-        {
+        // let index = match indexbuf
+        // .offsets()
+        // .binary_search_by(|b| b.key_ts().partial_cmp(&k).unwrap())
+        let index = match binary_search_by(&indexbuf.offsets(), |b| {
+            let b: KeyTsBorrow = b.key_ts().unwrap().bytes().into();
+            b.partial_cmp(&k).unwrap()
+        }) {
             Ok(index) => index,
             Err(index) => {
                 if index >= indexbuf.offsets().len() {
+                    return Ok(false);
+                }
+                if index == 0 {
                     return Ok(false);
                 }
                 index - 1
@@ -124,3 +133,46 @@ impl<K: KmsCipher> KvSeekIter for CacheTableIter<K> {
     }
 }
 impl<K: KmsCipher> KvCacheIterator<ValueMeta> for CacheTableIter<K> {}
+
+pub fn binary_search_by<'a, T: Follow<'a> + 'a, F>(
+    v: &Vector<'a, T>,
+    mut f: F,
+) -> Result<usize, usize>
+where
+    F: FnMut(T::Inner) -> Ordering,
+{
+    // INVARIANTS:
+    // - 0 <= left <= left + size = right <= self.len()
+    // - f returns Less for everything in self[..left]
+    // - f returns Greater for everything in self[right..]
+    let mut size = v.len();
+    let mut left = 0;
+    let mut right = size;
+    while left < right {
+        let mid = left + size / 2;
+
+        // SAFETY: the while condition means `size` is strictly positive, so
+        // `size/2 < size`. Thus `left + size/2 < left + size`, which
+        // coupled with the `left + size <= self.len()` invariant means
+        // we have `left + size/2 < self.len()`, and this is in-bounds.
+        let cmp = f(v.get(mid));
+        // let cmp = f(unsafe { self.get_unchecked(mid) });
+
+        // This control flow produces conditional moves, which results in
+        // fewer branches and instructions than if/else or matching on
+        // cmp::Ordering.
+        // This is x86 asm for u8: https://rust.godbolt.org/z/698eYffTx.
+        left = if cmp == Ordering::Less { mid + 1 } else { left };
+        right = if cmp == Ordering::Greater { mid } else { right };
+        if cmp == Ordering::Equal {
+            // SAFETY: same as the `get_unchecked` above
+            return Ok(mid);
+        }
+
+        size = right - left;
+    }
+
+    // SAFETY: directly true from the overall invariant.
+    // Note that this is `<=`, unlike the assume in the `Ok` path.
+    Err(left)
+}

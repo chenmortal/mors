@@ -46,43 +46,42 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
         key: &KeyTs,
     ) -> Result<Option<(TxnTs, Option<ValueMeta>)>> {
         if let Some(tables) = self.seek_table(key) {
-            let mut tasks = Vec::with_capacity(tables.len());
+            let mut max_txn = None;
+            let mut max_value = None;
+
             for table in tables {
                 let ks = key.encode();
-                tasks.push(tokio::spawn(async move {
-                    let k = KeyTsBorrow::from(ks.as_ref());
-                    let mut iter = table.iter(true);
-                    match iter.seek(k) {
-                        Ok(seek) => {
-                            if seek {
-                                if let Some(seek_key) = iter.key() {
-                                    if k.key() == seek_key.key() {
-                                        let txn = seek_key.txn_ts();
-                                        return Some((txn, iter.value()));
+                let k = KeyTsBorrow::from(ks.as_ref());
+                let mut iter = table.iter(true);
+                match iter.seek(k) {
+                    Ok(seek) => {
+                        if seek {
+                            if let Some(seek_key) = iter.key() {
+                                if k.key() == seek_key.key() {
+                                    let txn = seek_key.txn_ts();
+                                    match max_txn {
+                                        Some(m_txn) => {
+                                            if txn > m_txn {
+                                                max_txn = Some(txn);
+                                                max_value = iter.value();
+                                            }
+                                        }
+                                        None => {
+                                            max_txn = Some(txn);
+                                            max_value = iter.value();
+                                        }
                                     }
                                 }
                             }
-                            None
-                        }
-                        Err(e) => {
-                            error!("{} seek  error:{}", table.id(), e);
-                            None
                         }
                     }
-                }));
-            }
-            let mut max_txn = TxnTs::default();
-            let mut max_value = None;
-            for task in tasks {
-                if let Some((txn, value)) = task.await? {
-                    if txn > max_txn {
-                        max_txn = txn;
-                        max_value = value;
+                    Err(e) => {
+                        error!("{} seek  error:{}", table.id(), e);
                     }
-                };
+                }
             }
-            if max_txn != TxnTs::default() {
-                return Ok(Some((max_txn, max_value)));
+            if let Some(m_txn) = max_txn {
+                return Ok(Some((m_txn, max_value)));
             }
         };
         Ok(None)
@@ -98,12 +97,9 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
                 .cloned()
                 .collect::<Vec<_>>()
                 .into()
-        } else {
-            let table_index = handler
-                .tables()
-                .binary_search_by(|t| t.biggest().cmp(key))
-                .ok()
-                .unwrap();
+        } else if let Ok(table_index) =
+            handler.tables().binary_search_by(|t| t.biggest().cmp(key))
+        {
             if table_index >= handler.tables().len() {
                 return None;
             }
@@ -112,6 +108,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
                 return None;
             }
             vec![t].into()
+        } else {
+            None
         }
     }
 }
