@@ -487,44 +487,6 @@ impl<K: KmsCipher> Table<K> {
         Ok(())
     }
     #[cfg(not(feature = "sync"))]
-    async fn table_index(&self) -> Result<TableIndexBuf> {
-        if self.0.cipher.is_none() {
-            return Ok(self.0.index_buf.clone());
-        }
-
-        let mut data = vec![0; self.0.index_len];
-        debug_assert_eq!(
-            self.0.mmap.pread(&mut data, self.0.index_start)?,
-            self.0.index_len
-        );
-        let index_buf = TableIndexBuf::from_vec(
-            self.0.cipher.as_ref().unwrap().decrypt(&data)?,
-        )?;
-        if let Some(c) = self.0.cache.as_ref() {
-            c.insert_index(self.0.id, index_buf.clone()).await;
-        }
-        Ok(index_buf)
-    }
-    #[cfg(feature = "sync")]
-    fn table_index(&self) -> Result<TableIndexBuf> {
-        if self.0.cipher.is_none() {
-            return Ok(self.0.index_buf.clone());
-        }
-
-        let mut data = vec![0; self.0.index_len];
-        debug_assert_eq!(
-            self.0.mmap.pread(&mut data, self.0.index_start)?,
-            self.0.index_len
-        );
-        let index_buf = TableIndexBuf::from_vec(
-            self.0.cipher.as_ref().unwrap().decrypt(&data)?,
-        )?;
-        if let Some(c) = self.0.cache.as_ref() {
-            c.insert_index(self.0.id, index_buf.clone());
-        }
-        Ok(index_buf)
-    }
-    #[cfg(not(feature = "sync"))]
     pub(crate) async fn get_block(
         &self,
         block_index: BlockIndex,
@@ -593,7 +555,7 @@ impl<K: KmsCipher> Table<K> {
             };
         }
 
-        let table_index = self.table_index()?;
+        let table_index = self.get_index()?;
 
         let block_id: usize = block_index.into();
         let block = &table_index.offsets().get(block_id);
@@ -657,6 +619,9 @@ impl<K: KmsCipher> Table<K> {
     }
     #[cfg(feature = "sync")]
     pub(crate) fn get_index(&self) -> Result<TableIndexBuf> {
+        if self.0.cipher.is_none() {
+            return Ok(self.0.index_buf.clone());
+        }
         if let Some(c) = self.0.cache.as_ref() {
             if let Some(t) = c.get_index(self.id()) {
                 return Ok(t);

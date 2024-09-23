@@ -1,5 +1,5 @@
 use bytesize::ByteSize;
-use log::{error, info, trace, LevelFilter};
+use log::{debug, error, info, trace, LevelFilter};
 use mors_common::closer::Closer;
 use mors_common::kv::Meta;
 use mors_encrypt::cipher::AesCipher;
@@ -72,7 +72,7 @@ async fn test_builder() {
     .await;
     //20 20 20 20 33 34 38 38  34
     for table in tables {
-        info!(
+        debug!(
             "table {} smallest {} biggest {}",
             table.id(),
             table.smallest(),
@@ -93,7 +93,7 @@ async fn test_builder() {
                 Some((_t, value)) => {
                     assert_eq!(v, value.unwrap());
                     count += 1;
-                    if count % 10000 == 0 {
+                    if count % 100000 == 0 {
                         let duration = start.elapsed().unwrap();
                         trace!(
                             "count:{} for duration {}",
