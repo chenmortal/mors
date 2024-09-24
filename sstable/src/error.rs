@@ -12,8 +12,6 @@ pub enum MorsTableError {
     DecodeError(#[from] DecodeError),
     #[error("Checksum verification failed. Expected: {0}, Got: {1}")]
     ChecksumVerify(u64, u64),
-    #[error("Invalid flatbuffer: {0}")]
-    InvalidFlatbuffer(#[from] flatbuffers::InvalidFlatbuffer),
     #[error("TableIndexOffsetEmpty")]
     TableIndexOffsetEmpty,
     #[error("InvalidChecksumLen, Either the data is corrupt or the table Config are incorrectly set ")]

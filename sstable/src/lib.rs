@@ -1,7 +1,6 @@
 mod block;
 pub mod cache;
 mod error;
-mod fb;
 mod pb;
 mod read;
 pub mod table;

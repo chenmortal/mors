@@ -288,7 +288,7 @@ impl<K: KmsCipher> TableBuilder<K> {
             .map(|c| c.decrypt(&data))
             .transpose()?
             .unwrap_or(data);
-        let index_buf = TableIndexBuf::from_vec(data)?;
+        let index_buf = TableIndexBuf::from_vec(data);
 
         debug_assert!(!index_buf.offsets().is_empty());
 
@@ -304,12 +304,12 @@ impl<K: KmsCipher> TableBuilder<K> {
         if index_buf.offsets().is_empty() {
             return Err(MorsTableError::TableIndexOffsetEmpty);
         }
-        let first_block_offset = index_buf.offsets().get(0);
-        let smallest = first_block_offset.key_ts().unwrap().bytes().into();
+        let first_block_offset = index_buf.offsets().first().unwrap();
+        let smallest = first_block_offset.key_ts().into();
 
         //get biggest
         let last_block_offset =
-            index_buf.offsets().get(index_buf.offsets_len() - 1);
+            index_buf.offsets().get(index_buf.offsets_len() - 1).unwrap();
 
         let last = last_block_offset.offset() as usize;
         let data =
@@ -558,7 +558,7 @@ impl<K: KmsCipher> Table<K> {
         let table_index = self.get_index()?;
 
         let block_id: usize = block_index.into();
-        let block = &table_index.offsets().get(block_id);
+        let block = &table_index.offsets().get(block_id).unwrap();
 
         let raw_data_ref = self
             .0
@@ -637,7 +637,7 @@ impl<K: KmsCipher> Table<K> {
             .map(|c| c.decrypt(raw_data_ref))
             .transpose()?
             .unwrap_or_else(|| raw_data_ref.to_vec());
-        let index_buf = TableIndexBuf::from_vec(data)?;
+        let index_buf = TableIndexBuf::from_vec(data);
         if let Some(c) = self.0.cache.as_ref() {
             c.insert_index(self.id(), index_buf.clone())
         }

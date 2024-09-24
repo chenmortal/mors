@@ -1,5 +1,5 @@
 use bytesize::ByteSize;
-use log::{debug, error, info, trace, LevelFilter};
+use log::{debug, error,  trace, LevelFilter};
 use mors_common::closer::Closer;
 use mors_common::kv::Meta;
 use mors_encrypt::cipher::AesCipher;

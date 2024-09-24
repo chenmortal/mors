@@ -16,13 +16,14 @@ mors-wal = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }
 memmap2 = { workspace = true }
+bincode = { workspace = true }
 bytes = { workspace = true }
 bytesize = { workspace = true }
 crc32fast = { workspace = true }
 xxhash-rust = { workspace = true }
-flatbuffers = { workspace = true }
 log = { workspace = true }
 moka = { workspace = true, features = ["sync", "future"] }
+serde = { workspace = true ,features = ["derive"] }
 tokio = { workspace = true }
 
 [build-dependencies]

@@ -7,7 +7,6 @@ use std::{
     },
 };
 
-use flatbuffers::FlatBufferBuilder;
 use log::debug;
 use memmap2::Advice;
 use mors_common::{
@@ -31,13 +30,14 @@ use mors_wal::storage::mmap::MmapFileBuilder;
 use prost::Message;
 use tokio::task::spawn_blocking;
 
-use crate::error::MorsTableError;
-use crate::fb::table_generated::{
-    BlockOffset, BlockOffsetArgs, TableIndex, TableIndexArgs,
-};
 use crate::pb::proto::{checksum, Checksum};
 use crate::Result;
 use crate::{block::write::BlockWriter, table::TableBuilder};
+use crate::{error::MorsTableError, table_index::BlockOffset};
+use crate::{
+    // fb::table_generated::{BlockOffsetArgs, TableIndex, TableIndexArgs},
+    table_index::TableIndexBufInner,
+};
 pub struct TableWriter<K: KmsCipher> {
     tablebuilder: TableBuilder<K>,
     block_writer: BlockWriter,
@@ -218,40 +218,35 @@ impl<K: KmsCipher> TableWriter<K> {
         block_list: &Vec<BlockWriter>,
         bloom: Option<&Bloom>,
     ) -> Result<(Vec<u8>, u32)> {
-        let mut builder = FlatBufferBuilder::with_capacity(3 << 20);
         let mut data_size = 0;
-        let mut block_offset = Vec::new();
+        let mut block_offsets = Vec::with_capacity(block_list.len());
         for block in block_list {
-            let args = BlockOffsetArgs {
-                key_ts: builder
-                    .create_vector(block.base_keyts().as_ref())
-                    .into(),
-                offset: data_size,
-                len: block.data().len() as u32,
-            };
-
+            let block_offset = BlockOffset::new(
+                block.base_keyts().to_vec(),
+                data_size,
+                block.data().len() as u32,
+            );
             data_size += block.data().len() as u32;
-            block_offset.push(BlockOffset::create(&mut builder, &args));
+            block_offsets.push(block_offset);
         }
         self.on_disk_size += data_size;
-        let table_index_args = TableIndexArgs {
-            offsets: builder.create_vector(&block_offset).into(),
-            bloom_filter: bloom.and_then(|x| builder.create_vector(x).into()),
-            max_version: self.max_version.to_u64(),
-            key_count: self.key_hashes.len() as u32,
-            uncompressed_size: self.uncompressed_size.load(Ordering::Acquire),
-            on_disk_size: self.on_disk_size,
-            stale_data_size: self.stale_data_size,
-        };
-        let table_index = TableIndex::create(&mut builder, &table_index_args);
-        builder.finish(table_index, None);
-
+        let table_index = TableIndexBufInner::new(
+            block_offsets,
+            bloom.and_then(|x| x.to_vec().into()),
+            self.max_version.to_u64(),
+            self.key_hashes.len() as u32,
+            self.uncompressed_size.load(Ordering::Acquire),
+            self.on_disk_size,
+            self.stale_data_size,
+        );
+        let bin_data = bincode::serialize(&table_index).unwrap();
         let data = match &self.cipher {
-            Some(c) => c.encrypt(builder.finished_data())?,
-            None => builder.finished_data().to_vec(),
+            Some(c) => c.encrypt(&bin_data)?,
+            None => bin_data,
         };
         Ok((data, data_size))
     }
+    
     fn is_empty(&self) -> bool {
         self.key_hashes.len() == 0
     }
