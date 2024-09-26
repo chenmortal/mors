@@ -15,6 +15,7 @@ pub trait BufExt: Buf {
 }
 pub trait Encode {
     fn encode(&self) -> Vec<u8>;
+    fn encode_slice(&self) -> &[u8];
 }
 impl BufExt for &[u8] {}
 impl Encode for Vec<u32> {
@@ -25,6 +26,26 @@ impl Encode for Vec<u32> {
         }
         result
     }
+    fn encode_slice(&self) -> &[u8] {
+        let ptr = self.as_ptr() as *const u8;
+        let size = self.len() * size_of::<u32>();
+        unsafe { std::slice::from_raw_parts(ptr, size) }
+    }
+}
+pub fn round_up_to(n: usize, divisor: usize) -> usize {
+    debug_assert!(divisor > 0);
+    debug_assert!(divisor.is_power_of_two());
+    (n + divisor - 1) & !(divisor - 1)
+}
+pub fn vec_as_bytes(v: &[u32]) -> &[u8] {
+    let ptr = v.as_ptr() as *const u8;
+    let size = std::mem::size_of_val(v);
+    unsafe { std::slice::from_raw_parts(ptr, size) }
+}
+pub fn bytes_as_u32(bytes: &[u8]) -> &[u32] {
+    let ptr = bytes.as_ptr() as *const u32;
+    let size = bytes.len() / size_of::<u32>();
+    unsafe { std::slice::from_raw_parts(ptr, size) }
 }
 pub fn search<F>(n: usize, f: F) -> Result<usize, usize>
 where

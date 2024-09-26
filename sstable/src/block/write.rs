@@ -1,5 +1,5 @@
 use bytes::BufMut;
-use mors_common::{kv::ValueMeta, ts::KeyTsBorrow, util::Encode};
+use mors_common::{kv::ValueMeta, ts::KeyTsBorrow, util::{round_up_to, vec_as_bytes,},};
 use mors_traits::kms::KmsCipher;
 use prost::Message;
 
@@ -82,9 +82,13 @@ impl BlockWriter {
         
     }
     pub(crate) fn finish_block(&mut self,algo:Algorithm){
-        self.data.extend_from_slice(&self.entry_offsets.encode());
+        let align_size = round_up_to(self.data.len(), size_of::<u32>());
+        let align_offset=(align_size-self.data().len()) as u8;
+        self.data.resize(align_size, 0);
+        let data = vec_as_bytes(&self.entry_offsets);
+        self.data.extend_from_slice(data);
         self.data.put_u32(self.entry_offsets.len() as u32);
-
+        self.data.put_u8(align_offset);
         let checksum = Checksum::new(algo, &self.data);
         self.data.extend_from_slice(&checksum.encode_to_vec());
         self.data.put_u32(checksum.encoded_len() as u32);

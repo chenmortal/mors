@@ -3,7 +3,8 @@ pub mod write;
 use std::sync::Arc;
 
 use bytes::Buf;
-use mors_common::{file_id::SSTableId, util::BufExt};
+use mors_common::file_id::SSTableId;
+use mors_common::util::bytes_as_u32;
 use mors_traits::sstable::{BlockIndex, BlockTrait};
 use prost::Message;
 use read::CacheBlockIter;
@@ -17,8 +18,9 @@ struct BlockInner {
     block_index: BlockIndex,
     block_offset: u32,
     data: Vec<u8>, //actual data + entry_offsets+num_entries;
+    data_align: u8,
     entries_index_start: usize,
-    entry_offsets: Vec<u32>,
+    entries_index_end: usize,
     checksum: Vec<u8>,
     checksum_len: usize,
 }
@@ -42,25 +44,27 @@ impl Block {
         read_pos -= checksum_len;
         let checksum = data[read_pos..read_pos + checksum_len].to_vec();
         data.truncate(read_pos);
-
+        read_pos -= 1;
+        let mut data_align_slice = &data[read_pos..read_pos + 1];
+        let data_align = data_align_slice.get_u8();
         //read num entries
         read_pos -= 4;
         let mut num_entries = &data[read_pos..read_pos + 4];
         let num_entries = num_entries.get_u32() as usize;
 
         //read entries index start
-        let entries_index_start = read_pos - (num_entries * 4);
-        let mut entries = &data[entries_index_start..read_pos];
-        let entry_offsets = entries.get_vec_u32();
+        let entries_index_start = read_pos - (num_entries * size_of::<u32>());
+        let entries_index_end = read_pos;
         Ok(Block(Arc::new(BlockInner {
             table_id,
             block_index,
             block_offset,
             data,
             entries_index_start,
-            entry_offsets,
             checksum,
             checksum_len,
+            entries_index_end,
+            data_align,
         })))
     }
     pub(crate) fn verify(&self) -> Result<()> {
@@ -81,7 +85,12 @@ impl Block {
         self.0.block_offset
     }
     pub(crate) fn entry_offsets(&self) -> &[u32] {
-        &self.0.entry_offsets
+        bytes_as_u32(
+            &self.0.data[self.0.entries_index_start..self.0.entries_index_end],
+        )
+    }
+    pub(crate) fn data_align(&self) -> u8 {
+        self.0.data_align
     }
     pub(crate) fn entries_index_start(&self) -> usize {
         self.0.entries_index_start

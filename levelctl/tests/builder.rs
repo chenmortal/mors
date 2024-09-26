@@ -1,5 +1,5 @@
 use bytesize::ByteSize;
-use log::{debug, error,  trace, LevelFilter};
+use log::{debug, error, trace, LevelFilter};
 use mors_common::closer::Closer;
 use mors_common::kv::Meta;
 use mors_encrypt::cipher::AesCipher;
@@ -16,7 +16,8 @@ use mors_vlog::discard::Discard;
 use mors_vlog::vlogctl::VlogCtlBuilder;
 use std::fs::create_dir;
 use std::path::PathBuf;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
+use tokio::time::sleep;
 
 pub type TestTable = Table<AesCipher>;
 pub type TestLevelCtlBuilder = LevelCtlBuilder<TestTable, MorsKms>;
@@ -81,11 +82,13 @@ async fn test_builder() {
         let r = level_ctl.push_level0(table).await;
         assert!(r.is_ok());
     }
-    let _compact_task = Closer::new("levectl compact");
-    // tokio::spawn(level_ctl.clone().spawn_compact(compact_task, kms, discard));
+    let compact_task = Closer::new("levectl compact");
+    tokio::spawn(level_ctl.clone().spawn_compact(compact_task, kms, discard));
+    let kvs = generate_kv_slice(range, "k", "v", Meta::default());
+    sleep(Duration::from_secs(5)).await;
     let mut count = 0;
     let mut start = SystemTime::now();
-    for (k, v) in generate_kv_slice(range, "k", "v", Meta::default()) {
+    for (k, v) in kvs {
         let result = level_ctl.get(&k).await;
         assert!(result.is_ok());
         match result {

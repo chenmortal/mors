@@ -40,7 +40,6 @@ pub struct CacheBlockIter {
     key: Vec<u8>,
     header: BlockEntryHeader,
     entry_index: Option<usize>,
-
     back_key: Vec<u8>,
     back_header: BlockEntryHeader,
     back_entry_index: Option<usize>,
@@ -226,6 +225,7 @@ impl KvCacheIter<ValueMeta> for CacheBlockIter {
             let end_offset =
                 if next_entry_id == self.inner.entry_offsets().len() {
                     self.inner.entries_index_start()
+                        - self.inner.data_align() as usize
                 } else {
                     self.inner.entry_offsets()[next_entry_id] as usize
                 };
