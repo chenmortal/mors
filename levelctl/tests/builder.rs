@@ -33,7 +33,7 @@ fn test_kv_size() {
     dbg!(k.len());
     dbg!(v.len());
 }
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_builder() {
     let mut logger = env_logger::builder();
     logger.filter_level(LevelFilter::Trace);
@@ -71,7 +71,6 @@ async fn test_builder() {
         Meta::default(),
     )
     .await;
-    //20 20 20 20 33 34 38 38  34
     for table in tables {
         debug!(
             "table {} smallest {} biggest {}",
@@ -85,9 +84,10 @@ async fn test_builder() {
     let compact_task = Closer::new("levectl compact");
     tokio::spawn(level_ctl.clone().spawn_compact(compact_task, kms, discard));
     let kvs = generate_kv_slice(range, "k", "v", Meta::default());
-    sleep(Duration::from_secs(5)).await;
+    sleep(Duration::from_secs(0)).await;
     let mut count = 0;
     let mut start = SystemTime::now();
+    let mut not_found=0;
     for (k, v) in kvs {
         let result = level_ctl.get(&k).await;
         assert!(result.is_ok());
@@ -107,13 +107,15 @@ async fn test_builder() {
                     }
                 }
                 None => {
+                    not_found+=1;
                     error!("key:{} not found", k);
                 }
             },
             Err(e) => {
+                not_found+=1;
                 error!("error:{},k {}", e, k);
             }
         }
-        // let (_txn, value) = level_ctl.get(&k).await.unwrap().unwrap();
     }
+    debug!("not found {}",not_found);
 }
