@@ -141,21 +141,24 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         let mut changes = Vec::with_capacity(
             new_tables.len() + plan.top().len() + plan.bottom().len(),
         );
+        let this_level = plan.this_level().level();
+        let next_level = plan.next_level().level();
+
         for table in new_tables {
             let cipher = table.cipher().map(|c| c.cipher_key_id());
             changes.push(ManifestChange::new_create(
                 table.id(),
-                plan.next_level().level(),
+                next_level,
                 cipher,
                 table.compression(),
             ));
         }
 
         for table in plan.top() {
-            changes.push(ManifestChange::new_delete(table.id()));
+            changes.push(ManifestChange::new_delete(table.id(), this_level));
         }
         for table in plan.bottom() {
-            changes.push(ManifestChange::new_delete(table.id()));
+            changes.push(ManifestChange::new_delete(table.id(), next_level));
         }
 
         manifest.push_changes(changes).await?;

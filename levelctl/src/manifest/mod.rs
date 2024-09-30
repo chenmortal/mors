@@ -349,7 +349,7 @@ impl ManifestInfo {
                         compress: change.compression.into(),
                     },
                 );
-                
+
                 for _ in self.levels.len()..=change.level as usize {
                     self.levels.push(LevelManifest::default());
                 }
@@ -388,11 +388,11 @@ impl ManifestChange {
             compression: compression.into(),
         }
     }
-    pub fn new_delete(table_id: SSTableId) -> Self {
+    pub fn new_delete(table_id: SSTableId, level: Level) -> Self {
         Self {
             id: table_id.into(),
             op: Operation::Delete as i32,
-            level: Default::default(),
+            level: level.into(),
             key_id: Default::default(),
             encryption_algo: Default::default(),
             compression: Default::default(),

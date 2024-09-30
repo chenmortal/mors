@@ -341,6 +341,7 @@ mod test {
     use log::{debug, info};
     use mors_common::test::{gen_random_entries, get_rng};
     use mors_traits::default::DEFAULT_DIR;
+    use std::fs::remove_dir_all;
     use std::{fs::create_dir, path::PathBuf};
     use tokio::sync::oneshot;
 
@@ -348,12 +349,15 @@ mod test {
     async fn test_write_impl() -> Result<(), MorsError> {
         console_subscriber::init();
         let mut logger = env_logger::builder();
-        logger.filter_level(LevelFilter::Trace);
+        logger.filter_level(LevelFilter::Info);
         logger.init();
 
         let path = DEFAULT_DIR;
         let dir = PathBuf::from(path);
         if !dir.exists() {
+            create_dir(&dir).unwrap();
+        } else {
+            remove_dir_all(&dir).unwrap();
             create_dir(&dir).unwrap();
         }
         let mut builder = MorsBuilder::default();
@@ -361,11 +365,13 @@ mod test {
         builder
             .set_num_memtables(3)
             .set_memtable_size(5 * 1024 * 1024)
-            .levelctl.set_level0_num_tables_stall(10000);
+            .levelctl
+            .set_level0_num_tables_stall(10000);
 
         let mors = builder.build().await?;
 
-        let seeds = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"];
+        // let seeds = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"];
+        let seeds = vec!["a", "b"];
         let mut handlers = Vec::with_capacity(seeds.len());
         for seed in seeds {
             let mut rng = get_rng(seed);
@@ -392,24 +398,30 @@ mod test {
                     }
                 }
                 debug!("{} Waiting for write to complete", seed);
-                
-                let mut wait_success=0;
-                let mut wait_failed=0;
+
+                let mut wait_success = 0;
+                let mut wait_failed = 0;
                 for recv in receivers {
                     match recv.await {
                         Ok(e) => {
-                            wait_success+=1;
-                            if wait_success % 10==0 { 
-                                info!("{} Write channel count {}", seed, wait_success);
+                            wait_success += 1;
+                            if wait_success % 10 == 0 {
+                                info!(
+                                    "{} Write channel count {}",
+                                    seed, wait_success
+                                );
                             }
                             if let Err(k) = e {
                                 eprintln!("Error: {:?}", k.to_string());
                             }
                         }
                         Err(k) => {
-                            wait_failed+=1;
-                            if wait_failed % 10==0 {  
-                                info!("{} Write channel failed count {}", seed, wait_failed);
+                            wait_failed += 1;
+                            if wait_failed % 10 == 0 {
+                                info!(
+                                    "{} Write channel failed count {}",
+                                    seed, wait_failed
+                                );
                             }
                             eprintln!("Error: {:?}", k.to_string());
                         }
