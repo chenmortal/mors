@@ -12,12 +12,15 @@ mors-traits = { workspace = true }
 mors-wal = { workspace = true }
 memmap2 = { workspace = true }
 thiserror = { workspace = true }
-log = "0.4.21"
+log = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
 mors-skip_list = { workspace = true }
 mors-encrypt = { workspace = true }
 proptest = { workspace = true }
+tokio = { workspace = true }
+env_logger = { workspace = true }
+bytesize = { workspace = true }
 [lints]
 workspace = true

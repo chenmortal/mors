@@ -44,7 +44,7 @@ impl MmapFile {
                 data.len(),
             )
         };
-        raw.flush_async_range(offset, data.len())?;
+        // raw.flush_async_range(offset, data.len())?;
         Ok(())
     }
 
@@ -81,6 +81,10 @@ impl MmapFile {
             ));
         }
         { Self::raw_write(&self.raw, offset, buf) }?;
+        let new_offset=offset+buf.len();
+        if new_offset % 1024*1024 ==0{
+            self.raw.flush_async_range(0, new_offset)?;
+        }
         Ok(buf.len())
     }
     /// Loads a value from the bool.

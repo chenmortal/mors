@@ -1,3 +1,4 @@
+use mors_traits::memtable::MemtableBuilderConfig;
 use std::collections::VecDeque;
 use std::fs::create_dir;
 use std::marker::PhantomData;

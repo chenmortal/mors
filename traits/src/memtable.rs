@@ -14,7 +14,8 @@ pub trait MemtableTrait<T: SkipListTrait, K: Kms>:
     Sized + Send + Sync + 'static
 {
     type ErrorType: Into<MemtableError>;
-    type MemtableBuilder: MemtableBuilderTrait<Self, T, K>;
+    type MemtableBuilder: MemtableBuilderTrait<Self, T, K>
+        + MemtableBuilderConfig;
     fn get(
         &self,
         key: &KeyTs,
@@ -39,6 +40,8 @@ pub trait MemtableBuilderTrait<
     fn open_exist(&self, kms: K) -> Result<VecDeque<Arc<M>>, MemtableError>;
 
     fn build(&self, kms: K) -> Result<M, MemtableError>;
+}
+pub trait MemtableBuilderConfig {
     fn max_batch_size(&self) -> usize;
     fn max_batch_count(&self) -> usize;
     fn set_num_memtables(&mut self, num_memtables: usize);

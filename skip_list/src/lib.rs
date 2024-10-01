@@ -5,7 +5,6 @@ pub mod arena;
 mod error;
 pub mod impls;
 mod iter;
+#[allow(dead_code)]
 pub mod skip_list;
 pub(crate) type Result<T> = std::result::Result<T, MorsSkipListError>;
-
-

@@ -364,7 +364,7 @@ mod test {
         builder.set_dir(dir).set_read_only(false);
         builder
             .set_num_memtables(3)
-            .set_memtable_size(5 * 1024 * 1024)
+            .set_memtable_size(128 * 1024 * 1024)
             .levelctl
             .set_level0_num_tables_stall(10000);
 

@@ -8,7 +8,10 @@ use mors_common::{
 use mors_traits::{
     file::StorageTrait,
     kms::Kms,
-    memtable::{MemtableBuilderTrait, MemtableError, MemtableTrait},
+    memtable::{
+        MemtableBuilderConfig, MemtableBuilderTrait, MemtableError,
+        MemtableTrait,
+    },
     skip_list::SkipListTrait,
 };
 
@@ -32,7 +35,8 @@ impl<T: SkipListTrait, K: Kms, S: StorageTrait>
     fn build(&self, kms: K) -> Result<Memtable<T, K, S>> {
         Ok(self.build_impl(kms)?)
     }
-
+}
+impl<T: SkipListTrait> MemtableBuilderConfig for MemtableBuilder<T> {
     fn set_num_memtables(&mut self, num_memtables: usize) {
         self.set_num_memtables_impl(num_memtables);
     }

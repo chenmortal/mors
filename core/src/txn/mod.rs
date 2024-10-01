@@ -19,7 +19,7 @@ use mors_common::kv::{Entry, Meta};
 use mors_common::ts::{KeyTs, TxnTs};
 use mors_traits::kms::Kms;
 use mors_traits::levelctl::LevelCtlTrait;
-use mors_traits::memtable::{MemtableBuilderTrait, MemtableTrait};
+use mors_traits::memtable::{MemtableBuilderConfig, MemtableTrait};
 use mors_traits::skip_list::SkipListTrait;
 use mors_traits::sstable::TableTrait;
 
