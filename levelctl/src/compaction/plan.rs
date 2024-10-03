@@ -1,5 +1,5 @@
 use std::{
-    ops::RangeInclusive,
+    ops::Range,
     time::{Duration, SystemTime},
 };
 
@@ -515,7 +515,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandlerTables<T, K> {
         &self,
         _lock: &CompactPlanReadGuard<T, K>,
         kr: &KeyTsRange,
-    ) -> Option<RangeInclusive<usize>> {
+    ) -> Option<Range<usize>> {
         if kr.left.is_empty() || kr.right.is_empty() {
             return None;
         }
@@ -528,19 +528,33 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandlerTables<T, K> {
             return None;
         }
 
-        let right_index = self
+        let right_index = match self
             .tables()
             .binary_search_by(|t| t.smallest().cmp(&kr.right))
-            .unwrap_or_else(|i| i); // if t.smallest==kr.right, so need this table.
-        if right_index >= table_len {
+        {
+            Ok(i) => i + 1, // if t.smallest==kr.right, so need this table.
+            Err(i) => i,
+        };
+        if right_index > table_len {
             return None;
         }
-        Some(left_index..=right_index)
+        Some(left_index..right_index)
     }
 }
 
 #[test]
-fn test_a() {
-    let k = 1.0;
-    assert!((0.0..=1.0).contains(&k));
+fn test_table_index_by_range() {
+    let a = [(1.0, 4.0), (3.0, 5.0), (4.0, 7.0), (5.0, 8.0)];
+    let a_left = 4.5;
+    let a_right = 5.0;
+    let a_left = a
+        .binary_search_by(|t| t.1.partial_cmp(&a_left).unwrap())
+        .unwrap_or_else(|i| i);
+    let a_right =
+        match a.binary_search_by(|t| t.0.partial_cmp(&a_right).unwrap()) {
+            Ok(i) => i + 1,
+            Err(i) => i,
+        };
+    assert_eq!(a_left, 1);
+    assert_eq!(a_right, 4);
 }

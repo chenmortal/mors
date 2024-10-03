@@ -106,9 +106,6 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     pub(crate) fn level0_stalls_ms(&self) -> &AtomicU64 {
         &self.inner.level0_stalls_ms
     }
-    pub(crate) fn next_id(&self) -> &Arc<AtomicU32> {
-        &self.inner.next_id
-    }
     pub(crate) fn handler(&self, level: Level) -> Option<&LevelHandler<T, K>> {
         if level > self.inner.max_level {
             return None;
@@ -116,6 +113,22 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         let handler = &self.inner.handlers[level.to_usize()];
         debug_assert_eq!(handler.level(), level);
         Some(handler)
+    }
+    pub fn print_handlers(&self) {
+        for handler in &self.inner.handlers {
+            let level = handler.level();
+            let handler_r = handler.read();
+            for ele in handler_r.tables() {
+                debug!(
+                    "level:{} table:{} size:{}\nsmallest:{}\nbiggest:{}",
+                    level,
+                    ele.id(),
+                    ele.size(),
+                    ele.smallest(),
+                    ele.biggest()
+                );
+            }
+        }
     }
     pub(crate) fn max_level(&self) -> Level {
         self.inner.max_level

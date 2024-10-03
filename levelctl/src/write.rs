@@ -1,9 +1,9 @@
 use std::{sync::atomic::Ordering, time::Duration};
 
 use log::info;
+use mors_traits::levelctl::LevelCtlTrait;
 use mors_traits::{kms::Kms, levelctl::LEVEL0, sstable::TableTrait};
 use tokio::time::Instant;
-
 use crate::{
     ctl::LevelCtl, error::MorsLevelCtlError, handler::LevelHandler,
     manifest::manifest_change::ManifestChange,
@@ -20,7 +20,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             table.compression(),
         );
         self.manifest().push_changes(vec![change]).await?;
-        self.next_id().fetch_max(Into::<u32>::into (table.id())+1,Ordering::AcqRel);
+        self.next_id()
+            .fetch_max(Into::<u32>::into(table.id()) + 1, Ordering::AcqRel);
         let handler = self.handler(LEVEL0).unwrap();
         let level0_num_tables_stall = self.config().level0_num_tables_stall();
 

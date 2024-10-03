@@ -56,10 +56,9 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
         if let Some(tables) = self.seek_table(key) {
             let mut max_txn = None;
             let mut max_value = None;
-
+            let ks = key.encode();
+            let k = KeyTsBorrow::from(ks.as_ref());
             for table in tables {
-                let ks = key.encode();
-                let k = KeyTsBorrow::from(ks.as_ref());
                 let mut iter = table.iter(true);
                 match iter.seek(k) {
                     Ok(seek) => {
