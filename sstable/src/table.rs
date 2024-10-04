@@ -1,5 +1,9 @@
 use std::{
-    fmt::Debug, marker::PhantomData, path::PathBuf, sync::Arc, time::SystemTime,
+    fmt::Debug,
+    marker::PhantomData,
+    path::PathBuf,
+    sync::{atomic::AtomicBool, Arc},
+    time::SystemTime,
 };
 
 use bytes::Buf;
@@ -226,6 +230,7 @@ impl<K: KmsCipher> TableBuilder<K> {
                 cipher,
                 checksum_verify_mode: self.checksum_verify_mode,
                 compression: self.compression,
+                to_delete: AtomicBool::new(false),
             }
             .into(),
         );
@@ -308,8 +313,10 @@ impl<K: KmsCipher> TableBuilder<K> {
         let smallest = first_block_offset.key_ts().into();
 
         //get biggest
-        let last_block_offset =
-            index_buf.offsets().get(index_buf.offsets_len() - 1).unwrap();
+        let last_block_offset = index_buf
+            .offsets()
+            .get(index_buf.offsets_len() - 1)
+            .unwrap();
 
         let last = last_block_offset.offset() as usize;
         let data =
@@ -355,6 +362,7 @@ pub(crate) struct TableInner<K: KmsCipher> {
     cipher: Option<K>,
     checksum_verify_mode: ChecksumVerificationMode,
     compression: CompressionType,
+    to_delete: AtomicBool,
 }
 impl<K: KmsCipher> Debug for Table<K> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -372,6 +380,15 @@ impl<K: KmsCipher> Debug for Table<K> {
             .field("checksum_verify_mode", &self.0.checksum_verify_mode)
             .field("compression", &self.0.compression)
             .finish()
+    }
+}
+impl<K: KmsCipher> Drop for TableInner<K> {
+    fn drop(&mut self) {
+        if self.to_delete.load(std::sync::atomic::Ordering::Relaxed) {
+            if let Err(e) = self.mmap.delete() {
+                error!("Delete table error: {:?}", e);
+            }
+        }
     }
 }
 impl<K: KmsCipher> TableTrait<K> for Table<K> {
@@ -432,8 +449,13 @@ impl<K: KmsCipher> TableTrait<K> for Table<K> {
         TableWriter::new(builder, cipher)
     }
 
-    fn delete(&self) -> std::result::Result<(), SSTableError> {
-        Ok(self.0.mmap.delete().map_err(MorsTableError::IoError)?)
+    fn delete(&self) {
+        let _ = self.0.to_delete.compare_exchange(
+            false,
+            true,
+            std::sync::atomic::Ordering::SeqCst,
+            std::sync::atomic::Ordering::SeqCst,
+        );
     }
 
     fn may_contain(&self, key: &[u8]) -> bool {

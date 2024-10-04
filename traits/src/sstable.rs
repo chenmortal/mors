@@ -47,7 +47,7 @@ pub trait TableTrait<K: KmsCipher>:
         builder: Self::TableBuilder,
         cipher: Option<K>,
     ) -> Self::TableWriter;
-    fn delete(&self) -> Result<(), SSTableError>;
+    fn delete(&self);
     fn iter(
         &self,
         use_cache: bool,
@@ -103,8 +103,9 @@ pub struct CacheTableConcatIter<T: TableTrait<K>, K: KmsCipher> {
     use_cache: bool,
 }
 impl<T: TableTrait<K>, K: KmsCipher> CacheTableConcatIter<T, K> {
-    pub fn new(tables: Vec<T>, use_cache: bool) -> Self {
+    pub fn new(mut tables: Vec<T>, use_cache: bool) -> Self {
         let mut iters = Vec::with_capacity(tables.len());
+        tables.sort_by(|a, b| a.biggest().cmp(b.biggest()));
         for _ in 0..tables.len() {
             iters.push(None);
         }
