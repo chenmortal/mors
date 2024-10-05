@@ -1,4 +1,3 @@
-use log::error;
 use mors_common::{file_id::SSTableId, ts::TxnTs};
 use mors_traits::{
     kms::Kms,
@@ -95,11 +94,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
             .drain(..)
             .filter(|t| !to_delete.contains(&t.id()))
             .for_each(|t| new_tables.push(t));
-        old.iter().for_each(|t| {
-            if let Err(e) = t.delete() {
-                error!("Delete table error: {:?}", e);
-            }
-        });
+        old.iter().for_each(|t| t.delete());
         new.iter().for_each(|t| new_tables.push(t.clone()));
 
         inner_w.init(self.level(), new_tables);
@@ -118,9 +113,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
             if to_delete.contains(&table.id()) {
                 sub_total_size += table.size();
                 sub_total_stale_size += table.stale_data_size();
-                if let Err(e) = table.delete() {
-                    error!("Delete table error: {:?}", e);
-                }
+                table.delete();
             } else {
                 new_tables.push(table);
             }
