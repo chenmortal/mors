@@ -13,5 +13,5 @@ memmap2 = { workspace = true }
 thiserror = { workspace = true }
 bytes = { workspace = true }
 integer-encoding = { workspace = true }
-log = { workspace = true }
+# log = { workspace = true }
 crc32fast = { workspace = true }

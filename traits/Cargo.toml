@@ -11,7 +11,7 @@ version.workspace = true
 thiserror = { workspace = true }
 bytes = { workspace = true }
 
-lazy_static = { workspace = true }
+# lazy_static = { workspace = true }
 # mors-wal= { workspace = true }
 mors-common = { workspace = true }
 log = "0.4.22"

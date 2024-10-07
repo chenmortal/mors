@@ -23,12 +23,11 @@ crc32fast = { workspace = true }
 xxhash-rust = { workspace = true }
 log = { workspace = true }
 moka = { workspace = true, features = ["sync", "future"] }
-serde = { workspace = true ,features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true }
 
 [build-dependencies]
 prost-build = { workspace = true }
-flatc-rust = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "tracing"] }
@@ -47,7 +46,3 @@ workspace = true
 [[bench]]
 name = "build"
 harness = false
-
-[[example]]
-name = "simple"
-path = "examples/simple.rs"

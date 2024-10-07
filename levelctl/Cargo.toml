@@ -9,7 +9,6 @@ version.workspace = true
 [dependencies]
 mors-traits = { workspace = true }
 mors-common = { workspace = true }
-backtrace = { workspace = true }
 thiserror = { workspace = true }
 bytes = { workspace = true }
 crc32fast = { workspace = true }
@@ -18,9 +17,7 @@ parking_lot = { workspace = true }
 log = { workspace = true }
 tabled = { workspace = true }
 tokio = { workspace = true }
-tokio-util = { workspace = true }
 bytesize = { workspace = true }
-pretty-hex = { workspace = true }
 rand = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
