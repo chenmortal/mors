@@ -7,7 +7,7 @@ use bytes::Bytes;
 use bytesize::ByteSize;
 use mors_traits::{
     kms::Kms,
-    levelctl::{Level, LevelCtlTrait, LEVEL0},
+    levelctl::{Level, LevelCtlTrait, LEVEL0, LEVEL1},
     sstable::{TableBuilderTrait, TableTrait},
 };
 
@@ -23,7 +23,7 @@ use tabled::{
 use super::Result;
 use crate::ctl::LevelCtl;
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Default, Clone, PartialEq)]
 pub(crate) struct CompactPriority {
     level: Level,
     now_total_size: usize,
@@ -34,6 +34,45 @@ pub(crate) struct CompactPriority {
     adjusted: f64,
     drop_prefixes: Vec<Bytes>,
     target: CompactTarget,
+}
+impl Debug for CompactPriority {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut builder = Builder::default();
+        builder.push_column(vec![
+            "Level",
+            "NowTotalSize",
+            "PlanDeleteSize",
+            "PlanSize",
+            "TargetSize",
+            "Score",
+            "Adjusted",
+        ]);
+        let mut record = Vec::with_capacity(7);
+        record.push(format!("{}", self.level));
+        record.push(format!("{}", self.now_total_size));
+        record.push(format!("{}", self.plan_delete_size));
+        record.push(format!("{}", self.plan_size));
+        record.push(format!("{}", self.target_size));
+        record.push(format!("{:.4}", self.score));
+        record.push(format!("{:.4}", self.adjusted));
+        builder.push_column(record);
+        let style = Style::modern_rounded();
+        let text = "CompactPriority";
+        let clr_green = Color::FG_GREEN;
+        let table = builder
+            .build()
+            .with(style)
+            .with(
+                LineText::new(text, Rows::first())
+                    .offset(Offset::End(text.len())),
+            )
+            .with(Alignment::center())
+            .with(BorderSpanCorrection)
+            .modify(Columns::single(1), clr_green)
+            .modify(Cell::new(0, 1), Border::new().set_bottom('+'))
+            .to_string();
+        writeln!(f, "{}", table)
+    }
 }
 pub(crate) fn fmt_compact_priorities(
     prios: &[CompactPriority],
@@ -295,6 +334,9 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                 < target.target_size[base_level.to_usize() + 1]
         {
             target.base_level = base_level + 1;
+        }
+        if target.base_level == LEVEL0 {
+            target.base_level = LEVEL1;
         }
         target
     }
