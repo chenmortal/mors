@@ -253,6 +253,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
 
         let mut discard_stats = HashMap::new();
         let mut table_task = Vec::new();
+        let smallest: KeyTs = merge_iter.key().unwrap().into();
+
         while merge_iter.valid() {
             if !kr.right().is_empty()
                 && merge_iter.key().unwrap() >= *kr.right()
@@ -291,6 +293,16 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                 builder.open(next_id, cipher).await
             }));
         }
+        let biggest: KeyTs = merge_iter.key().unwrap().into();
+        debug!(
+            "Compacting range: {:?} - {:?} with {} tables",
+            smallest,
+            biggest,
+            table_task.len()
+        );
+        if smallest >= biggest {
+            error!("Invalid range: {:?} - {:?}", smallest, biggest);
+        }
         for (id, discard) in discard_stats.iter() {
             context.discard().update(*id as u64, *discard as i64)?;
         }
@@ -305,10 +317,13 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                 this_level: handler.read(),
                 next_level: handler.read(),
             };
-            let range = guard.this_level.table_index_by_range(&guard, &kr);
-            if range.is_some() && range.unwrap().count() > 0 {
-                return true;
-            }
+            if let Some(t) =
+                guard.this_level.get_table_by_range(kr.left(), kr.right())
+            {
+                if !t.is_empty() {
+                    return true;
+                }
+            };
         }
         false
     }
@@ -390,15 +405,18 @@ impl<'a, T: TableTrait<K::Cipher>, K: Kms> AddKeyContext<'a, T, K> {
                             false
                         } else {
                             let handler = self.ctl.handler(level).unwrap();
-                            // let table = handler.read();;
                             let lock = CompactPlanReadGuard {
                                 this_level: handler.read(),
                                 next_level: handler.read(),
                             };
-                            let range = lock
-                                .this_level
-                                .table_index_by_range(&lock, self.kr);
-                            range.is_some() && range.unwrap().count() >= 10
+                            if let Some(t) = lock.this_level.get_table_by_range(
+                                self.kr.left(),
+                                self.kr.right(),
+                            ) {
+                                t.len() >= 10
+                            } else {
+                                false
+                            }
                         }
                     };
                     if exceeds_allowed_overlap {

@@ -1,5 +1,5 @@
 use std::{
-    ops::Range,
+    fmt::Debug,
     time::{Duration, SystemTime},
 };
 
@@ -16,7 +16,7 @@ use crate::{
 
 use super::priority::CompactPriority;
 use super::Result;
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct CompactPlan<T: TableTrait<K::Cipher>, K: Kms> {
     task_id: usize,
     priority: CompactPriority,
@@ -29,6 +29,25 @@ pub(crate) struct CompactPlan<T: TableTrait<K::Cipher>, K: Kms> {
     this_size: usize,
     drop_prefixes: Vec<Bytes>,
     splits: Vec<KeyTsRange>,
+}
+impl<T: TableTrait<K::Cipher>, K: Kms> Debug for CompactPlan<T, K> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            r#"CompactPlan task_id: {} 
+{:?}
+this_level: {:?} -> next_level: {:?}
+top: {:?}, bottom: {:?},
+this_range: {:?}, next_range: {:?}"#,
+            self.task_id,
+            self.priority,
+            self.this_level.level(),
+            self.next_level.level(),
+            self.top.iter().map(|t| t.id()).collect::<Vec<_>>(),
+            self.bottom.iter().map(|t| t.id()).collect::<Vec<_>>(),
+            self.this_range,
+            self.next_range,
+        ))
+    }
 }
 impl<T: TableTrait<K::Cipher>, K: Kms> Default for CompactPlan<T, K> {
     fn default() -> Self {
@@ -208,18 +227,17 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
             }
             plan.this_range = s;
         }
-        let index_range = lock
+        match lock
             .next_level
-            .table_index_by_range(&lock, &plan.this_range);
-
-        match index_range {
-            Some(range) => {
-                plan.bottom = lock.next_level.tables()[range].to_vec();
+            .get_table_by_range(plan.this_range.left(), plan.this_range.right())
+        {
+            Some(tables) => {
+                plan.bottom = tables;
             }
             None => {
                 plan.bottom.clear();
             }
-        }
+        };
 
         if plan.bottom.is_empty() {
             plan.next_range = plan.this_range.clone();
@@ -315,17 +333,17 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
 
             plan.top = vec![t.clone()];
 
-            let index_range = lock
-                .next_level
-                .table_index_by_range(&lock, &plan.this_range);
-            match index_range {
-                Some(range) => {
-                    plan.bottom = lock.next_level.tables()[range].to_vec();
+            match lock.next_level.get_table_by_range(
+                plan.this_range.left(),
+                plan.this_range.right(),
+            ) {
+                Some(t) => {
+                    plan.bottom = t;
                 }
                 None => {
                     plan.bottom.clear();
                 }
-            }
+            };
 
             if plan.bottom.is_empty() {
                 plan.next_range = plan.this_range.clone();
@@ -509,52 +527,4 @@ impl KeyTsRange {
             inf: true,
         }
     }
-}
-impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandlerTables<T, K> {
-    pub(crate) fn table_index_by_range(
-        &self,
-        _lock: &CompactPlanReadGuard<T, K>,
-        kr: &KeyTsRange,
-    ) -> Option<Range<usize>> {
-        if kr.left.is_empty() || kr.right.is_empty() {
-            return None;
-        }
-        let table_len = self.tables().len();
-        let left_index = self
-            .tables()
-            .binary_search_by(|t| t.biggest().cmp(&kr.left))
-            .unwrap_or_else(|i| i);
-        if left_index >= table_len {
-            return None;
-        }
-
-        let right_index = match self
-            .tables()
-            .binary_search_by(|t| t.smallest().cmp(&kr.right))
-        {
-            Ok(i) => i + 1, // if t.smallest==kr.right, so need this table.
-            Err(i) => i,
-        };
-        if right_index > table_len {
-            return None;
-        }
-        Some(left_index..right_index)
-    }
-}
-
-#[test]
-fn test_table_index_by_range() {
-    let a = [(1.0, 4.0), (3.0, 5.0), (4.0, 7.0), (5.0, 8.0)];
-    let a_left = 4.5;
-    let a_right = 5.0;
-    let a_left = a
-        .binary_search_by(|t| t.1.partial_cmp(&a_left).unwrap())
-        .unwrap_or_else(|i| i);
-    let a_right =
-        match a.binary_search_by(|t| t.0.partial_cmp(&a_right).unwrap()) {
-            Ok(i) => i + 1,
-            Err(i) => i,
-        };
-    assert_eq!(a_left, 1);
-    assert_eq!(a_right, 4);
 }

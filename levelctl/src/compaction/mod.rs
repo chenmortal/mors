@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-
 use log::{debug, info, warn};
 use mors_common::closer::Closer;
 use mors_traits::{
@@ -169,13 +168,16 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         let priority_level = priority.level();
         // base level can't be LEVEL0 , update it
         if priority.target().base_level() == LEVEL0 {
-            priority.set_target(self.target())
+            while priority.target().base_level() == LEVEL0 {
+                warn!("base level can't be LEVEL0");
+                priority.set_target(self.target());
+            }
         };
-        if priority.level().to_u8()==5 && format!("{:.2}", priority.score())=="2.11"{
-            debug!("Priority: {:?}", priority);
-        }
+
+        assert!(priority.target().base_level() != LEVEL0);
         match self.gen_plan(task_id, priority) {
             Ok(mut plan) => {
+                debug!("compact plan: {:?}", plan);
                 let result = match self
                     .compact(task_id, priority_level, &mut plan, context)
                     .await
@@ -189,15 +191,8 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                         true
                     }
                     Err(e) => {
-                        // warn!("[Compactor: {}] compact error: {}", task_id, e);
-                        // panic!("[Compactor: {}] compact error: {}", task_id, e);
-                        // false
-                        // let bt = Backtrace::new();
                         warn!("[Compactor: {}] compact error: {}", task_id, e);
-
-                        // panic!("[Compactor: {}] compact error: {}", task_id, e);
                         false
-                        // return Err(e);
                     }
                 };
                 self.compact_status().remove(&plan);
