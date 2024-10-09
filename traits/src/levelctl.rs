@@ -66,6 +66,7 @@ impl Display for LevelCtlError {
 }
 unsafe impl Send for LevelCtlError {}
 pub const LEVEL0: Level = Level(0);
+pub const LEVEL1: Level = Level(1);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Level(u8);
 impl From<u8> for Level {

@@ -256,27 +256,6 @@ impl CacheIterator for KvCacheMergeIterator {
         if self.right.is_none() {
             return self.left.next();
         }
-        // if self.init {
-        //     if self.left.next()? {
-
-        //     }
-        //     if !self.smaller_mut().next()? {
-        //         self.smaller_mut().valid = false;
-        //     };
-
-        //     self.bigger_mut().next()?;
-        //     match self.smaller().key().cmp(&self.bigger().key()) {
-        //         Ordering::Less => {}
-        //         Ordering::Equal => {
-        //             self.bigger_mut().next()?;
-        //         }
-        //         Ordering::Greater => {
-        //             self.left_small = !self.left_small;
-        //         }
-        //     }
-        //     self.init = false;
-        // } else {
-        // }
         while self.smaller().valid {
             if !self.init {
                 if let Some(k) = self.smaller().key() {
