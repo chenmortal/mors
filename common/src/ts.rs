@@ -64,6 +64,8 @@ impl TxnTs {
     pub fn is_empty(&self) -> bool {
         self.0 == 0
     }
+    pub const MAX: TxnTs = TxnTs(u64::MAX);
+    pub const MIN: TxnTs = TxnTs(0);
 }
 impl Add<u64> for TxnTs {
     type Output = Self;
@@ -354,12 +356,26 @@ impl<'a> From<KeyTsBorrow<'a>> for &'a [u8] {
 }
 #[cfg(test)]
 mod tests {
-    use crate::ts::KeyTs;
+    use bytes::Bytes;
+
+    use crate::ts::{KeyTs, KeyTsBorrow};
 
     #[test]
     fn test_fmt() {
         let mut key_ts = KeyTs::new("hello".into(), 10.into());
         key_ts.set_to_string(|x| String::from_utf8_lossy(x).to_string());
         assert_eq!(format!("{:?}", key_ts), "KeyTs: Key(hello)-TxnTs(10)");
+    }
+    #[test]
+    fn test_cmp() {
+        let a = KeyTs::new(Bytes::from_static(b"fff000"), 0.into());
+        let b = KeyTs::new(Bytes::from_static(b"000aaaaaaaaaa"), 0.into());
+        assert!(a > b);
+        let a_v = a.encode();
+        let b_v = b.encode();
+        assert!(KeyTs::from(&a_v[..]) > KeyTs::from(&b_v[..]));
+        let borrow =
+            KeyTsBorrow::from(&a_v[..]).cmp(&KeyTsBorrow::from(&b_v[..]));
+        assert!(borrow == std::cmp::Ordering::Greater);
     }
 }

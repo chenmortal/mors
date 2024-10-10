@@ -279,14 +279,6 @@ impl KvSeekIter for CacheBlockIter {
             let header = BlockEntryHeader::decode(
                 &data[..BlockEntryHeader::HEADER_SIZE],
             );
-            if k.len() >= header.overlap as usize && header.overlap > 8 {
-                let split = (header.overlap + header.diff - 8)
-                    .min(header.overlap) as usize;
-                match self.base_key[..split].cmp(&k[..split]) {
-                    std::cmp::Ordering::Equal => {}
-                    ord => return ord,
-                }
-            }
             let mut key =
                 vec![0u8; header.overlap as usize + header.diff as usize];
             key[..header.overlap as usize]
