@@ -1,4 +1,7 @@
-use mors_common::{file_id::SSTableId, ts::TxnTs};
+use mors_common::{
+    file_id::SSTableId,
+    ts::{KeyTs, TxnTs},
+};
 use mors_traits::{
     kms::Kms,
     levelctl::{Level, LEVEL0},
@@ -178,10 +181,11 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandlerTables<T, K> {
     pub(crate) fn tables(&self) -> &[T] {
         &self.tables
     }
-
+    #[allow(dead_code)]
     pub(crate) fn total_size(&self) -> usize {
         self.total_size
     }
+    #[allow(dead_code)]
     pub(crate) fn total_stale_size(&self) -> usize {
         self.total_stale_size
     }
@@ -190,11 +194,38 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandlerTables<T, K> {
         self.total_stale_size += table.stale_data_size();
         self.tables.push(table);
     }
+    #[allow(dead_code)]
     pub(crate) fn pop(&mut self) -> Option<T> {
-        self.tables.pop().map(|t| {
+        self.tables.pop().inspect(|t| {
             self.total_size -= t.size();
             self.total_stale_size -= t.stale_data_size();
-            t
         })
+    }
+    pub(crate) fn get_table_by_range(
+        &self,
+        left: &KeyTs,
+        right: &KeyTs,
+    ) -> Option<Vec<T>> {
+        if left.is_empty() || right.is_empty() {
+            return None;
+        }
+        let table_len = self.tables().len();
+        let left_index = self
+            .tables()
+            .binary_search_by(|t| t.biggest().cmp(left))
+            .unwrap_or_else(|i| i);
+        if left_index >= table_len {
+            return None;
+        }
+
+        let right_index =
+            match self.tables().binary_search_by(|t| t.smallest().cmp(right)) {
+                Ok(i) => i + 1, // if t.smallest==kr.right, so need this table.
+                Err(i) => i,
+            };
+        if right_index > table_len {
+            return None;
+        }
+        self.tables[left_index..right_index].to_vec().into()
     }
 }

@@ -1,18 +1,18 @@
+use crate::ctl::LevelCtl;
+use crate::error::MorsLevelCtlError;
+use crate::handler::LevelHandler;
 use log::error;
 use mors_common::{
     kv::ValueMeta,
     ts::{KeyTs, KeyTsBorrow, TxnTs},
 };
+use mors_traits::iter::CacheIterator;
 use mors_traits::{
     iter::{KvCacheIter, KvSeekIter},
     kms::Kms,
     levelctl::{Level, LEVEL0},
     sstable::TableTrait,
 };
-
-use crate::ctl::LevelCtl;
-use crate::error::MorsLevelCtlError;
-use crate::handler::LevelHandler;
 type Result<T> = std::result::Result<T, MorsLevelCtlError>;
 impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
     pub(crate) async fn get_impl(
@@ -56,16 +56,20 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
         if let Some(tables) = self.seek_table(key) {
             let mut max_txn = None;
             let mut max_value = None;
-            let ks = key.encode();
-            let k = KeyTsBorrow::from(ks.as_ref());
+            let k_left = KeyTs::new(key.key().clone(), TxnTs::MAX);
+            let ks = k_left.encode();
+            let k_left_b = KeyTsBorrow::from(ks.as_ref());
             for table in tables {
                 let mut iter = table.iter(true);
-                match iter.seek(k) {
+                match iter.seek(k_left_b) {
                     Ok(seek) => {
                         if seek {
-                            if let Some(seek_key) = iter.key() {
-                                if k.key() == seek_key.key() {
+                            while let Some(seek_key) = iter.key() {
+                                if k_left_b.key() == seek_key.key() {
                                     let txn = seek_key.txn_ts();
+                                    if txn == key.txn_ts() {
+                                        return Ok(Some((txn, iter.value())));
+                                    }
                                     match max_txn {
                                         Some(m_txn) => {
                                             if txn > m_txn {
@@ -78,6 +82,11 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelHandler<T, K> {
                                             max_value = iter.value();
                                         }
                                     }
+                                    if !iter.next()? {
+                                        break;
+                                    }
+                                } else {
+                                    break;
                                 }
                             }
                         }

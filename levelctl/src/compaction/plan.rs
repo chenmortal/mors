@@ -97,6 +97,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> CompactPlan<T, K> {
     pub(crate) fn drop_prefixes(&self) -> &[Bytes] {
         &self.drop_prefixes
     }
+    #[allow(dead_code)]
     // addSplits can allow us to run multiple sub-compactions in parallel across the split key ranges.
     pub(crate) fn add_splits(&mut self) {
         self.splits.clear();
