@@ -1,6 +1,6 @@
+use super::MAGIC_VERSION;
 use mors_common::file_id::SSTableId;
 use thiserror::Error;
-use super::MAGIC_VERSION;
 #[derive(Error, Debug)]
 pub enum ManifestError {
     #[error("Bad Magic")]
@@ -25,4 +25,6 @@ pub enum ManifestError {
     NoManifest,
     #[error("Table {0} not found")]
     TableNotFound(SSTableId),
+    #[error("Deserialize Error: {0}")]
+    DeserializeError(#[from] bincode::Error),
 }

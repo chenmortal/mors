@@ -1,6 +1,9 @@
+use serde::{Deserialize, Serialize};
 use snap::raw::Decoder;
 use thiserror::Error;
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Serialize, Deserialize,
+)]
 pub enum CompressionType {
     None,
     Snappy,

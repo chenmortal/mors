@@ -1,7 +1,13 @@
 use std::{
-    collections::HashSet, fmt::{Debug, Display}, fs::read_dir, hash::Hash, ops::Add, path::{Path, PathBuf}
+    collections::HashSet,
+    fmt::{Debug, Display},
+    fs::read_dir,
+    hash::Hash,
+    ops::Add,
+    path::{Path, PathBuf},
 };
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum FildIdError {
@@ -53,7 +59,18 @@ pub trait FileId: From<u32> + Into<u32> + Debug + Copy + Eq + Hash {
         id_set
     }
 }
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+)]
 pub struct MemtableId(u32);
 impl From<u32> for MemtableId {
     fn from(value: u32) -> Self {
@@ -73,7 +90,19 @@ impl Display for MemtableId {
         write!(f, "{:06}.mem", self.0)
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Default,
+    Serialize,
+    Deserialize,
+)]
 pub struct SSTableId(u32);
 impl From<u32> for SSTableId {
     fn from(value: u32) -> Self {
@@ -93,7 +122,19 @@ impl Display for SSTableId {
         write!(f, "{:06}.sst", self.0)
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Default,
+    Serialize,
+    Deserialize,
+)]
 pub struct VlogId(u32);
 impl From<u32> for VlogId {
     fn from(value: u32) -> Self {

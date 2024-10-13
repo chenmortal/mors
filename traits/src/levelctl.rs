@@ -5,6 +5,7 @@ use mors_common::closer::Closer;
 // use mors_common::closer::Closer;
 use mors_common::kv::ValueMeta;
 use mors_common::ts::{KeyTs, TxnTs};
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
@@ -67,7 +68,19 @@ impl Display for LevelCtlError {
 unsafe impl Send for LevelCtlError {}
 pub const LEVEL0: Level = Level(0);
 pub const LEVEL1: Level = Level(1);
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Default,
+    Serialize,
+    Deserialize,
+)]
 pub struct Level(u8);
 impl From<u8> for Level {
     fn from(value: u8) -> Self {

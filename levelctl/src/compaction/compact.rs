@@ -24,7 +24,7 @@ use mors_traits::{
 };
 use tokio::task::JoinHandle;
 
-use crate::manifest::manifest_change::ManifestChange;
+use crate::manifest::change::ManifestChange;
 use crate::manifest::Manifest;
 use crate::{ctl::LevelCtl, error::MorsLevelCtlError};
 

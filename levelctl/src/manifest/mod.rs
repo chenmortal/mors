@@ -1,8 +1,6 @@
+use change::{ManifestChange, ManifestChangeSet};
 use error::ManifestError;
 use log::info;
-use manifest_change::{
-    manifest_change::Operation, EncryptionAlgo, ManifestChange,
-};
 use mors_common::{
     compress::CompressionType,
     file_id::{FileId, SSTableId},
@@ -32,12 +30,9 @@ use tokio::sync::Mutex;
 
 use bytes::{Buf, BufMut};
 use mors_traits::default::DEFAULT_DIR;
-use prost::Message;
 
-use crate::manifest::manifest_change::ManifestChangeSet;
+pub mod change;
 pub mod error;
-#[allow(clippy::module_inception)]
-pub(crate) mod manifest_change;
 
 const MANIFEST_FILE_NAME: &str = "MANIFEST";
 const MANIFEST_REWRITE_FILE_NAME: &str = "MANIFEST-REWRITE";
@@ -331,75 +326,47 @@ impl ManifestInfo {
         Ok(())
     }
     fn apply_manifest_change(&mut self, change: &ManifestChange) -> Result<()> {
-        match change.op() {
-            Operation::Create => {
-                if self.tables.contains_key(&change.table_id()) {
-                    return Err(ManifestError::CreateError(change.table_id()));
-                };
-                let key_id = if change.key_id == Default::default() {
-                    None
-                } else {
-                    Some(change.key_id.into())
+        match change {
+            ManifestChange::Create {
+                id,
+                level,
+                cipher_key_id,
+                encryption_algo: _,
+                compression,
+            } => {
+                if self.tables.contains_key(id) {
+                    return Err(ManifestError::CreateError(*id));
                 };
                 self.tables.insert(
-                    change.table_id(),
+                    *id,
                     TableManifest {
-                        level: change.level.into(),
-                        key_id,
-                        compress: change.compression.into(),
+                        level: *level,
+                        key_id: *cipher_key_id,
+                        compress: *compression,
                     },
                 );
 
-                for _ in self.levels.len()..=change.level as usize {
+                for _ in self.levels.len()..=level.to_usize() {
                     self.levels.push(LevelManifest::default());
                 }
-                self.levels[change.level as usize]
+                self.levels[level.to_usize()]
                     .tables
                     .insert(change.table_id());
                 self.creations += 1;
             }
-            Operation::Delete => {
-                if !self.tables.contains_key(&change.table_id()) {
-                    return Err(ManifestError::DeleteError(change.table_id()));
+            ManifestChange::Delete { id, level } => {
+                if !self.tables.contains_key(id) {
+                    return Err(ManifestError::DeleteError(*id));
                 };
-                self.levels[change.level as usize]
+                self.levels[level.to_usize()]
                     .tables
                     .remove(&change.table_id());
                 self.tables.remove(&change.table_id());
                 self.deletions += 1;
             }
         }
+
         Ok(())
-    }
-}
-impl ManifestChange {
-    pub fn new_create(
-        table_id: SSTableId,
-        level: Level,
-        cipher_key_id: Option<CipherKeyId>,
-        compression: CompressionType,
-    ) -> Self {
-        Self {
-            id: table_id.into(),
-            op: Operation::Create as i32,
-            level: level.into(),
-            key_id: cipher_key_id.unwrap_or_default().into(),
-            encryption_algo: EncryptionAlgo::Aes as i32,
-            compression: compression.into(),
-        }
-    }
-    pub fn new_delete(table_id: SSTableId, level: Level) -> Self {
-        Self {
-            id: table_id.into(),
-            op: Operation::Delete as i32,
-            level: level.into(),
-            key_id: Default::default(),
-            encryption_algo: Default::default(),
-            compression: Default::default(),
-        }
-    }
-    pub fn table_id(&self) -> SSTableId {
-        self.id.into()
     }
 }
 impl Manifest {
@@ -483,7 +450,8 @@ mod tests {
     use mors_common::compress::CompressionType;
     use mors_common::file_id::SSTableId;
 
-    use super::manifest_change::ManifestChange;
+    use crate::manifest::change::ManifestChange;
+
     use super::ManifestBuilder;
 
     #[tokio::test]

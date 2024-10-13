@@ -18,6 +18,8 @@ log = { workspace = true }
 tabled = { workspace = true }
 tokio = { workspace = true }
 bytesize = { workspace = true }
+bincode = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 rand = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
@@ -25,7 +27,7 @@ env_logger = { workspace = true }
 mors-sstable = { workspace = true }
 mors-encrypt = { workspace = true }
 mors-vlog = { workspace = true }
-[build-dependencies]
-prost-build = { workspace = true }
+# [build-dependencies]
+# prost-build = { workspace = true }
 [lints]
 workspace = true
