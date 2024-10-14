@@ -82,13 +82,13 @@ pub trait TableWriterTrait: Send + Sync + 'static {
         key: &KeyTsBorrow,
         value: &ValueMeta,
         vptr_len: Option<u32>,
-    );
+    ) -> Result<(), SSTableError>;
     fn push_stale(
         &mut self,
         key: &KeyTsBorrow,
         value: &ValueMeta,
         vptr_len: Option<u32>,
-    );
+    ) -> Result<(), SSTableError>;
     fn flush_to_disk(
         &mut self,
         path: PathBuf,

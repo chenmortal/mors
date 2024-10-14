@@ -1,9 +1,9 @@
 use bytes::BufMut;
 use mors_common::{kv::ValueMeta, ts::KeyTsBorrow, util::{round_up_to, vec_as_bytes,},};
 use mors_traits::kms::KmsCipher;
-use prost::Message;
 
-use crate::{block::read::BlockEntryHeader, pb::proto::{checksum::Algorithm, Checksum}};
+use crate::{block::read::BlockEntryHeader, checksum::{Algorithm, Checksum}};
+use super::Result;
 // const MAX_BUFFER_BLOCK_SIZE: usize = 256 << 20; //256MB
 /// When a block is encrypted, it's length increases. We add 256 bytes of padding to
 /// handle cases when block size increases. This is an approximate number.
@@ -81,7 +81,7 @@ impl BlockWriter {
         self.data.extend_from_slice(value.encode().as_ref());
         
     }
-    pub(crate) fn finish_block(&mut self,algo:Algorithm){
+    pub(crate) fn finish_block(&mut self,algo:Algorithm)->Result<()>{
         let align_size = round_up_to(self.data.len(), size_of::<u32>());
         let align_offset=(align_size-self.data().len()) as u8;
         self.data.resize(align_size, 0);
@@ -90,7 +90,9 @@ impl BlockWriter {
         self.data.put_u32(self.entry_offsets.len() as u32);
         self.data.put_u8(align_offset);
         let checksum = Checksum::new(algo, &self.data);
-        self.data.extend_from_slice(&checksum.encode_to_vec());
-        self.data.put_u32(checksum.encoded_len() as u32);
+        let checksum_bin=checksum.encode_to_vec()?;
+        self.data.extend_from_slice(&checksum_bin);
+        self.data.put_u32(checksum_bin.len() as u32);
+        Ok(())
     }
 }

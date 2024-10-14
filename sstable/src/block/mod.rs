@@ -6,16 +6,17 @@ use bytes::Buf;
 use mors_common::file_id::SSTableId;
 use mors_common::util::bytes_as_u32;
 use mors_traits::sstable::{BlockIndex, BlockTrait};
-use prost::Message;
 use read::CacheBlockIter;
 
-use crate::{error::MorsTableError, pb::proto::Checksum, Result};
+use crate::checksum::Checksum;
+use crate::{error::MorsTableError, Result};
 #[derive(Default, Clone)]
 pub struct Block(Arc<BlockInner>);
 #[derive(Default)]
 struct BlockInner {
     table_id: SSTableId,
     block_index: BlockIndex,
+
     block_offset: u32,
     data: Vec<u8>, //actual data + entry_offsets+num_entries;
     data_align: u8,

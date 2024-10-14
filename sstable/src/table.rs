@@ -30,17 +30,9 @@ use mors_traits::{
     sstable::{BlockIndex, SSTableError, TableBuilderTrait, TableTrait},
 };
 use mors_wal::storage::mmap::{MmapFile, MmapFileBuilder};
-use prost::Message;
 
 use crate::{
-    block::Block,
-    cache::Cache,
-    error::MorsTableError,
-    pb::proto::{checksum, Checksum},
-    read::CacheTableIter,
-    table_index::TableIndexBuf,
-    write::TableWriter,
-    Result,
+    block::Block, cache::Cache, checksum::{self, Checksum}, error::MorsTableError, read::CacheTableIter, table_index::TableIndexBuf, write::TableWriter, Result
 };
 // ChecksumVerificationMode tells when should DB verify checksum for SSTable blocks.
 #[derive(Debug, Clone, Copy)]

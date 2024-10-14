@@ -28,6 +28,8 @@ pub enum MorsTableError {
     JoinError(#[from] tokio::task::JoinError),
     #[error("SSTableError: {0}")]
     SSTableError(#[from] SSTableError),
+    #[error("BincodeError: {0}")]
+    BincodeError(#[from] bincode::Error),
 }
 
 impl From<MorsTableError> for SSTableError {

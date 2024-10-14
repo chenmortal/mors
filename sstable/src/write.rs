@@ -26,17 +26,12 @@ use mors_traits::{
     sstable::{SSTableError, TableWriterTrait},
 };
 use mors_wal::storage::mmap::MmapFileBuilder;
-use prost::Message;
 use tokio::task::spawn_blocking;
 
-use crate::pb::proto::{checksum, Checksum};
-use crate::Result;
 use crate::{block::write::BlockWriter, table::TableBuilder};
+use crate::{checksum, Result};
+use crate::{checksum::Checksum, table_index::TableIndexBufInner};
 use crate::{error::MorsTableError, table_index::BlockOffset};
-use crate::{
-    // fb::table_generated::{BlockOffsetArgs, TableIndex, TableIndexArgs},
-    table_index::TableIndexBufInner,
-};
 pub struct TableWriter<K: KmsCipher> {
     tablebuilder: TableBuilder<K>,
     block_writer: BlockWriter,
@@ -72,18 +67,18 @@ impl<K: KmsCipher> TableWriterTrait for TableWriter<K> {
         key: &KeyTsBorrow,
         value: &ValueMeta,
         vptr_len: Option<u32>,
-    ) {
-        self.push_internal(key, value, vptr_len, false);
+    ) -> std::result::Result<(), SSTableError> {
+        Ok(self.push_internal(key, value, vptr_len, false)?)
     }
     fn push_stale(
         &mut self,
         key: &KeyTsBorrow,
         value: &ValueMeta,
         vptr_len: Option<u32>,
-    ) {
+    ) -> std::result::Result<(), SSTableError> {
         self.stale_data_size +=
             key.len() as u32 + value.value().len() as u32 + 4;
-        self.push_internal(key, value, vptr_len, true);
+        Ok(self.push_internal(key, value, vptr_len, true)?)
     }
 
     async fn flush_to_disk(
@@ -141,7 +136,7 @@ impl<K: KmsCipher> TableWriter<K> {
         value: &ValueMeta,
         vptr_len: Option<u32>,
         is_stale: bool,
-    ) {
+    ) -> Result<()> {
         if self.block_writer.should_finish_block::<K>(
             key,
             value,
@@ -151,20 +146,21 @@ impl<K: KmsCipher> TableWriter<K> {
             if is_stale {
                 self.stale_data_size += key.len() as u32 + 4;
             }
-            self.finish_block();
+            self.finish_block()?;
         }
         self.key_hashes.push(Bloom::hash(key.key()));
         self.max_version = self.max_version.max(key.txn_ts());
         self.block_writer.push_entry(key, value);
         self.on_disk_size += vptr_len.unwrap_or(0);
+        Ok(())
         // self.block_writer.push_entry::<K>(key, value,vptr_len,is_stale);
     }
-    fn finish_block(&mut self) {
+    fn finish_block(&mut self) -> Result<()> {
         if self.block_writer.entry_offsets().is_empty() {
-            return;
+            return Ok(());
         }
 
-        self.block_writer.finish_block(self.checksum_algo());
+        self.block_writer.finish_block(self.checksum_algo())?;
         self.uncompressed_size
             .fetch_add(self.block_writer.data().len() as u32, Ordering::AcqRel);
         self.len_offsets +=
@@ -191,9 +187,10 @@ impl<K: KmsCipher> TableWriter<K> {
             Ok(finished_block)
         });
         self.compress_task.push(handle);
+        Ok(())
     }
     async fn done(&mut self) -> Result<TableBuildData> {
-        self.finish_block();
+        self.finish_block()?;
         let mut block_list = Vec::with_capacity(self.compress_task.len());
         for task in self.compress_task.drain(..) {
             block_list.push(task.await?);
@@ -202,7 +199,7 @@ impl<K: KmsCipher> TableWriter<K> {
         let (index, data_size) =
             self.build_index(&block_list, bloom.as_ref())?;
         let checksum =
-            Checksum::new(self.checksum_algo(), &index).encode_to_vec();
+            Checksum::new(self.checksum_algo(), &index).encode_to_vec()?;
         let size = data_size as u64
             + index.len() as u64
             + 4
@@ -282,7 +279,7 @@ impl<K: KmsCipher> TableBuilder<K> {
                     .then(|| ValuePointer::decode(v.value()))
                     .flatten()
                     .map(|vp| vp.size());
-                writer.push(&k, &v, vptr_size);
+                writer.push(&k, &v, vptr_size)?;
             }
         }
         if writer.is_empty() {
