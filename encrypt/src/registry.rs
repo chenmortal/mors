@@ -9,26 +9,26 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use bytes::{Buf, BufMut};
 use log::error;
 use mors_traits::{
     default::{WithDir, WithReadOnly, DEFAULT_DIR},
     kms::{CipherKeyId, Kms, KmsBuilder, KmsCipher, KmsError},
 };
-use prost::{
-    bytes::{Buf, BufMut},
-    Message,
-};
 
+
+use super::Result;
+use crate::error::{MorsEncryptError, MorsKmsError};
+use crate::{
+    cipher::{AesCipher, Nonce},
+    datakey::DataKey,
+};
 use mors_common::ts::PhyTs;
 
-use crate::cipher::{AesCipher, Nonce};
-use crate::error::{MorsEncryptError, MorsKmsError};
-use crate::pb::encryption::DataKey;
 use crate::{
     KEY_REGISTRY_FILE_NAME, KEY_REGISTRY_REWRITE_FILE_NAME, SANITY_TEXT,
 };
 
-type Result<T> = std::result::Result<T, MorsKmsError>;
 #[derive(Debug, Default, Clone)]
 pub struct MorsKms(Arc<RwLock<KmsInner>>);
 impl Deref for MorsKms {
@@ -56,9 +56,7 @@ impl Kms for MorsKms {
         &self,
     ) -> std::result::Result<Option<Self::Cipher>, KmsError> {
         if let Some(data_key) = self.latest_datakey()? {
-            return Ok(
-                AesCipher::new(&data_key.data, data_key.key_id.into())?.into()
-            );
+            return Ok(AesCipher::new(&data_key.data, data_key.key_id)?.into());
         };
         Ok(None)
     }
@@ -211,10 +209,9 @@ impl KmsInner {
     fn read(&mut self, fp: &File) -> Result<()> {
         let key_iter = KeyRegistryIter::new(fp, &self.cipher)?;
         for data_key in key_iter {
-            self.next_key_id = self.next_key_id.max(data_key.key_id.into());
-            self.last_created =
-                self.last_created.max(data_key.created_at.into());
-            self.data_keys.insert(data_key.key_id.into(), data_key);
+            self.next_key_id = self.next_key_id.max(data_key.key_id);
+            self.last_created = self.last_created.max(data_key.created_at);
+            self.data_keys.insert(data_key.key_id, data_key);
         }
         Ok(())
     }
@@ -228,7 +225,7 @@ impl KmsInner {
             data_key.data = c.encrypt(nonce, &data_key.data)?;
         }
 
-        let e_data_key = data_key.encode_to_vec();
+        let e_data_key = data_key.encode_to_vec()?;
 
         let mut len_crc_buf = Vec::with_capacity(8);
         len_crc_buf.put_u32(e_data_key.len() as u32);
@@ -398,10 +395,10 @@ impl MorsKms {
         let key_id = inner_w.next_key_id;
         let created_at = PhyTs::now()?;
         let mut data_key = DataKey {
-            key_id: key_id.into(),
+            key_id,
             data: key,
             iv: nonce.to_vec(),
-            created_at: created_at.into(),
+            created_at,
         };
         let mut buf = Vec::new();
         KmsInner::store_data_key(&mut buf, &inner_w.cipher, &mut data_key)?;

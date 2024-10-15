@@ -15,6 +15,8 @@ pub enum MorsKmsError {
     InvalidDataKeyID(CipherKeyId),
     #[error(transparent)]
     MorsEncryptError(#[from] MorsEncryptError),
+    #[error(transparent)]
+    BincodeError(#[from] bincode::Error),
 }
 
 #[derive(Error, Debug)]

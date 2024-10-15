@@ -5,8 +5,20 @@ use std::time::{Duration, SystemTime, SystemTimeError};
 
 use bytes::{Buf, BufMut, Bytes};
 use pretty_hex::PrettyHex;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Clone,
+    Copy,
+    Serialize,
+    Deserialize,
+)]
 pub struct PhyTs(u64);
 impl Deref for PhyTs {
     type Target = u64;
