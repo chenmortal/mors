@@ -453,9 +453,9 @@ impl<'a, T: TableTrait<K::Cipher>, K: Kms> AddKeyContext<'a, T, K> {
                     Some(ValuePointer::decode(value.value()).unwrap().size());
             }
             if self.first_key_has_discard_set || is_delete {
-                self.writer.push_stale(&key, &value, vptr_len);
+                self.writer.push_stale(&key, &value, vptr_len)?;
             } else {
-                self.writer.push(&key, &value, vptr_len);
+                self.writer.push(&key, &value, vptr_len)?;
             }
             iter.next()?;
         }

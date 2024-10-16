@@ -15,8 +15,6 @@ pub enum ManifestError {
     Corrupted(u64, usize),
     #[error("CheckSum Mismatch")]
     CheckSumMismatch,
-    #[error("Decode Error: {0}")]
-    DecodeError(#[from] prost::DecodeError),
     #[error("MANIFEST invalid, table {0} exists")]
     CreateError(SSTableId),
     #[error("MANIFEST removes non-existing table {0}")]

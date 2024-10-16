@@ -12,7 +12,6 @@ mors-common = { workspace = true }
 thiserror = { workspace = true }
 bytes = { workspace = true }
 crc32fast = { workspace = true }
-prost = { workspace = true }
 parking_lot = { workspace = true }
 log = { workspace = true }
 tabled = { workspace = true }
@@ -27,7 +26,6 @@ env_logger = { workspace = true }
 mors-sstable = { workspace = true }
 mors-encrypt = { workspace = true }
 mors-vlog = { workspace = true }
-# [build-dependencies]
-# prost-build = { workspace = true }
+
 [lints]
 workspace = true

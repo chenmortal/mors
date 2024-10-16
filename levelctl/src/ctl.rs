@@ -43,7 +43,6 @@ pub struct LevelCtlInner<T: TableTrait<K::Cipher>, K: Kms> {
     handlers: Vec<LevelHandler<T, K>>,
     next_id: Arc<AtomicU32>,
     level0_stalls_ms: AtomicU64,
-    level0_stalls: AtomicU64,
     max_level: Level,
     compact_status: CompactStatus,
     config: LevelCtlConfig,
@@ -397,7 +396,6 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
             compact_status,
             table_builder: self.table.clone(),
             config: self.config,
-            level0_stalls: Default::default(),
             max_level: self.config.max_level,
         };
         Ok(LevelCtl {
