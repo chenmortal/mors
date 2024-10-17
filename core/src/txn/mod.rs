@@ -41,18 +41,6 @@ lazy_static! {
     pub(crate) static ref HASH: RandomState =
         ahash::RandomState::with_seed(thread_rng().gen());
 }
-#[derive(Debug, Clone, Copy)]
-pub struct TxnConfig {
-    read_only: bool,
-    // DetectConflicts determines whether the transactions would be checked for
-    // conflicts. The transactions can be processed at a higher rate when
-    // conflict detection is disabled.
-    detect_conflicts: bool,
-    // Transaction start and commit timestamps are managed by end-user.
-    // This is only useful for databases built on top of Badger (like Dgraph).
-    // Not recommended for most users.
-    managed_txns: bool,
-}
 pub struct WriteTxn<
     M: MemtableTrait<S, K>,
     K: Kms,
@@ -217,9 +205,7 @@ impl<
             None => Err(TxnError::KeyNotFound.into()),
         }
     }
-    pub(crate) async fn commit(
-        &mut self,
-    ) -> std::result::Result<(), MorsError> {
+    pub(crate) async fn commit(mut self) -> std::result::Result<(), MorsError> {
         if self.pending_writes.is_empty() {
             return Ok(());
         }
@@ -302,16 +288,71 @@ impl<
         Ok((commit_ts, r))
     }
 }
-// impl<
-//         M: MemtableTrait<S, K>,
-//         K: Kms,
-//         L: LevelCtlTrait<T, K>,
-//         T: TableTrait<K::Cipher>,
-//         S: SkipListTrait,
-//         V: VlogCtlTrait<K>,
-//     > Core<M, K, L, T, S, V>
-// {
-//     pub(crate) async fn begin_write(&self) -> WriteTxn<M, K, L, T, S, V> {
-//         WriteTxn::new(self.clone(), None)
-//     }
-// }
+pub struct ReadTxn<
+    M: MemtableTrait<S, K>,
+    K: Kms,
+    L: LevelCtlTrait<T, K>,
+    T: TableTrait<K::Cipher>,
+    S: SkipListTrait,
+    V: VlogCtlTrait<K>,
+> {
+    pub(crate) core: Core<M, K, L, T, S, V>,
+    pub(super) read_ts: TxnTs,
+    discard: bool,
+}
+
+impl<
+        M: MemtableTrait<S, K>,
+        K: Kms,
+        L: LevelCtlTrait<T, K>,
+        T: TableTrait<K::Cipher>,
+        S: SkipListTrait,
+        V: VlogCtlTrait<K>,
+    > ReadTxn<M, K, L, T, S, V>
+{
+    pub(crate) async fn new(
+        core: Core<M, K, L, T, S, V>,
+        custom_txn: Option<TxnTs>,
+    ) -> Result<Self> {
+        let txn = core.inner().txn_manager().clone();
+        let read_ts = match custom_txn {
+            Some(txn) => txn,
+            None => txn.generate_read_ts().await?,
+        };
+
+        let read_txn = Self {
+            read_ts,
+            discard: false,
+            core,
+        };
+        Ok(read_txn)
+    }
+    pub(crate) async fn get(
+        &self,
+        key: Bytes,
+    ) -> std::result::Result<KvEntry, MorsError> {
+        if key.is_empty() {
+            return Err(TxnError::EmptyKey.into());
+        }
+        if self.discard {
+            return Err(TxnError::DiscardTxn.into());
+        }
+        let key_ts = KeyTs::new(key, self.read_ts);
+        match self.core.inner().get(&key_ts).await? {
+            Some((txn_ts, value)) => {
+                if value.is_none() {
+                    return Err(TxnError::ValueNotFound.into());
+                }
+                let value = value.unwrap();
+                if value.meta().is_empty() || value.is_deleted_or_expired() {
+                    return Err(TxnError::ValueNotFound.into());
+                }
+                let mut entry: Entry = (key_ts, value).into();
+                entry.set_version(txn_ts);
+                let kv_entry: KvEntry = entry.into();
+                Ok(kv_entry)
+            }
+            None => Err(TxnError::KeyNotFound.into()),
+        }
+    }
+}

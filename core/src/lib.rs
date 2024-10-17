@@ -22,7 +22,7 @@ use tokio::runtime::Builder;
 #[cfg(feature = "sync")]
 use {std::sync::Arc, tokio::runtime::Handle};
 
-use txn::WriteTxn;
+use txn::{ReadTxn, WriteTxn};
 pub mod core;
 mod error;
 mod flush;
@@ -38,26 +38,7 @@ type MorsLevelCtl = LevelCtl<Table<AesCipher>, MorsKms>;
 type MorsTable = Table<AesCipher>;
 type MorsLevelCtlType = LevelCtl<MorsTable, MorsKms>;
 type MorsVlog = VlogCtl<MorsKms, MmapFile>;
-type WriteTxnType = WriteTxn<
-    MorsMemtable,
-    MorsKms,
-    MorsLevelCtlType,
-    MorsTable,
-    SkipList,
-    MorsVlog,
->;
-pub struct WriteTransaction {
-    txn: WriteTxnType,
-    #[cfg(feature = "sync")]
-    handler: Handle,
-}
-impl Deref for WriteTransaction {
-    type Target = WriteTxnType;
 
-    fn deref(&self) -> &Self::Target {
-        &self.txn
-    }
-}
 #[derive(Clone)]
 pub struct Mors {
     #[cfg(feature = "sync")]
@@ -192,6 +173,22 @@ impl Mors {
             handler: self.inner.runtime.handle().clone(),
         })
     }
+    #[cfg(not(feature = "sync"))]
+    pub async fn begin_read(&self) -> Result<ReadOnlyTransaction> {
+        let txn = ReadOnlyTxnType::new(self.inner.core.clone(), None).await?;
+        Ok(ReadOnlyTransaction { txn })
+    }
+    #[cfg(feature = "sync")]
+    pub fn begin_read(&self) -> Result<ReadOnlyTransaction> {
+        let txn = self
+            .inner
+            .runtime
+            .block_on(ReadOnlyTxnType::new(self.inner.core.clone(), None))?;
+        Ok(ReadOnlyTransaction {
+            txn,
+            handler: self.inner.runtime.handle().clone(),
+        })
+    }
 }
 #[derive(Debug)]
 pub(crate) enum PrefetchStatus {
@@ -266,6 +263,26 @@ impl KvEntry {
         self.status = status;
     }
 }
+type WriteTxnType = WriteTxn<
+    MorsMemtable,
+    MorsKms,
+    MorsLevelCtlType,
+    MorsTable,
+    SkipList,
+    MorsVlog,
+>;
+pub struct WriteTransaction {
+    txn: WriteTxnType,
+    #[cfg(feature = "sync")]
+    handler: Handle,
+}
+impl Deref for WriteTransaction {
+    type Target = WriteTxnType;
+
+    fn deref(&self) -> &Self::Target {
+        &self.txn
+    }
+}
 impl WriteTransaction {
     pub fn set(&mut self, key: Bytes, value: Bytes) -> Result<()> {
         self.set_entry(KvEntry::new(key, value))
@@ -277,17 +294,51 @@ impl WriteTransaction {
     pub fn get(&self, key: Bytes) -> Result<KvEntry> {
         self.handler.block_on(self.txn.get(key))
     }
+    #[cfg(not(feature = "sync"))]
+    pub async fn get(&self, key: Bytes) -> Result<KvEntry> {
+        self.txn.get(key).await
+    }
     pub fn delete(&mut self, key: Bytes) -> Result<()> {
         let mut entry = KvEntry::new(key, Bytes::new());
         entry.set_delete();
         self.set_entry(entry)
     }
     #[cfg(not(feature = "sync"))]
-    pub async fn commit(&mut self) -> Result<()> {
+    pub async fn commit(self) -> Result<()> {
         self.txn.commit().await
     }
     #[cfg(feature = "sync")]
     pub fn commit(&mut self) -> Result<()> {
         self.handler.block_on(self.txn.commit())
+    }
+}
+type ReadOnlyTxnType = ReadTxn<
+    MorsMemtable,
+    MorsKms,
+    MorsLevelCtlType,
+    MorsTable,
+    SkipList,
+    MorsVlog,
+>;
+pub struct ReadOnlyTransaction {
+    txn: ReadOnlyTxnType,
+    #[cfg(feature = "sync")]
+    handler: Handle,
+}
+impl Deref for ReadOnlyTransaction {
+    type Target = ReadOnlyTxnType;
+
+    fn deref(&self) -> &Self::Target {
+        &self.txn
+    }
+}
+impl ReadOnlyTransaction {
+    #[cfg(feature = "sync")]
+    pub fn get(&self, key: Bytes) -> Result<KvEntry> {
+        self.handler.block_on(self.txn.get(key))
+    }
+    #[cfg(not(feature = "sync"))]
+    pub async fn get(&self, key: Bytes) -> Result<KvEntry> {
+        self.txn.get(key).await
     }
 }
