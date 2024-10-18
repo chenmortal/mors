@@ -13,7 +13,6 @@ sync = ["moka/sync"]
 mors-common = { workspace = true }
 mors-traits = { workspace = true }
 mors-wal = { workspace = true }
-prost = { workspace = true }
 thiserror = { workspace = true }
 memmap2 = { workspace = true }
 bincode = { workspace = true }
@@ -25,9 +24,6 @@ log = { workspace = true }
 moka = { workspace = true, features = ["sync", "future"] }
 serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true }
-
-[build-dependencies]
-prost-build = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "tracing"] }
