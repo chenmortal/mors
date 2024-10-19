@@ -127,6 +127,15 @@ impl Entry {
         self.value_threshold = value_threshold;
         self
     }
+    pub fn try_set_value_threshold(
+        &mut self,
+        value_threshold: usize,
+    ) -> &mut Self {
+        if self.value_threshold == 0 {
+            self.value_threshold = value_threshold;
+        }
+        self
+    }
     pub fn estimate_size(&self, threshold: usize) -> usize {
         if self.value().len() < threshold {
             self.key_ts().key().len() + self.value().len() + 2

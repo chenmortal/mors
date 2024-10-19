@@ -228,6 +228,9 @@ impl KvEntry {
     pub fn set_meta(&mut self, meta: u8) {
         self.entry.set_user_meta(meta);
     }
+    pub fn set_value_threshold(&mut self, threshold: usize) {
+        self.entry.set_value_threshold(threshold);
+    }
     pub fn meta(&self) -> u8 {
         self.entry.user_meta()
     }
@@ -308,7 +311,7 @@ impl WriteTransaction {
         self.txn.commit().await
     }
     #[cfg(feature = "sync")]
-    pub fn commit(&mut self) -> Result<()> {
+    pub fn commit(self) -> Result<()> {
         self.handler.block_on(self.txn.commit())
     }
 }

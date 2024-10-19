@@ -24,7 +24,7 @@ impl<K: Kms, S: StorageTrait> VlogCtl<K, S> {
                 for (entry, vp) in iter {
                     // buf.clear();
                     value_sizes.push(entry.value().len());
-                    entry.set_value_threshold(self.value_threshold());
+                    entry.try_set_value_threshold(self.value_threshold());
                     if entry.value().len() < entry.value_threshold() {
                         *vp = ValuePointer::default();
                         continue;
