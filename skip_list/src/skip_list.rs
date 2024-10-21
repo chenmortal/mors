@@ -1,8 +1,11 @@
 use std::{
-    ops::{Deref, DerefMut}, pin::Pin, ptr::NonNull, sync::{
+    ops::{Deref, DerefMut},
+    pin::Pin,
+    ptr::NonNull,
+    sync::{
         atomic::{AtomicU64, AtomicUsize, Ordering},
         Arc,
-    }
+    },
 };
 
 use mors_traits::skip_list::OptionKV;
@@ -143,7 +146,11 @@ impl SkipListInner {
         }
         Ok(None)
     }
-    pub(crate) fn get_key_value(&self, key: &[u8], allow_next: bool) -> Result<OptionKV> {
+    pub(crate) fn get_key_value(
+        &self,
+        key: &[u8],
+        allow_next: bool,
+    ) -> Result<OptionKV> {
         if let Some(node) = self.find_or_next(key, allow_next) {
             let key = node.get_key(&self.arena)?;
             let value = node.get_value(&self.arena)?;
@@ -431,7 +438,10 @@ impl Node {
         Ok(arena
             .get_slice::<u8>(self.key_offset as usize, self.key_len as usize)?)
     }
-    pub(crate) fn get_value<'a>(&self, arena: &'a Arena) -> Result<Option<&'a [u8]>> {
+    pub(crate) fn get_value<'a>(
+        &self,
+        arena: &'a Arena,
+    ) -> Result<Option<&'a [u8]>> {
         // let (offset, len) = self.value_slice();
         let v = self.value_slice.load(Ordering::Relaxed);
         let len = v as u32;
@@ -442,7 +452,11 @@ impl Node {
         Ok(Some(arena.get_slice::<u8>(offset, len as usize)?))
     }
     #[inline]
-    pub(crate) fn next<'a>(&self, arena: &'a Arena, level: usize) -> Result<&'a Node> {
+    pub(crate) fn next<'a>(
+        &self,
+        arena: &'a Arena,
+        level: usize,
+    ) -> Result<&'a Node> {
         self.tower[level].get_node(arena)
     }
 

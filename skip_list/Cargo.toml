@@ -13,5 +13,9 @@ mors-traits = { workspace = true }
 thiserror = { workspace = true }
 rand = { workspace = true }
 log = { workspace = true }
+[dev-dependencies]
+mors-common = { workspace = true }
+fastrand = { workspace = true }
+parking_lot = { workspace = true }
 [lints]
 workspace = true
