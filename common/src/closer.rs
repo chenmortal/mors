@@ -1,7 +1,6 @@
 use std::{error::Error, future::Future, sync::Arc};
 
-use log::{debug, error};
-use parking_lot::Mutex;
+use log::debug;
 use tokio::{
     select,
     sync::{
