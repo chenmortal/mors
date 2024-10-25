@@ -28,7 +28,15 @@ async fn main_impl() -> Result<()> {
     builder.set_dir(dir).set_read_only(false);
     builder.set_num_memtables(1).set_memtable_size(1024 * 1024);
     let mors = builder.build().await?;
-
+    // let mut write_tran = mors.begin_write().await?;
+    // write_tran.set("key".into(), "value".into())?;
+    // write_tran.commit().await?;
+    let read_tran = mors.begin_read().await?;
+    let v = read_tran.get("key".into()).await?;
+    let vp = v.value().as_ref();
+    dbg!(vp);
+    assert_eq!(vp, b"value");
+    // let v = write_tran.get("key".into()).await?;
     Ok(())
 }
 #[cfg(feature = "sync")]

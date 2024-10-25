@@ -141,9 +141,13 @@ impl<
         }
         self.size += entry.estimate_size(entry.value_threshold());
 
-        if self.count >= max_batch_count || self.size >= max_batch_size {
-            return Err(TxnError::TxnTooBig);
-        }
+        // if self.count >= max_batch_count || self.size >= max_batch_size {
+        //     eprintln!(
+        //         "txn too big {} >= {} || {} >= {}",
+        //         self.count, max_batch_count, self.size, max_batch_size
+        //     );
+        //     return Err(TxnError::TxnTooBig);
+        // }
 
         if let Some(c) = self.conflict_keys.as_mut() {
             c.insert(HASH.hash_one(entry.key()));

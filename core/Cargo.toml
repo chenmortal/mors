@@ -6,7 +6,7 @@ license.workspace = true
 readme.workspace = true
 
 [features]
-default = ["txn"]
+default = ["txn", "sync"]
 sync = []
 txn = []
 [lints]
@@ -52,3 +52,7 @@ fastrand = "2.0.0"
 [[example]]
 name = "simple"
 path = "examples/simple.rs"
+
+[[bench]]
+name = "benchmark"
+harness = false
