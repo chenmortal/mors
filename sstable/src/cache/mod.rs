@@ -9,6 +9,7 @@ use moka::sync::Cache as MokaCache;
 use moka::sync::CacheBuilder as MokaCacheBuilder;
 
 use mors_common::file_id::SSTableId;
+use mors_common::page_size;
 use mors_traits::cache::{BlockCacheKey, CacheBuilder, CacheTrait};
 
 use crate::block::Block;
@@ -84,7 +85,7 @@ impl Default for MorsCacheBuilder {
         Self {
             index_cache_size: 16 << 20,
             index_size: DEFAULT_INDEX_SIZE,
-            block_size: 4 * 1024,
+            block_size: page_size() * 4,
             block_cache_size: 256 << 20,
         }
     }

@@ -1,6 +1,6 @@
 use mors_common::compress::CompressError;
 use mors_traits::{iter::IterError, kms::EncryptError, sstable::SSTableError};
-use prost::DecodeError;
+
 use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum MorsTableError {
@@ -8,8 +8,7 @@ pub enum MorsTableError {
     IoError(#[from] std::io::Error),
     #[error("compression and block_size cannot be both empty")]
     InvalidConfig,
-    #[error("decode error: {0}")]
-    DecodeError(#[from] DecodeError),
+
     #[error("Checksum verification failed. Expected: {0}, Got: {1}")]
     ChecksumVerify(u64, u64),
     #[error("TableIndexOffsetEmpty")]
