@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+
 use log::{debug, info, warn};
 use mors_common::closer::Closer;
 use mors_traits::{
@@ -105,7 +106,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                     if self.config().levelmax2max_compaction()
                     && task_id ==2 && count >= 200 {
                         let priority=CompactPriority::new(self.max_level(), self.target());
-                        self.run_compact(task_id,priority,context.clone()).await;
+                        self.run_compact(task_id,priority,context.clone()).await?;
                         count=0;
                     }else{
 
@@ -139,7 +140,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                         }
                         for prio in prios{
                             if prio.adjusted() >= 1.0 || (task_id == 0 && prio.level() == LEVEL0) {
-                                if self.run_compact(task_id, prio, context.clone()).await {
+                                if self.run_compact(task_id, prio, context.clone()).await? {
                                     break;
                                 }
                             } else {
@@ -163,13 +164,16 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         task_id: usize,
         mut priority: CompactPriority,
         context: CompactContext<K, D>,
-    ) -> bool {
+    ) -> Result<bool> {
         debug_assert!(priority.level() <= self.max_level());
         let priority_level = priority.level();
         // base level can't be LEVEL0 , update it
         if priority.target().base_level() == LEVEL0 {
             priority.set_target(self.target())
         };
+        if priority.level().to_u8()==5 && format!("{:.2}", priority.score())=="2.11"{
+            debug!("Priority: {:?}", priority);
+        }
         match self.gen_plan(task_id, priority) {
             Ok(mut plan) => {
                 let result = match self
@@ -185,17 +189,24 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                         true
                     }
                     Err(e) => {
+                        // warn!("[Compactor: {}] compact error: {}", task_id, e);
+                        // panic!("[Compactor: {}] compact error: {}", task_id, e);
+                        // false
+                        // let bt = Backtrace::new();
                         warn!("[Compactor: {}] compact error: {}", task_id, e);
+
+                        // panic!("[Compactor: {}] compact error: {}", task_id, e);
                         false
+                        // return Err(e);
                     }
                 };
                 self.compact_status().remove(&plan);
-                result
+                Ok(result)
             }
-            Err(MorsLevelCtlError::FillTablesError) => false,
+            Err(MorsLevelCtlError::FillTablesError) => Ok(false),
             Err(e) => {
                 warn!("task {} compact error: {}", task_id, e);
-                false
+                Ok(false)
             }
         }
     }

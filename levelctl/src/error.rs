@@ -2,7 +2,10 @@ use std::sync::PoisonError;
 
 use mors_common::{file_id::SSTableId, ts::KeyTs};
 use mors_traits::{
-    iter::IterError, kms::KmsError, levelctl::{Level, LevelCtlError}, sstable::SSTableError
+    iter::IterError,
+    kms::KmsError,
+    levelctl::{Level, LevelCtlError},
+    sstable::SSTableError,
 };
 use thiserror::Error;
 
@@ -31,6 +34,10 @@ pub enum MorsLevelCtlError {
     EmptyCompactTarget,
     #[error("Iter Error: {0}")]
     IterError(#[from] IterError),
+    #[error("InvalidKey")]
+    InvalidKey,
+    #[error("InvalidValue")]
+    InvalidValue,
 }
 
 impl<T> From<PoisonError<T>> for MorsLevelCtlError {

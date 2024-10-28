@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{atomic::Ordering, Arc};
 use std::time::SystemTime;
 
-use log::{debug, info};
+use log::{debug, error, info, trace};
 use mors_common::{
     file_id::{FileId, SSTableId},
     kv::{Meta, ValueMeta, ValuePointer},
@@ -58,8 +58,18 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         if plan.splits().is_empty() {
             plan.push_split(KeyTsRange::default());
         }
+        // plan.priority().
         let new_tables =
-            self.compact_build_tables(level, plan, &context).await?;
+            match self.compact_build_tables(level, plan, &context).await {
+                Ok(new) => new,
+                Err(e) => {
+                    let p = plan.priority();
+                    error!("Error compacting tables: {:?} {:?}", e, p);
+                    return Err(e);
+                }
+            };
+        // let new_tables =
+        //     self.compact_build_tables(level, plan, &context).await?;
 
         self.do_manifest_change(&new_tables, plan, context.manifest())
             .await?;
@@ -244,7 +254,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
         let mut table_task = Vec::new();
         while merge_iter.valid() {
             if !kr.right().is_empty()
-                && merge_iter.key().unwrap() == *kr.right()
+                && merge_iter.key().unwrap() >= *kr.right()
             {
                 break;
             }
@@ -267,6 +277,9 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtl<T, K> {
                 plan: &plan,
             };
             context.push(&mut merge_iter)?;
+            if context.writer.is_empty() {
+                continue;
+            }
             let next_id: SSTableId =
                 self.next_id().fetch_add(1, Ordering::AcqRel).into();
 
@@ -321,8 +334,16 @@ impl<'a, T: TableTrait<K::Cipher>, K: Kms> AddKeyContext<'a, T, K> {
         let mut table_key_range = KeyTsRange::default();
 
         while iter.valid() {
-            let key = iter.key().unwrap();
-            let value = iter.value().unwrap();
+            let key = iter.key().ok_or_else(|| {
+                error!("Invalid key");
+                MorsLevelCtlError::InvalidKey
+            })?;
+
+            let value = iter.value().ok_or_else(|| {
+                error!("Invalid value");
+                MorsLevelCtlError::InvalidValue
+            })?;
+
             if self.plan.drop_prefixes().iter().any(|p| key.starts_with(p)) {
                 num_keys += 1;
                 self.update_discard(&value);
@@ -419,7 +440,7 @@ impl<'a, T: TableTrait<K::Cipher>, K: Kms> AddKeyContext<'a, T, K> {
             }
             iter.next()?;
         }
-        debug!(
+        trace!(
             "Pushed {} keys, skipped {} keys, took {:?}",
             num_keys,
             num_skips,

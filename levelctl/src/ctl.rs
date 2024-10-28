@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-use log::{debug, info};
+use log::{debug, info, trace};
 use mors_common::{
     closer::Closer,
     file_id::SSTableId,
@@ -373,7 +373,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
 
         let (max_id, handlers) =
             self.open_tables_by_manifest(manifest.clone(), kms).await?;
-
+        trace!("max_id:{}", max_id);
         let next_id = Arc::new(AtomicU32::new(1 + Into::<u32>::into(max_id)));
 
         let ctl = LevelCtlInner {
@@ -471,7 +471,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
         }
         debug!("all tables opened");
         watch_closer.cancel();
-        watch_closer.wait().await?;
+        watch_closer.wait().await;
         Ok((max_id, handlers))
     }
     fn watch_num_opened(
@@ -484,8 +484,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
         let start = Instant::now();
         let closer = Closer::new("levelctl init watch_num_opened");
         let closer_clone = closer.clone();
-
-        closer.set_joinhandle(tokio::spawn(async move {
+        closer.spawn(async move {
             let mut tick = interval(Duration::from_secs(3));
             loop {
                 select! {
@@ -504,7 +503,7 @@ impl<T: TableTrait<K::Cipher>, K: Kms> LevelCtlBuilder<T, K> {
                     }
                 }
             }
-        }));
+        });
         closer
     }
 }

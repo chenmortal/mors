@@ -9,6 +9,7 @@ version.workspace = true
 [dependencies]
 mors-traits = { workspace = true }
 mors-common = { workspace = true }
+backtrace = { workspace = true }
 thiserror = { workspace = true }
 bytes = { workspace = true }
 crc32fast = { workspace = true }
