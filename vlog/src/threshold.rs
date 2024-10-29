@@ -147,9 +147,9 @@ impl VlogThreshold {
             clear_notify,
         )));
         let vlog_c = vlog_threshold.clone();
-        closer.set_joinhandle(tokio::spawn(
+        closer.spawn(
             vlog_c.listen_for_value_threshold_update(receiver, clear_notified),
-        ));
+        );
         vlog_threshold
     }
 
