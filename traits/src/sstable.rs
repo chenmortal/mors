@@ -7,12 +7,14 @@ use crate::{
     },
     kms::KmsCipher,
 };
+use log::trace;
 use mors_common::{
     compress::CompressionType,
     file_id::SSTableId,
     kv::ValueMeta,
     ts::{KeyTs, KeyTsBorrow, TxnTs},
 };
+use std::fmt::Formatter;
 use std::{
     error::Error,
     fmt::{Debug, Display},
@@ -74,6 +76,7 @@ pub trait TableBuilderTrait<T: TableTrait<K>, K: KmsCipher>:
 }
 pub trait TableWriterTrait: Send + Sync + 'static {
     fn reached_capacity(&self) -> bool;
+    fn is_empty(&self) -> bool;
     fn push(
         &mut self,
         key: &KeyTsBorrow,
@@ -207,7 +210,13 @@ impl<T: TableTrait<K>, K: KmsCipher> KvCacheIter<ValueMeta>
     for CacheTableConcatIter<T, K>
 {
     fn key(&self) -> Option<mors_common::ts::KeyTsBorrow<'_>> {
-        self.item().and_then(|x| x.key())
+        match self.item() {
+            None => {
+                trace!("CacheTableConcatIter::key: None");
+                None
+            }
+            Some(x) => x.key(),
+        }
     }
 
     fn value(&self) -> Option<ValueMeta> {
@@ -234,6 +243,11 @@ pub trait BlockTrait: Sized + Clone + Send + Sync + 'static {}
 pub trait TableIndexBufTrait: Sized + Clone + Send + Sync + 'static {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct BlockIndex(u32);
+impl Display for BlockIndex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BlockIndex({})", self.0)
+    }
+}
 impl From<u32> for BlockIndex {
     fn from(value: u32) -> Self {
         Self(value)

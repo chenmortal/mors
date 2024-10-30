@@ -1,4 +1,4 @@
-use std::{error::Error, sync::Arc};
+use std::{error::Error, future::Future, sync::Arc};
 
 use log::{debug, error};
 use parking_lot::Mutex;
@@ -9,6 +9,10 @@ use tokio::{
         AcquireError, Notify, OwnedSemaphorePermit, Semaphore,
     },
     task::JoinHandle,
+};
+use tokio_util::{
+    sync::{CancellationToken, WaitForCancellationFuture},
+    task::TaskTracker,
 };
 #[derive(Debug, Default, Clone)]
 pub struct CloseNotify(Arc<Notify>);
@@ -90,64 +94,99 @@ impl<E: Error> ThrottlePermit<E> {
         }
     }
 }
-#[derive(Clone, Debug)]
-pub struct Closer(Arc<CloserInner>);
-#[derive(Debug)]
-struct CloserInner {
-    join_handle: Mutex<Option<JoinHandle<()>>>,
-    sem: Semaphore,
-    // need_permits: AtomicUsize,
-    task: &'static str,
-}
-impl Default for Closer {
-    fn default() -> Self {
-        Self(Arc::new(CloserInner {
-            join_handle: Mutex::new(None),
-            task: Default::default(),
-            sem: Semaphore::new(0),
-            // need_permits: AtomicUsize::new(0),
-        }))
-    }
+#[derive(Debug, Clone)]
+pub struct Closer {
+    cancel: CancellationToken,
+    task_tracker: TaskTracker,
+    name: &'static str,
 }
 impl Closer {
-    pub fn new(task: &'static str) -> Self {
-        Self(Arc::new(CloserInner {
-            join_handle: Mutex::new(None),
-            task,
-            sem: Semaphore::new(0),
-            // need_permits: AtomicUsize::new(0),
-        }))
+    pub fn new(name: &'static str) -> Self {
+        Self {
+            cancel: CancellationToken::new(),
+            task_tracker: TaskTracker::new(),
+            name,
+        }
     }
     pub fn cancel(&self) {
-        debug!("cancelling for {} task", self.0.task);
-        self.0.sem.add_permits(Semaphore::MAX_PERMITS);
+        debug!("cancelling for {} task", self.name);
+        self.task_tracker.close();
+        self.cancel.cancel();
     }
-    pub fn cancel_one(&self) {
-        self.0.sem.add_permits(1);
+    pub fn cancelled(&self) -> WaitForCancellationFuture {
+        self.cancel.cancelled()
     }
-
-    pub async fn cancelled(&self) {
-        // self.0.need_permits.fetch_add(1, Ordering::SeqCst);
-        let permit = self.0.sem.acquire().await;
-        if let Err(e) = permit {
-            error!("{}: cancelled: {}", self.0.task, e);
-        }
+    pub fn spawn<F>(&self, task: F) -> JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        self.task_tracker.spawn(task)
     }
-
-    pub fn set_joinhandle(&self, handle: JoinHandle<()>) {
-        *self.0.join_handle.lock() = Some(handle);
-    }
-    pub async fn wait(&self) -> Result<(), tokio::task::JoinError> {
-        let handle = {
-            let mut lock = self.0.join_handle.lock();
-            lock.take()
-        };
-        if let Some(handle) = handle {
-            handle.await?;
-        }
-        Ok(())
+    pub async fn wait(&self) {
+        self.task_tracker.wait().await;
     }
 }
+// #[derive(Clone, Debug)]
+// pub struct Closer(Arc<CloserInner>);
+// #[derive(Debug)]
+// struct CloserInner {
+//     join_handle: Mutex<Option<JoinHandle<()>>>,
+//     sem: Semaphore,
+//     // need_permits: AtomicUsize,
+//     task: &'static str,
+// }
+// impl Default for Closer {
+//     fn default() -> Self {
+//         Self(Arc::new(CloserInner {
+//             join_handle: Mutex::new(None),
+//             task: Default::default(),
+//             sem: Semaphore::new(0),
+//             // need_permits: AtomicUsize::new(0),
+//         }))
+//     }
+// }
+// impl Closer {
+//     pub fn new(task: &'static str) -> Self {
+//         Self(Arc::new(CloserInner {
+//             join_handle: Mutex::new(None),
+//             task,
+//             sem: Semaphore::new(0),
+//             // need_permits: AtomicUsize::new(0),
+//         }))
+//     }
+//     pub fn cancel(&self) {
+//         debug!("cancelling for {} task", self.0.task);
+//         self.0.sem.add_permits(Semaphore::MAX_PERMITS);
+//     }
+//     pub fn cancel_one(&self) {
+//         self.0.sem.add_permits(1);
+//     }
+
+//     pub async fn cancelled(&self) {
+//         // self.0.need_permits.fetch_add(1, Ordering::SeqCst);
+//         let permit = self.0.sem.acquire().await;
+//         if let Err(e) = permit {
+//             error!("{}: cancelled: {}", self.0.task, e);
+//         }
+//     }
+
+//     pub fn set_joinhandle(&self, handle: JoinHandle<()>) {
+//         *self.0.join_handle.lock() = Some(handle);
+//     }
+//     pub async fn wait(&self) -> Result<(), tokio::task::JoinError> {
+//         let handle = {
+//             let mut lock = self.0.join_handle.lock();
+//             lock.take()
+//         };
+//         if let Some(handle) = handle {
+//             if !handle.is_finished() {
+//                 handle.await?;
+//             }
+//         }
+//         Ok(())
+//     }
+// }
 #[cfg(test)]
 mod tests {
     use std::{sync::Arc, time::Duration};

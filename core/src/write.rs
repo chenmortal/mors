@@ -360,8 +360,8 @@ mod test {
         builder.set_dir(dir).set_read_only(false);
         builder
             .set_num_memtables(3)
-            .set_memtable_size(5 * 1024 * 1024);
-            
+            .set_memtable_size(5 * 1024 * 1024)
+            .levelctl.set_level0_num_tables_stall(10000);
 
         let mors = builder.build().await?;
 
@@ -371,14 +371,15 @@ mod test {
             let mut rng = get_rng(seed);
             let db = mors.clone();
             let handler = tokio::spawn(async move {
-                let count = 10000;
+                debug!("{} Starting write", seed);
+                let count = 100000;
                 let random = gen_random_entries(&mut rng, count, 1000.into());
                 let mut entries = Vec::with_capacity(count);
                 let mut receivers = Vec::new();
                 let random_read = random.clone();
                 for entry in random {
                     entries.push(entry);
-                    if entries.len() == 10 {
+                    if entries.len() == 1000 {
                         let (sender, receiver) = oneshot::channel();
                         receivers.push(receiver);
                         let write_request = WriteRequest::new(entries, sender);
@@ -391,14 +392,25 @@ mod test {
                     }
                 }
                 debug!("{} Waiting for write to complete", seed);
+                
+                let mut wait_success=0;
+                let mut wait_failed=0;
                 for recv in receivers {
                     match recv.await {
                         Ok(e) => {
+                            wait_success+=1;
+                            if wait_success % 10==0 { 
+                                info!("{} Write channel count {}", seed, wait_success);
+                            }
                             if let Err(k) = e {
                                 eprintln!("Error: {:?}", k.to_string());
                             }
                         }
                         Err(k) => {
+                            wait_failed+=1;
+                            if wait_failed % 10==0 {  
+                                info!("{} Write channel failed count {}", seed, wait_failed);
+                            }
                             eprintln!("Error: {:?}", k.to_string());
                         }
                     };
@@ -420,6 +432,12 @@ mod test {
                                 }
                             } else {
                                 not_found += 1;
+                                if not_found % 1000 == 0 {
+                                    info!(
+                                        "{} Read completed not found {}",
+                                        seed, not_found
+                                    );
+                                }
                                 // eprintln!("Error: {:?}", "No value found");
                             }
                         }

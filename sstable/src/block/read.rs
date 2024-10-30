@@ -1,4 +1,5 @@
 use bytes::{Buf, BufMut};
+use log::trace;
 use mors_common::{kv::ValueMeta, ts::KeyTsBorrow};
 use mors_traits::{
     iter::{
@@ -214,6 +215,7 @@ impl DoubleEndedCacheIterator for CacheBlockIter {
 impl KvCacheIter<ValueMeta> for CacheBlockIter {
     fn key(&self) -> Option<KeyTsBorrow<'_>> {
         if self.key.is_empty() {
+            trace!("{}:{} key is empty",self.inner.table_id(),self.inner.block_index());
             return None;
         }
         return Some(self.key.as_slice().into());

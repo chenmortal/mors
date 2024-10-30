@@ -41,11 +41,7 @@ impl WaterMark {
             name,
             closer,
         }));
-
-        water
-            .0
-            .closer
-            .set_joinhandle(tokio::spawn(water.clone().process(receiver)));
+        water.0.closer.spawn(water.clone().process(receiver));
         water
     }
     pub(crate) async fn begin(&self, txn: TxnTs) -> Result<()> {

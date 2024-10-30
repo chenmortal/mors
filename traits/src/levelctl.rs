@@ -2,6 +2,7 @@ use crate::default::{WithDir, WithReadOnly};
 use crate::vlog::DiscardTrait;
 use crate::{kms::Kms, sstable::TableTrait};
 use mors_common::closer::Closer;
+// use mors_common::closer::Closer;
 use mors_common::kv::ValueMeta;
 use mors_common::ts::{KeyTs, TxnTs};
 use std::error::Error;

@@ -71,6 +71,12 @@ async fn handle_print_manifest(dir: PathBuf) -> Result<(), ManifestError> {
     println!("{}", info);
     Ok(())
 }
+#[tokio::test]
+async fn test_print_manifest() {
+    handle_print_manifest(PathBuf::from(DEFAULT_DIR))
+        .await
+        .unwrap();
+}
 
 #[test]
 fn test_tabled() {

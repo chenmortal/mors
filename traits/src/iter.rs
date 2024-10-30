@@ -142,6 +142,7 @@ where
 }
 // if true then KvCacheIter.key() >= k
 pub trait KvSeekIter: CacheIterator {
+    ///if true then KvCacheIter.key() >= k, if false then can't find KvCacheIter.key() >= k 
     fn seek(&mut self, k: KeyTsBorrow<'_>) -> Result<bool>;
 }
 
@@ -179,6 +180,7 @@ pub struct KvCacheMergeIterator {
     right: Option<KvCacheMergeNode>,
     temp_key: Vec<u8>,
     left_small: bool,
+    init: bool,
 }
 impl KvCacheMergeIterator {
     pub fn new(
@@ -189,6 +191,7 @@ impl KvCacheMergeIterator {
             right,
             temp_key: Vec::new(),
             left_small: true,
+            init: true,
         };
         match iters.len() {
             0 => None,
@@ -214,7 +217,13 @@ impl KvCacheMergeIterator {
         if self.left_small {
             &self.left
         } else {
-            self.right.as_ref().unwrap()
+            match self.right.as_ref() {
+                None => {
+                    panic!("right is None");
+                }
+                Some(r) => r,
+            }
+            // self.right.as_ref().unwrap()
         }
     }
     pub fn valid(&self) -> bool {
@@ -244,37 +253,65 @@ impl KvCacheMergeIterator {
 }
 impl CacheIterator for KvCacheMergeIterator {
     fn next(&mut self) -> Result<bool> {
+        if self.right.is_none() {
+            return self.left.next();
+        }
+        // if self.init {
+        //     if self.left.next()? {
+
+        //     }
+        //     if !self.smaller_mut().next()? {
+        //         self.smaller_mut().valid = false;
+        //     };
+
+        //     self.bigger_mut().next()?;
+        //     match self.smaller().key().cmp(&self.bigger().key()) {
+        //         Ordering::Less => {}
+        //         Ordering::Equal => {
+        //             self.bigger_mut().next()?;
+        //         }
+        //         Ordering::Greater => {
+        //             self.left_small = !self.left_small;
+        //         }
+        //     }
+        //     self.init = false;
+        // } else {
+        // }
         while self.smaller().valid {
-            if let Some(k) = self.smaller().key() {
-                if self.temp_key.as_slice() != k.as_ref() {
-                    self.temp_key = k.to_vec();
-                    return Ok(true);
+            if !self.init {
+                if let Some(k) = self.smaller().key() {
+                    if self.temp_key.as_slice() != k.as_ref() {
+                        self.temp_key = k.to_vec();
+                        return Ok(true);
+                    }
                 }
             }
-
-            let result = self.smaller_mut().next()?;
-            if !result {
+            let smaller_next = self.smaller_mut().next()?;
+            if !smaller_next {
                 self.smaller_mut().valid = false;
             }
-            if self.right.is_some() && self.bigger().valid {
-                if result {
-                    if self.bigger().key().is_none()
-                        && !self.bigger_mut().next()?
-                    {
+            if self.bigger().valid {
+                if !smaller_next {
+                    self.left_small = !self.left_small;
+                    continue;
+                }
+                if self.init {
+                    self.init = false;
+                    let bigger_next = self.bigger_mut().next()?;
+                    if !bigger_next {
+                        self.bigger_mut().valid = false;
                         continue;
                     }
-                    match self.smaller().key().cmp(&self.bigger().key()) {
-                        std::cmp::Ordering::Less => {}
-                        std::cmp::Ordering::Equal => {
-                            self.bigger_mut().next()?;
-                        }
-                        std::cmp::Ordering::Greater => {
-                            self.left_small = !self.left_small;
-                        }
-                    };
-                } else {
-                    self.left_small = !self.left_small;
                 }
+                match self.smaller().key().cmp(&self.bigger().key()) {
+                    std::cmp::Ordering::Less => {}
+                    std::cmp::Ordering::Equal => {
+                        self.bigger_mut().next()?;
+                    }
+                    std::cmp::Ordering::Greater => {
+                        self.left_small = !self.left_small;
+                    }
+                };
             }
         }
         Ok(false)
@@ -296,31 +333,35 @@ impl KvSeekIter for KvCacheMergeIterator {
             Some(r) => r.seek(k)?,
             None => false,
         };
-
-        if self.bigger().valid {
-            if !self.smaller().valid {
-                self.left_small = !self.left_small;
-            } else {
-                let bigger_key = self.bigger().key().unwrap();
-                let smaller_key = self.smaller().key().unwrap();
-                match smaller_key.cmp(&bigger_key) {
-                    Ordering::Less => {}
-                    Ordering::Equal => {
-                        self.bigger_mut().next()?;
-                    }
-                    Ordering::Greater => {
-                        self.left_small = !self.left_small;
-                    }
+        self.init = false;
+        if !left && !right{
+            return Ok(false);
+        }
+        if left && !right {
+            self.left_small = true;
+            if let Some(r) = &mut self.right {
+                r.valid=false;
+            }
+        }
+        if !left && right {
+            self.left_small = false;
+            self.left.valid = false;
+        }
+        if left && right{
+            let bigger_key = self.bigger().key().unwrap();
+            let smaller_key = self.smaller().key().unwrap();
+            match smaller_key.cmp(&bigger_key) {
+                Ordering::Less => {}
+                Ordering::Equal => {
+                    self.bigger_mut().next()?;
+                }
+                Ordering::Greater => {
+                    self.left_small = !self.left_small;
                 }
             }
         }
-
-        if left || right {
-            self.temp_key = k.as_ref().to_vec();
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        self.temp_key=self.smaller().key().unwrap().to_vec();
+        Ok(true)
     }
 }
 impl KvCacheIterator<ValueMeta> for KvCacheMergeIterator {}

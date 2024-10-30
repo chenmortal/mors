@@ -254,12 +254,11 @@ impl<
         let levelctl = self.levelctl.build(kms.clone()).await?;
 
         let compact_task = Closer::new("levectl compact");
-        compact_task.set_joinhandle(tokio::spawn(
-            levelctl.clone().spawn_compact(
-                compact_task.clone(),
-                kms.clone(),
-                discard,
-            ),
+        // let compact_task = TaskTracker::new();
+        compact_task.spawn(levelctl.clone().spawn_compact(
+            compact_task.clone(),
+            kms.clone(),
+            discard,
         ));
 
         let mut max_version = levelctl.max_version();
@@ -291,17 +290,18 @@ impl<
         });
 
         let write_task = Closer::new("write request task");
-        write_task.set_joinhandle(tokio::spawn(CoreInner::do_write_task(
+        write_task.spawn(CoreInner::do_write_task(
             inner.clone(),
             receiver,
             write_task.clone(),
-        )));
+        ));
+
         let flush_task = Closer::new("flush task");
-        flush_task.set_joinhandle(tokio::spawn(CoreInner::do_flush_task(
+        flush_task.spawn(CoreInner::do_flush_task(
             inner.clone(),
             flush_receiver,
             flush_task.clone(),
-        )));
+        ));
         let core = Core { inner };
         Ok(core)
     }

@@ -113,6 +113,10 @@ impl<K: KmsCipher> TableWriterTrait for TableWriter<K> {
             .map_err(MorsTableError::from)??;
         Ok(())
     }
+
+    fn is_empty(&self) -> bool {
+        self.key_hashes.is_empty()
+    }
 }
 impl<K: KmsCipher> TableWriter<K> {
     pub(crate) fn new(builder: TableBuilder<K>, cipher: Option<K>) -> Self {
@@ -246,7 +250,7 @@ impl<K: KmsCipher> TableWriter<K> {
         };
         Ok((data, data_size))
     }
-    
+
     fn is_empty(&self) -> bool {
         self.key_hashes.len() == 0
     }

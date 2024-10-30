@@ -1,6 +1,4 @@
-
-
-
+use log::trace;
 use mors_common::{kv::ValueMeta, ts::KeyTsBorrow};
 use mors_traits::{
     iter::{
@@ -54,7 +52,13 @@ impl<K: KmsCipher> DoubleEndedCacheIter for CacheTableIter<K> {
 }
 impl<K: KmsCipher> KvCacheIter<ValueMeta> for CacheTableIter<K> {
     fn key(&self) -> Option<KeyTsBorrow<'_>> {
-        self.block_iter.as_ref().and_then(|b| b.key())
+        match self.block_iter.as_ref() {
+            None => {
+                trace!("block_iter is None");
+                None}
+            Some(b) => {b.key()}
+        }
+        // self.block_iter.as_ref().and_then(|b| b.key())
     }
 
     fn value(&self) -> Option<ValueMeta> {
@@ -109,25 +113,26 @@ impl<K: KmsCipher> CacheIterator for CacheTableIter<K> {
 impl<K: KmsCipher> KvSeekIter for CacheTableIter<K> {
     fn seek(&mut self, k: KeyTsBorrow<'_>) -> Result<bool, IterError> {
         let indexbuf = self.inner.get_index()?;
-        let index = match indexbuf.offsets().binary_search_by(|b| {
-            let b: KeyTsBorrow = b.key_ts().into();
-            b.partial_cmp(&k).unwrap()
-        }) {
-            Ok(index) => index,
-            Err(mut index) => {
-                if index == 0 {
-                    return Ok(false);
-                };
-                index -= 1;
-                if index >= indexbuf.offsets().len() {
-                    return Ok(false);
-                }
-                index
+        let index = indexbuf.offsets().binary_search_by(|b| {
+            let base_key: KeyTsBorrow = b.key_ts().into();
+            base_key.partial_cmp(&k).unwrap()
+        }).unwrap_or_else(|index| {
+            if index == 0 {
+                0
+            } else {
+                index - 1
             }
-        };
+        });
         let next_block = self.inner.get_block(index.into(), self.use_cache)?;
         self.block_iter = next_block.iter().into();
         self.block_iter.as_mut().unwrap().seek(k)
     }
 }
 impl<K: KmsCipher> KvCacheIterator<ValueMeta> for CacheTableIter<K> {}
+
+#[test]
+fn test_a(){
+    let vec1 = vec![1, 3, 5, 7];
+    let result = vec1.binary_search_by(|x| x.cmp(&9));
+    println!("{:?}", result);
+}
